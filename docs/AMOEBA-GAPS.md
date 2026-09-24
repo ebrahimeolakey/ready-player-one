@@ -1,6 +1,6 @@
 # 与 Amoeba 的功能差距
 
-核对日期：2026-09-24。本表以**头号玩家 0.4.4-beta.1 发行源码与测试**为当前状态，对照 **Amoeba 0.1.38**；0.1.40 增量单列。安装包见 README 下载区。群聊与 ProjectContext 属于另一批开发，未包含在本次发行源码中。
+核对日期：2026-09-24。本表以**头号玩家 0.4.5-beta.1 发行源码与测试**为当前状态，对照 **Amoeba 0.1.38**；0.1.40 增量单列。安装包见 README 下载区。群聊与 ProjectContext 属于另一批开发，未包含在本次发行源码中。
 
 官方文档没有逐页版本号，下表将其作为功能说明，版本归属优先参考[官方发布日志](https://useamoeba.com/changelog)。核对当日最新日志已到 0.1.40；其 Mac 版本仍等待公证，Mac 下载和更新仍为 0.1.38。不能把最新文档中的每句话未经确认倒推为所有旧版已交付行为。
 
@@ -34,13 +34,14 @@
 | 评论 | 编辑器行范围、消息 ID/哈希、本机 diff 左右行/片段锚点、只读历史定位；过期检查、转计划/Agent。见 [引用](REFERENCES.md) | 远端共享纯文本 diff 无可验证文件对象，仍只读；完整桌面导航及多成员流程待验收 | 已实现主要锚点，部分场景待验收 |
 | 共享记忆 | 文件/commit/hash 关联、保存/合并/同步后自动置过期、显式更新基线、版本冲突检查和分页修改历史；MCP CRUD | Agent 自主复核内容及双机更新冲突的桌面验收 | 已实现，待验收 |
 | 离线执行与恢复 | 本机运行不中断、加密 outbox、幂等输出、丢响应恢复、跨重启不重跑未知动作；[恢复测试](../tests/run-coordinator-recovery.test.mjs) | 需要远端工具审批的新动作离线时等待决定，不能称所有动作无条件 fail-open；已补独立证据卡和人工确认 API、追加历史与版本冲突保护，见 [结果确认](UNKNOWN-OUTCOMES.md)；更多真实 Provider 中断状态仍需验收 | 已实现，待更多验收 |
-| Mission Control / 历史 | 计划进度、执行数、审批/接管/冲突/受阻聚合、会话归档与导出 | 活动文件汇总主要计 `lane.files`，未完全并入有 TTL 的 open/changed 信息；模型共享已接入，见 A10；使用账号来源和过期状态需验收，见 A7 | 部分实现 |
-| Git 工作流 | 导入/克隆私有仓库、暂存、diff、提交、远程同步、分支、工作树；Editor 可发会话限定邀请 | 桌面 Git 全闭环；应用内创建远端仓库入口仍未提供 | 部分实现 |
-| 编辑器、终端与浏览器 | CodeMirror、JS/TS 语言服务、取消搜索、真实 PTY、内嵌浏览器、Node 调试、显式独立 Codex/Claude CLI。见 [CLI](PROVIDER-CLI.md) | CLI 不等于共享原生 session 迁移；真实登录后交互及完整焦点切换待验收 | 已实现主要本地工具，待验收 |
+| Mission Control / 历史 | 计划进度、审批/接管/冲突/受阻聚合、归档导出；未过期 open/changed/declared 范围按工作区与路径去重，区分文件/目录/未知并显示来源；空闲隐藏统计。见 [活动视图](ACTIVITY-VIEW.md) | 完整桌面多成员视觉状态与账号来源需继续验收，不能把有限截图当作所有状态相同 | 已实现，待更多视觉验收 |
+| Git 工作流 | 导入/克隆、暂存、diff、提交、远程同步、分支、工作树；Editor 会话限定邀请；应用内 GitHub 建仓库/显式绑定，投递记录防重复、账号与身份校验、不覆盖 origin。见 [建仓库](GITHUB-REPOSITORY-CREATE.md) | 新 GitHub 账号/组织权限的真实创建、绑定、克隆全流程仍需同事验收；服务测试没有创建外部仓库 | 已实现，待真实账号验收 |
+| 编辑器、终端与浏览器 | CodeMirror、JS/TS 语言服务、取消搜索、真实 PTY、浏览器、Node 调试、独立 CLI；字体/缩进/换行/空白/参考线/缩略图设置及可选 JSON 保存格式化。见 [编辑器](EDITOR-SETTINGS.md)、[CLI](PROVIDER-CLI.md) | 格式化限严格 JSON，清理行尾限 JSON/.txt；其他语言/原版全部编辑器行为未覆盖。CLI 不等于共享原生 session 迁移；真实登录后完整交互待验收 | 已实现主要本地工具，存在明确范围差异 |
 | 图片、语音、转录 | 图片选择/拖入/粘贴、真实 Codex 返回蓝色图片结果；reasoning 增量、工具生命周期、复制、链接选择和 Esc 停止；macOS 语音 helper 已构建/探测 | 语音尚未完成用户主动录音端到端；自定义 API 的真实供应商调用和图片兼容性未验收 | 已实现，待验收 |
 | 自定义 Provider / ACP | 密钥及启动配置加密、CRUD、模型目录/默认值、兼容 API 六类受审批工具；ACP OpenCode/Hermes 预设与真实 stdio fixture；[ACP 边界](ACP-PROVIDERS.md) | fixture 不是 OpenCode/Hermes，也没调用其模型；没有这些 CLI 的真实账号验收。ACP 不提供通用 OS 沙箱/所有工具强制审批保证 | 已实现适配，待真实 Provider 验收 |
 | 数据保护 | 系统密钥加密、迁移、脱敏、保留期；Owner 删除范围预览、加密转录/关联记录清理与失败恢复，保留项目及无身份索引的草稿 | 备份恢复统一演练；其他成员离线副本、Provider 历史和外部导出不自动删除；脱敏限已识别模式 | 已实现，待完整恢复演练 |
-| 系统通知与更新 | 后台完成/审批通知；平台更新选择、digest 校验、显式安装和替换失败回滚；真实 Mac 旧 bundle 副本升级与新版窗口启动 | 该实验由当前源码驱动旧副本，不是原 0.3 UI 点击更新；新版 UI→下一版完整升级、启动后健康确认及崩溃自动回滚未验收/未实现，详见 [Mac 更新记录](UPDATER-MAC-VALIDATION.md) | 已实现，部分验收与健康闭环缺失 |
+| 系统通知与更新 | 通知、平台更新、digest 校验、显式安装；Mac 同协议/同数据代际的双阶段健康确认和失败恢复，目标改变保留人工恢复，真实 main/React 确认与拒绝测试通过。见 [更新健康](UPDATE-HEALTH.md) | 旧发布无兼容声明时仅手动安装并保留备份；Windows NSIS 不具备此自动恢复。已发布 UI→后续安装包的实际完整替换仍待验收，fixture 不替代该过程 | 已实现健康流程，待发行包升级验收 |
+| 通用偏好 | 已有自动检查更新、部分系统通知、双栏工具与编辑器偏好 | 实测原版另有深浅主题、启动恢复、对话密度、布局偏好、通知分类、菜单栏图标/声音、VS Code 导入等，目前未全部提供。见 [实测补充](UI-OBSERVATION-2026-09-24.md) | 部分实现 |
 | UI 对齐 | 中文核心布局、会话/分享/成员/设置、并排通道、编辑器/Agent 栏已对照重做，后续能力已接入 | [v0.3 对照](UI-REFERENCE.md)不是 0.4.1 全状态逐像素证明；窄屏/空态/错误态/角色差异/全部新增面板需固定尺寸矩阵复核 | 部分完成，尚非全部 UI 1:1 |
 
 原版协作行为依据：[协作/计划/评论](https://useamoeba.com/docs/collaboration/live-sessions)、[Provider/接管/子任务/恢复](https://useamoeba.com/docs/agents/providers)、[工作区与记忆](https://useamoeba.com/docs/concepts/workspaces)、[角色与数据](https://useamoeba.com/docs/admin/members)、[Git 与工作树](https://useamoeba.com/docs/git/repositories)、[快捷键/MCP/结果未知](https://useamoeba.com/docs/help/troubleshooting)。每项本地证据不等于原版全部内部行为已复现。
@@ -60,7 +61,7 @@
 
 以下仅依据[0.1.40 发布日志](https://useamoeba.com/changelog)，核对当日 Mac 尚未切换到该版本。
 
-| 官方新增/改进方向 | 头号玩家 0.4.3 状态 | 下一步 |
+| 官方新增/改进方向 | 头号玩家 0.4.5 状态 | 下一步 |
 | --- | --- | --- |
 | 自定义 API 推理强度；编辑/删除提供商和密钥 | 配置/UI 已支持明确列出的 efforts 与 CRUD，加密保存 | 真实端点验收；不猜模型支持的 effort |
 | Explorer 高亮、选中代码评论 | 已有文件选择高亮、CodeMirror 选区评论与 hash 校验 | 对照 0.1.40 的具体交互再判差距，不重复宣称未做 |
@@ -80,4 +81,4 @@
 
 可直接开发的任务与逐项验收动作见 [AMOEBA-ACCEPTANCE](AMOEBA-ACCEPTANCE.md)。
 
-0.4.3 新增内容见 [实施记录](IMPLEMENTATION-TRACKER.md)；旧版安装包保持不变。
+0.4.5 新增内容见 [实施记录](IMPLEMENTATION-TRACKER.md)；旧版安装包保持不变。

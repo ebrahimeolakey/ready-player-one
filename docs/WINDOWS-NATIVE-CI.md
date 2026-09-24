@@ -76,3 +76,22 @@ ZIP/NSIS 在同一 runner 构建成功，下载后的 SHA256 与 runner 一致�
 ![0.4.4 Windows 原生启动](evidence/windows-native-0.4.4.png)
 
 本机完整回归 319/319，并非全部 319 项都在 Windows 重跑。实体 Windows 首次安装、真实账号 GUI 登录与双机公网仍需同事验收。
+
+## 0.4.5-beta.1 原生验证
+
+[最终成功运行](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/35985376144)，精确源码提交 `f0e644af873a7f928efa63b05647bf9881d7eb88`，包含发布前的新建 GitHub 仓库表单样式修复。此前 `b766b99` 的成功运行仅保留为过程证据，不作为最终发行包。
+
+Windows 2022 x64 的现有平台回归 **28/28 通过**；Renderer 构建、实际 Electron 40.10.6 / Node 24.15.0 主入口、Hub、加密设置、preload / React 和真实 PowerShell PTY 均通过。Provider CLI 使用 console Node 22.23.2 在真实 ConPTY 中验证中文 / 空格 / 引号 / 元字符参数、TTY、目录、权限、Shift+Tab、重复打开不重发、退出码与清理，未调用真实模型。
+
+ZIP 与 NSIS 在同一 runner 构建成功，下载后的 SHA256 与 runner 一致，ZIP 全部 CRC 校验通过。ASAR 内 **78 个 core/desktop/dist 文件**与隔离发行源码文件清单完全相同：76 个仅 CRLF/LF 不同，编译 JS/CSS 两个文件逐字节一致；没有额外或缺失文件。manifest 为 `0.4.5-beta.1` / Apache-2.0；ASAR SHA256 `13b623e1981f356110c3f830a3b18d654934d8988e529b5c1c59ab36be66a2d2`。
+
+| 文件 | SHA256 |
+| --- | --- |
+| `Ready-Player-One-0.4.5-beta.1-windows-x64-setup.exe` | `8653920dc7b79aeb4d0196dd98991775403fad6f00de70275d1973f6fb671795` |
+| `Ready-Player-One-0.4.5-beta.1-windows-x64.zip` | `5eb3a2dac692cbcc4878bdb623d87fe82d527dcb7c0df7aba35c3bb30736b2b8` |
+
+[结构化审计](evidence/windows-native-0.4.5.json)；[运行证据 artifact](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/35985376144/artifacts/10801847150)；[原生构建包 artifact](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/35985376144/artifacts/10801842208)。artifact 有保留期，最终下载请使用项目 Releases。
+
+![0.4.5 Windows 原生启动](evidence/windows-native-0.4.5.png)
+
+本机隔离完整回归 361/361；并非全部 361 项在 Windows 重跑。此证据不覆盖实体 Windows 首次安装、SmartScreen / 安装向导、真实账号 GUI 登录、Windows 自更新或两台实体机器的公网协作；macOS 更新健康门禁验证另见 [实际桌面记录](UPDATE-HEALTH-DESKTOP-SMOKE.md)。
