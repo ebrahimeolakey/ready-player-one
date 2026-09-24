@@ -15,7 +15,7 @@
 
 不确定芯片？打开 Mac 的「关于本机」查看。下载后解压，将「头号玩家.app」拖入「应用程序」。无需安装 Node.js 或 Homebrew。
 
-**这是未签名、未公证的测试版。** 首次打开可能被 macOS 拦截，请按[安装指南](docs/BETA-TESTING.md#1-安装)操作。Git 仓库功能需要本机 Git；AI 执行需要自己的 Codex 或 Claude 账号及可用额度。
+**这是未签名、未公证的测试版。** 首次打开可能被 macOS 拦截，请按[安装指南](docs/BETA-TESTING.md#1-安装)操作。Git 仓库功能需要本机 Git；当前 Codex 执行入口也要求目录已初始化 Git。AI 执行需要自己的 Codex 或 Claude 账号及可用额度。
 
 [版本说明](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.3.0-beta.1) · [文件校验](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.3.0-beta.1/SHA256SUMS-0.3.0.txt) · [反馈问题](https://github.com/ebrahimeolakey/ready-player-one/issues)
 
@@ -60,4 +60,6 @@
 
 头号玩家是受 Amoeba 协作工作流启发的独立实现，非 Amoeba 官方产品，尚未覆盖原版全部界面与功能。不包含原应用的打包代码或品牌素材。
 
-[界面对照](docs/UI-REFERENCE.md) · [架构](docs/ARCHITECTURE.md) · [MIT License](LICENSE)
+[与 Amoeba 的功能差距](docs/AMOEBA-GAPS.md) · [界面对照](docs/UI-REFERENCE.md) · [架构](docs/ARCHITECTURE.md) · [Apache License 2.0](LICENSE)
+
+当前主分支采用 Apache-2.0；已发布的 v0.3.0-beta.1 及更早版本保留发布时的 MIT 许可。第三方依赖遵循各自许可证。

@@ -5,7 +5,7 @@
   "type": "module",
   "main": "desktop/main.mjs",
   "author": "Ready Player One contributors",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
@@ -46,7 +46,9 @@
       "dist/**",
       "desktop/**",
       "core/**",
-      "package.json"
+      "package.json",
+      "LICENSE",
+      "NOTICE"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
