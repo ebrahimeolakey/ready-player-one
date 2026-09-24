@@ -4,11 +4,11 @@
 
 ## 1. 安装
 
-- Apple Silicon（M1/M2/M3/M4 等）：`Ready-Player-One-0.3.0-beta.1-mac-arm64.zip`。
-- Intel Mac：`Ready-Player-One-0.3.0-beta.1-mac-x64.zip`。
-- 解压，把「头号玩家.app」拖到「应用程序」，然后打开。Mac 需已安装 Git（开发者通常已有 Xcode 命令行工具）。无需 Node.js 或 Homebrew。
+- Apple Silicon（M 系列）：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.3.0-beta.1/Ready-Player-One-0.3.0-beta.1-mac-arm64.zip)。
+- Intel Mac：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.3.0-beta.1/Ready-Player-One-0.3.0-beta.1-mac-x64.zip)。
+- 解压，把「头号玩家.app」拖到「应用程序」，然后打开。使用 Git 仓库功能时需安装 Git；普通本机文件夹可直接打开。无需 Node.js 或 Homebrew。
 - 这是未做 Developer ID 签名、公证的内部测试包。macOS 可能阻止第一次打开；仅在确认文件来自本仓库、校验与发布一致后，按系统「隐私与安全性」中的提示选择是否允许。公司设备若禁止未公证应用，请交给 IT 处理。不要关闭 Gatekeeper 或移除系统安全策略。
-- GitHub 仓库是私有的。未获仓库权限的同事可由房主直接转发 ZIP 与本指南，不需要先拿到源码仓库权限。
+- GitHub 仓库已公开。任何同事均可直接下载安装包，无需 GitHub 登录或源码仓库权限。
 
 ## 2. 登录自己的账号
 
@@ -24,7 +24,7 @@
 
 ## 3. 房主创建公网邀请
 
-1. 打开 / 克隆一个 Git 项目，新建会话。
+1. 打开本机文件夹，或克隆一个 Git 项目，新建会话。
 2. 进入会话后点右上角「分享」，网络选择「互联网」。首次点「安装协作组件」，等待下载校验完成。
 3. 点「复制邀请链接」，把链接发给同事。链接只授予当前工作区权限，24 小时有效。
 4. 保持应用打开、Mac 不休眠。首次建立通道需要联网访问 Cloudflare。
