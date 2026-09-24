@@ -1,3 +1,4 @@
+import { currentSessionBranch, assertExpectedBranch } from "./snapshots.mjs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, mkdtemp, readFile, writeFile, rename, rm, open, realpath } from "node:fs/promises";
@@ -73,11 +74,13 @@ export async function createSubtask(parentRoot, { id, baseCommit, requiredChecks
   return exclusive(place, async () => {
     try { await readFile(place.file); throw Error("子任务已经存在"); } catch (e) { if (e.code !== "ENOENT") throw e; }
     if (await git(place.root, ["rev-parse", `${commit}^{commit}`]) !== commit) throw Error("快照不是有效 commit");
+    const parentBranch = await currentSessionBranch(place.root);
+    await assertExpectedBranch(place.root, parentBranch);
     const worktree = join(dirname(place.root), ".rpo-subtasks", idValue(id));
     await mkdir(dirname(worktree), { recursive: true });
     const branch = `rpo/subtask/${idValue(id)}`;
     await git(place.root, ["worktree", "add", "-b", branch, worktree, commit]);
-    const state = { id, parentRoot: place.root, worktree, branch, baseCommit: commit, requiredChecks: checks, status: "working", at: new Date().toISOString() };
+    const state = { id, parentRoot: place.root, parentBranch, worktree, branch, baseCommit: commit, requiredChecks: checks, status: "working", at: new Date().toISOString() };
     await save(place, state); return state;
   });
 }
@@ -98,7 +101,9 @@ export async function captureCandidate(parentRoot, { id }) {
       await git(state.worktree, ["add", "-A", "--", "."], { env });
       const tree = await git(state.worktree, ["write-tree"], { env });
       const commit = tree === await git(state.worktree, ["rev-parse", `${head}^{tree}`]) ? head : await git(state.worktree, ["commit-tree", tree, "-p", head, "-m", `RPO subtask ${id} candidate`]);
-      await git(state.worktree, ["update-ref", "HEAD", commit, head]);
+      await assertExpectedBranch(state.worktree, state.branch);
+      await git(state.worktree, ["update-ref", `refs/heads/${state.branch}`, commit, head]);
+      await assertExpectedBranch(state.worktree, state.branch);
       await git(state.worktree, ["read-tree", commit]);
       state.candidateCommit = commit; state.status = "candidate"; delete state.checkedCandidate; delete state.checks;
       await save(place, state);
@@ -150,6 +155,7 @@ export async function integrateCandidate(parentRoot, { id, candidateCommit, expe
   const place = await location(parentRoot, id);
   return exclusive(place, async () => {
     const state = await load(place);
+    await assertExpectedBranch(place.root, state.parentBranch);
     if (state.status === "integrated") return { ...state, alreadyIntegrated: true };
     if (!candidateCommit || candidateCommit !== state.candidateCommit || candidateCommit !== state.checkedCandidate || !passed(state, state.checks || [])) throw Error("候选未通过必需检查或已改变");
     const receipt = `refs/rpo/subtask-integrations/${idValue(id)}`;
@@ -162,6 +168,7 @@ export async function integrateCandidate(parentRoot, { id, candidateCommit, expe
         return { ...state, alreadyIntegrated: true };
       } catch {}
     }
+    await assertExpectedBranch(place.root, state.parentBranch);
     await clean(place.root);
     const parentCommit = await git(place.root, ["rev-parse", "HEAD"]);
     if (hashValue(expectedParentCommit) !== parentCommit) return { status: "stale", parentCommit };
@@ -174,6 +181,7 @@ export async function integrateCandidate(parentRoot, { id, candidateCommit, expe
     const checks = await runChecks(place.root, state, integrationCommit);
     if (!passed(state, checks)) return { status: "failed", parentCommit, candidateCommit, checks };
     if (beforeApply) await beforeApply();
+    await assertExpectedBranch(place.root, state.parentBranch);
     await clean(place.root);
     if (await git(place.root, ["rev-parse", "HEAD"]) !== parentCommit) return { status: "stale", parentCommit: await git(place.root, ["rev-parse", "HEAD"]) };
     // A durable ref and checked record let retry recover after an interrupted state-file write.

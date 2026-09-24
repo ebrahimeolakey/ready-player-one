@@ -1,3 +1,4 @@
+import { defaultBindings, validateBindings } from "../core/keybindings.mjs";
 import { ACPConfigStore } from "../core/acp-config.mjs";
 import { registerACP, probeACP } from "../core/providers/acp.mjs";
 import {
@@ -288,6 +289,7 @@ const state = () => ({
     members: [],
   }),
   local: {
+    keyboard: { ...defaultBindings(process.platform), ...config.keyboard },
     runIssues: coordinator?.issues || [],
     update: updater?.getState(),
     laneOptions: config.laneOptions,
@@ -371,30 +373,41 @@ const coordinator = new RunCoordinator({
     const queued = lane?.queue?.find((q) => q.approvalId === a.id);
     const images = runImages.get(a.id) || runImages.get(queued?.id) || [];
     let custom = {};
+    let configuredModel;
     if (a.provider.startsWith("custom-")) {
       const settings = await providerStore.getRuntimeConfig(a.provider);
       registerOpenAICompatible(runtime, a.provider, {
         baseUrl: settings.baseUrl,
         model: settings.model,
+        requestUsage: settings.requestUsage === true,
         apiKeyEnv: settings.apiKey ? "RPO_SELECTED_PROVIDER_KEY" : undefined,
         tools: createWorkspaceTools(),
       });
       custom = { env: { RPO_SELECTED_PROVIDER_KEY: settings.apiKey } };
+      configuredModel = settings.model;
     }
     if (a.provider.startsWith("acp-")) {
       const settings = await acpStore.getRuntimeConfig(a.provider);
       registerACP(runtime, a.provider, settings);
+      configuredModel = settings.model;
     }
     if (debuggerService.isBusy(localRoot(a))) throw Error("请先停止项目调试");
     if (repoLocks.has(canonicalRoot(localRoot(a))))
       throw Error("项目正在执行 Git 操作，请稍后重试");
+    const selectedOptions = config.laneOptions[a.laneId] || {};
+    const model = selectedOptions.model || configuredModel || undefined;
+    await client.call("lane.configure", {
+      sessionId: a.sessionId, laneId: a.laneId,
+      model: model || null, effort: selectedOptions.effort || null,
+    });
     return {
-      ...config.laneOptions[a.laneId],
+      ...selectedOptions,
+      model,
       ...custom,
       images,
       codexConfig: { "mcp_servers.rpo": mcp },
       mcpServers: { rpo: mcp },
-      readOnlyMcpTools: ["mcp__rpo__rpo_context"],
+      readOnlyMcpTools: ["mcp__rpo__rpo_context", "mcp__rpo__rpo_overlap_check", "mcp__rpo__rpo_memory_list"],
     };
   },
   steeringImages: (id) => runImages.get(id) || [],
@@ -523,6 +536,7 @@ async function syncSession(sessionId) {
   syncBusy.add(sessionId);
   repoLocks.add(canonical);
   try {
+    await snapshots.assertSessionWorktree(root, { sessionId, allowConflicts: true });
     const conflicts = await snapshots.conflictFiles(root);
     if (conflicts.length) {
       syncStates.set(sessionId, { status: "conflict", files: conflicts });
@@ -564,7 +578,11 @@ async function syncSession(sessionId) {
       status: "synced",
     });
   } catch (e) {
-    syncStates.set(sessionId, { status: "error", message: e.message });
+    const branchPaused = ["RPO_SYNC_BRANCH_MISMATCH", "RPO_SYNC_BRANCH_UNBOUND"].includes(e.code);
+    syncStates.set(sessionId, {
+      status: branchPaused ? "paused" : "error", message: e.message,
+      ...(branchPaused ? { code: e.code, expectedBranch: e.expectedBranch, actualBranch: e.actualBranch } : {}),
+    });
   } finally {
     syncBusy.delete(sessionId);
     repoLocks.delete(canonical);
@@ -944,6 +962,10 @@ async function invoke(method, a) {
         ?.efforts?.includes(effort)
     )
       throw Error("此 API 尚未配置该推理强度");
+    await client.call("lane.configure", {
+      sessionId: a.sessionId, laneId: lane.id,
+      model: model || null, effort: effort || null,
+    });
     config.laneOptions[lane.id] = { model, effort };
     saveConfig();
     emit();
@@ -1138,6 +1160,23 @@ async function invoke(method, a) {
     await syncSession(a.sessionId);
     return true;
   }
+  if (method === "sync.binding" || method === "sync.bind") {
+    const s = client.state.sessions.find(s => s.id === a.sessionId && s.workspaceId === a.workspaceId);
+    if (!s) throw Error("会话不存在");
+    const root = config.sessionPaths[s.id];
+    if (!root) throw Error("请先创建会话独立工作树");
+    if (method === "sync.binding") return snapshots.inspectSessionWorktree(root, { sessionId: s.id });
+    const role = client.state.me.roles?.[s.workspaceId] || (client.state.me.host ? "owner" : "editor");
+    if (!["owner", "editor"].includes(role) || !s.lanes.some(l => l.ownerId === client.state.me.id))
+      throw Error("当前角色不能绑定同步分支");
+    const binding = await withRepository(root, () => snapshots.bindSessionWorktree(root, {
+      sessionId: s.id, expectedBranch: a.expectedBranch, replaceExpectedBranch: a.replaceExpectedBranch,
+    }));
+    syncStates.set(s.id, { status: "ready", message: "已绑定同步分支" });
+    emit();
+    if (config.syncSessions[s.id]) await syncSession(s.id);
+    return binding;
+  }
   if (method === "sync.conflict")
     return snapshots.conflictVersions(localRoot(a), a.path);
   if (method === "sync.resolve") {
@@ -1151,9 +1190,9 @@ async function invoke(method, a) {
   }
   if (method === "files") return local.files(localRoot(a), a.path);
   if (method === "file.search") return local.searchFiles(localRoot(a), a.query);
-  if (method === "file.read") return local.read(localRoot(a), a.path);
+  if (method === "file.read") return local.readBound(canonicalRoot(localRoot(a)), a.path);
   if (method === "file.save")
-    return local.save(localRoot(a), a.path, a.content, a.hash);
+    return local.saveBound(canonicalRoot(localRoot(a)), a.path, a.content, a.hash, a.expectedRoot);
   if (method === "git.changes") return local.changes(localRoot(a));
   if (method === "diff.publish") {
     const change = await local.changes(localRoot(a));
@@ -1163,6 +1202,12 @@ async function invoke(method, a) {
   if (method === "providers.refresh") {
     await refreshAccounts();
     return providerList;
+  }
+  if (method === "settings.keyboard") {
+    config.keyboard = validateBindings(a.bindings, process.platform);
+    saveConfig();
+    emit();
+    return config.keyboard;
   }
   if (method === "settings.name") {
     config.name = String(a.name).trim().slice(0, 40) || config.name;

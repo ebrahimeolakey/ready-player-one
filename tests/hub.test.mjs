@@ -342,3 +342,36 @@ test("malformed remote messages close the client without crashing", async (t) =>
   );
   client.close();
 });
+
+test('usage snapshots are persisted/shared, owner-fenced, bounded and idempotent without summing',async t=>{
+ const {codexUsage}=await import('../core/providers/usage.mjs');
+ const {hub,host,workspace,guest}=await setup(t),other=await guest();
+ const session=await host.call('session.create',{workspaceId:workspace.id,title:'usage'});
+ const lane=await host.call('lane.create',{sessionId:session.id,provider:'codex'});
+ const start=async()=>{const a=await host.call('run.request',{sessionId:session.id,laneId:lane.id,prompt:'synthetic',mode:'read-only'});await host.call('approval.decide',{id:a.id,allow:true});await host.call('run.claim',{id:a.id});return a.id;};
+ const runId=await start();
+ const usage=codexUsage({last:{totalTokens:20},total:{totalTokens:120},modelContextWindow:1000});
+ const a={sessionId:session.id,laneId:lane.id,runId,sequence:1,usage};
+ await assert.rejects(other.call('run.usage',a),/自己的/);
+ await host.call('member.role',{workspaceId:workspace.id,memberId:other.state.me.id,role:'viewer'});
+ await assert.rejects(other.call('run.usage',a),/editor 权限/);
+ await assert.rejects(host.call('run.usage',{...a,runId:'wrong'}),/结束/);
+ for(const n of [-1,0,1.5,100001]) await assert.rejects(host.call('run.usage',{...a,sequence:n}),/序号/);
+ for(const n of [-1,1.5,1e15,'10'])await assert.rejects(host.call('run.usage',{...a,usage:{...usage,context:{...usage.context,usedTokens:n}}}),/非负整数/);
+ await assert.rejects(host.call('run.usage',{...a,usage:{...usage,source:'claude'}}),/来源/);
+ assert.equal((await host.call('run.usage',a)).duplicate,false);
+ assert.equal((await host.call('run.usage',a)).duplicate,true);
+ await assert.rejects(host.call('run.usage',{...a,usage:{...usage,context:{...usage.context,usedTokens:21}}}),/冲突/);
+ const reduced={...a,sequence:2,usage:{...usage,context:{...usage.context,usedTokens:5}}};await host.call('run.usage',reduced);
+ assert.equal((await host.call('run.usage',a)).duplicate,true);
+ const stored=hub.store.readJSON(hub.file).sessions.find(s=>s.id===session.id).lanes.find(l=>l.id===lane.id).usage;
+ assert.equal(stored.sequence,2);assert.equal(stored.context.usedTokens,5);assert.equal(stored.cumulative.totalTokens,120);
+ await other.call('state');assert.equal(other.state.sessions.find(s=>s.id===session.id).lanes[0].usage.context.usedTokens,5);
+ await host.call('run.finish',{sessionId:session.id,laneId:lane.id,runId,status:'done'});
+ await assert.rejects(host.call('run.usage',reduced),/结束/);
+ const next=await start();assert.equal(hub.db.sessions.find(s=>s.id===session.id).lanes[0].usage,undefined);
+ await assert.rejects(host.call('run.usage',{...a,sequence:3}),/结束/);
+ await host.call('run.usage',{...a,runId:next});
+ await host.call('lane.stop',{sessionId:session.id,laneId:lane.id});
+ await assert.rejects(host.call('run.usage',{...a,runId:next,sequence:2}),/结束/);
+});

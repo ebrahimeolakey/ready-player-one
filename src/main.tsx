@@ -1,3 +1,5 @@
+import { KeyboardContext, KeyboardSettings, shortcutsAllowed } from "./KeyboardSettings";
+import { matchesBinding } from "../core/keybindings.mjs";
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -124,12 +126,12 @@ function App() {
   }, [state.workspaces, workspace]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !(e.target instanceof Element && e.target.closest("[data-shortcut-capture]"))) {
         setModal("");
         setRepoPicker(false);
         setSessionMenu("");
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if (shortcutsAllowed(e.target) && matchesBinding(e, "searchSessions", state.local.keyboard, state.local.os)) {
         e.preventDefault();
         setView("sessions");
         setSelected("");
@@ -138,7 +140,7 @@ function App() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, []);
+  }, [state.local.keyboard, state.local.os]);
   const ws = state.workspaces.find((w) => w.id === workspace),
     session = state.sessions.find((s) => s.id === selected),
     sessions = state.sessions.filter((s) => s.workspaceId === workspace),
@@ -182,6 +184,7 @@ function App() {
         : Date.parse(b.at) - Date.parse(a.at),
     );
   return (
+    <KeyboardContext.Provider value={{os:state.local.os,bindings:state.local.keyboard}}>
     <div className={"app-shell " + (!sidebar ? "sidebar-collapsed" : "")}>
       <div className="titlebar">
         <div className="drag-region" />
@@ -477,24 +480,7 @@ function App() {
                     </div>
                   </>
                 )}
-                {setting === "keyboard" && (
-                  <>
-                    {[
-                      ["搜索会话", "⌘K"],
-                      ["新建 Agent", "⇧⌘L"],
-                      ["展开 / 收起终端", "⌘J"],
-                      ["查找文件", "⌘P"],
-                      ["发送任务", "⌘↵"],
-                      ["保存文件", "⌘S"],
-                      ["关闭弹窗", "Esc"],
-                    ].map(([a, b]) => (
-                      <div className="setting-card" key={a}>
-                        <span className="grow">{a}</span>
-                        <kbd>{b}</kbd>
-                      </div>
-                    ))}
-                  </>
-                )}
+                {setting === "keyboard" && <KeyboardSettings bindings={state.local.keyboard} os={state.local.os} call={api.invoke} />}
                 {setting === "data" && (
                   <>
                     <div className="setting-card"><span className="grow">本机加密</span><span>{state.storage?.encrypted?"已开启":"连接中"}</span></div>
@@ -1153,6 +1139,7 @@ function App() {
         </Modal>
       )}
     </div>
+    </KeyboardContext.Provider>
   );
 }
 createRoot(document.getElementById("root")!).render(<App />);

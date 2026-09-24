@@ -1,3 +1,5 @@
+import { acpUsage } from "./usage.mjs";
+import { emitReportedConfiguration } from "./configuration.mjs";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, win32 } from "node:path";
 import { JsonLineProcess } from "./transport.mjs";
@@ -311,6 +313,7 @@ export class ACPRun {
       throw new Error("此 ACP Agent 未声明图片输入支持");
     this.emit({ type: "session", sessionId: this.sessionId });
     this.emit({ type: "catalog", ...acpCatalog(this.session, this.config) });
+    emitReportedConfiguration(this, acpCatalog(this.session, this.config).currentModelId, category(this.session, "thought_level")?.currentValue);
     this.emit({ type: "started", sessionId: this.sessionId });
     this.activePrompt = true;
     this.promptPromise = this.rpc(
@@ -443,6 +446,7 @@ export class ACPRun {
           type: "catalog",
           ...acpCatalog(this.session, this.config),
         });
+      if (!this.loading && this.activePrompt) emitReportedConfiguration(this, acpCatalog(this.session, this.config).currentModelId, category(this.session, "thought_level")?.currentValue);
       return;
     }
     if (update.sessionUpdate === "current_mode_update") {
@@ -507,6 +511,7 @@ export class ACPRun {
       this.emit({
         type: "usage",
         usage: { used: update.used, contextWindow: update.size },
+        usageSnapshot: acpUsage(update),
         cost: update.cost,
       });
     if (update.sessionUpdate === "plan")

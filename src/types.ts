@@ -1,19 +1,30 @@
+export type UsageSnapshot = {
+  version:1; source:'codex'|'claude'|'acp'|'openai-compatible';
+  context:{usedTokens:number|null;limitTokens:number|null;basis:'provider-context'|'last-request-input'};
+  cumulative:null|{scope:'provider-session'|'run'|'turn';includesSubagents:boolean|null;inputTokens:number|null;outputTokens:number|null;totalTokens:number|null;cachedInputTokens:number|null;cacheWriteInputTokens:number|null;reasoningOutputTokens:number|null};
+  cost:null|{amount:number;currency:string;scope:'provider-session'|'run'|'turn';kind:'estimate'|'reported'};
+};
+export type LaneUsage = UsageSnapshot & {runId:string;sequence:number;updatedAt:string};
 export type FileScope = { path: string; kind: "file" | "directory" | "unknown" };
 export type OverlapEvidence = { type: "path" | "plan-path" | "plan-step" | "task-keywords" | "lock"; current?: FileScope & {source:string;planId?:string}; other?: FileScope & {source:string;planId?:string}; planIds?:string[]; terms?:string[]; text?:string };
 export type OverlapDetail = { sessionId:string; sessionTitle:string; laneId:string; ownerId:string; owner:string; files:string[]; kind:"overlapping"|"adjacent"|"lock"; confidence:"high"|"advisory"; currentBranch:string|null; otherBranch:string|null; branchRelation:"same"|"different"|"unknown"; planIds:string[]; evidence:OverlapEvidence[]; algorithm:"deterministic-v1"; advisory:true; reason:string; lockId?:string; expires?:number };
 export type Entry = { id: string; role: string; text: string; at: string };
+export type ModelConfiguration = { model: string | null; effort: string | null };
 export type Lane = {
   id: string;
   ownerId: string;
   owner: string;
   provider: string;
   providerLabel?:string;
+  configuration?: ModelConfiguration & { updatedAt: string };
+  runConfiguration?: {runId:string;requested:ModelConfiguration;requestedAt:string;reported?:ModelConfiguration & {sequence:number;at:string}};
   status: string;
   entries: Entry[];
   files: string[];
   snapshot?: {ref:string; commit:string; at:string};
   activeRunId?:string;
   providerSessionId?:string;
+  usage?:LaneUsage;
   activity?:{fileScopes:FileScope[];branch:string|null;planIds:string[];at:string;expires:number};
   changesExpires?:number;
   steering?:{id:string;text:string;status:string;message?:string;runId?:string;restoredAt?:string}[];
@@ -85,6 +96,7 @@ export type State = {
   identity?:{configured:boolean;issuer?:string|null;audience:string};
   shared?: boolean;
   local: {
+    keyboard?:Record<string,string>;
     modelCatalogs?:Record<string,import("./ProviderControls").ProviderModel[]>;
     laneOptions?: Record<string,{model?:string;effort?:string}>;
     update?:import("./UpdatePanel").UpdateState;

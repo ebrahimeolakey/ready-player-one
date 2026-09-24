@@ -79,6 +79,11 @@ test("real stdio child: negotiate config catalogs, model/effort/mode, MCP, image
     onApproval: () => ({ allow: true }),
   });
   assert.equal((await completion).status, "done");
+  const configured = events.filter(e => e.type === "configuration").at(-1);
+  assert.equal(configured.model, "other-model"); assert.equal(configured.effort, "high");
+  const usage = events.find(e => e.type === "usage").usageSnapshot;
+  assert.deepEqual(usage.context, {usedTokens:10,limitTokens:1000,basis:"provider-context"});
+  assert.equal(usage.cumulative, null);
   assert.equal(
     await readFile(join(f.cwd, "approved.txt"), "utf8"),
     "only after allow_once",

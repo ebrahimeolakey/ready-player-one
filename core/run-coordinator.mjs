@@ -1,3 +1,5 @@
+import { validateUsage } from "./providers/usage.mjs";
+import { publicConfiguration } from "./providers/configuration.mjs";
 import {randomUUID, createHash} from 'node:crypto';
 import {mkdirSync,readFileSync,writeFileSync,renameSync,readdirSync} from 'node:fs';
 import {join} from 'node:path';
@@ -78,8 +80,18 @@ export class RunCoordinator {
    const latest=c.state?.sessions.find(s=>s.id===approval.sessionId)?.lanes.find(l=>l.id===approval.laneId);
    if(latest?.stopRequested||latest?.fencedRunId===r.runId)throw Error('执行已撤销');
    r.phase='starting';this.save(r);
+   this.enqueue(r,'run.configuration',{phase:'requested',...publicConfiguration(options)});
    await this.runtime.start({runId:r.runId,provider:approval.provider,cwd:this.root(approval),prompt,mode:approval.mode,sessionId:lane.providerSessionId,...options,
     onEvent:e=>{
+     if(e.type==='configuration'&&!r.ended){
+      let configuration;try{configuration=publicConfiguration(e);}catch{return;}
+      const key=JSON.stringify(configuration);
+      if(r.reportedConfigurationKey!==key){r.reportedConfigurationKey=key;r.configurationSequence=(r.configurationSequence||0)+1;this.enqueue(r,'run.configuration',{phase:'reported',sequence:r.configurationSequence,...configuration});}
+     }
+     if(e.type==='usage'&&e.usageSnapshot&&!r.ended){
+      let usage;try {usage=validateUsage(e.usageSnapshot);}catch{return;}
+      r.usageSequence=(r.usageSequence||0)+1;this.enqueue(r,'run.usage',{sequence:r.usageSequence,usage});
+     }
      if(e.type==='session')this.enqueue(r,'run.session',{providerSessionId:e.sessionId});
      if(e.type==='delta'&&e.text)this.enqueue(r,'run.entry',{eventId:randomUUID(),entryId:`${r.runId}:${e.itemId||'output'}`,delta:true,role:e.role||'assistant',text:e.text});
      if(e.type==='message'&&e.text)this.enqueue(r,'run.entry',{eventId:randomUUID(),entryId:`${r.runId}:${e.itemId||randomUUID()}`,delta:false,role:e.role||'assistant',text:e.text});

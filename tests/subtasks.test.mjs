@@ -87,3 +87,19 @@ test("commands only come from explicit creation config; checks that alter candid
   assert.equal(result.status, "failed"); assert.match(result.checks[0].output, /修改了候选/);
   assert.equal((await subtaskState(root, "mutation")).requiredChecks[0].id, "mutates");
 });
+
+test('integration fences exact parent branch even at same commit and rechecks after approval/checks',async t=>{
+ const {root,base}=await setup(t),task=await createSubtask(root,{id:'branch-fence',baseCommit:base,requiredChecks:checks});
+ await writeFile(join(task.worktree,'child.txt'),'checked child\n');const candidate=await captureCandidate(root,{id:task.id});await checkCandidate(root,{id:task.id,candidateCommit:candidate.candidateCommit});
+ const args={id:task.id,candidateCommit:candidate.candidateCommit,expectedParentCommit:base};
+ for(const branch of ['ordinary','rpo/other']){
+  await git(root,['switch','-c',branch]);await writeFile(join(root,'dirty.txt'),'staged');await git(root,['add','dirty.txt']);await writeFile(join(root,'dirty.txt'),'unstaged');
+  const before=[await git(root,['show-ref']),await git(root,['diff','--cached']),await git(root,['diff'])];
+  await assert.rejects(integrateCandidate(root,args),e=>e.code==='RPO_SYNC_BRANCH_MISMATCH'&&e.expectedBranch==='main');
+  assert.deepEqual([await git(root,['show-ref']),await git(root,['diff','--cached']),await git(root,['diff'])],before);
+  await git(root,['restore','--staged','dirty.txt']);await rm(join(root,'dirty.txt'));await git(root,['switch','main']);
+ }
+ await assert.rejects(integrateCandidate(root,{...args,beforeApply:()=>git(root,['switch','-c','rpo/mid-check'])}),{code:'RPO_SYNC_BRANCH_MISMATCH'});
+ assert.equal(await git(root,['rev-parse','HEAD']),base);await assert.rejects(git(root,['show-ref','--verify',`refs/rpo/subtask-integrations/${task.id}`]));
+ await git(root,['switch','main']);assert.equal((await integrateCandidate(root,args)).status,'integrated');
+});

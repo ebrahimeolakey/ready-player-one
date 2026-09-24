@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { shellCommand, platformEnv } from "../../core/platform.mjs";
 import { worktree } from "../../core/local.mjs";
-import { publishSnapshot, receiveSnapshot } from "../../core/snapshots.mjs";
+import { publishSnapshot, receiveSnapshot, bindSessionWorktree, assertSessionWorktree } from "../../core/snapshots.mjs";
 import { checkpointSubtaskSource, createSubtask, captureCandidate, reviewCandidate, checkCandidate, integrateCandidate, subtaskState } from "../../core/subtasks.mjs";
 const exec = promisify(execFile);
 const supported = new Set(["tasks.spawn", "tasks.review", "tasks.check", "tasks.integrate", "handoff.prepare", "handoff.receive"]);
@@ -30,6 +30,10 @@ export function createTaskCoordination({ client, runtime, localRoot, config, sav
       saveConfig();
     }
     return localRoot({ ...params, laneId });
+  }
+  async function assertBoundContext(root, sessionId) {
+    if (config.sessionPaths[sessionId] === root || Object.values(config.lanePaths).includes(root))
+      await assertSessionWorktree(root, {sessionId});
   }
   function ownedLane(ctx, laneId) {
     const lane = ctx.session.lanes.find(l => l.id === laneId);
@@ -78,10 +82,12 @@ export function createTaskCoordination({ client, runtime, localRoot, config, sav
         // Only the renderer's explicit user form supplies commands; Agent messages never feed this config.
         const requiredChecks = args.checkCommands.map((line, index) => { const [command, shellArgs] = shellCommand(line); return { id: `check-${index + 1}`, command, args: shellArgs }; });
         const root = localRoot({ ...params, laneId: parent.id });
+        await assertBoundContext(root, session.id);
         const baseCommit = await checkpointSubtaskSource(root);
         const created = await c.call("subtask.request", { ...params, parentLaneId: parent.id, ownerId: state.me.id, title: args.title.trim(), prompt: args.prompt.trim(), baseCommit, requiredCheckIds: requiredChecks.map(c => c.id) });
         try {
           const local = await createSubtask(root, { id: created.id, baseCommit, requiredChecks });
+          await bindSessionWorktree(local.worktree, {sessionId:session.id, expectedBranch:local.branch});
           const claimed = await c.call("subtask.claim", { id: created.id, baseCommit, worktreeReady: true, provider: args.provider || parent.provider });
           config.lanePaths[claimed.lane.id] = local.worktree; saveConfig();
           return { ...claimed, worktree: local.worktree, baseCommit };
@@ -98,10 +104,12 @@ export function createTaskCoordination({ client, runtime, localRoot, config, sav
         if(["running","awaiting"].includes(parent.status)||runtime.runs.has(parent.activeRunId))throw Error("请先等待或停止父 Agent，再集成子任务");
         const root = localRoot({ ...params, laneId: task.parentLaneId });
         return withRepository(root,async()=>{
+        await assertBoundContext(root, session.id);
         const reviewed = await subtaskState(root, task.id);
         if (args.candidateCommit !== task.candidate?.commit || args.candidateCommit !== reviewed.candidateCommit) throw Error("候选已经变化，请重新审阅和检查");
         const expectedParentCommit = (await exec("git", ["rev-parse", "HEAD"], { cwd: root, env: platformEnv() })).stdout.trim();
         const result = await integrateCandidate(root, { id: task.id, candidateCommit: args.candidateCommit, expectedParentCommit, beforeApply: async () => {
+          await assertBoundContext(root, session.id);
           const latest = await context(args);
           const parent=ownedLane(latest, latest.task.parentLaneId);
           if(["running","awaiting"].includes(parent.status)||runtime.runs.has(parent.activeRunId))throw Error("父 Agent 已开始执行，暂不集成");
@@ -127,6 +135,7 @@ export function createTaskCoordination({ client, runtime, localRoot, config, sav
         const sourceCheckpoint = await checkpointSubtaskSource(originalRoot);
         const root = await dedicated(ctx, source.id);
         const publish=async()=>{
+          await assertSessionWorktree(root, {sessionId:session.id});
           if (root !== originalRoot) await exec("git", ["-c", "core.hooksPath=", "merge", "--ff-only", sourceCheckpoint], { cwd: root, env: platformEnv() });
           const snapshot = await publishSnapshot(root, { sessionId: session.id, ownerId: state.me.id });
           await c.call("snapshot.publish", { ...params, laneId: source.id, ...snapshot });

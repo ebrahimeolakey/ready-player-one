@@ -1,3 +1,4 @@
+import { bindSessionWorktree, inspectSessionWorktree } from "./snapshots.mjs";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import {
@@ -122,6 +123,17 @@ export async function save(root, path, content, expectedHash) {
   await writeFile(p, content, "utf8");
   return { hash: hash(content) };
 }
+// Pin editor I/O to the canonical directory observed when a document was opened.
+export async function readBound(root, path) {
+  const canonicalRoot = await realpath(root);
+  return {...await read(canonicalRoot, path), canonicalRoot};
+}
+export async function saveBound(root, path, content, expectedHash, expectedRoot) {
+  const canonicalRoot = await realpath(root);
+  if (typeof expectedRoot !== "string" || expectedRoot !== canonicalRoot)
+    throw Error("项目目录已改变，未保存内容已保留。请切回原目录，或重新打开当前目录的文件后合并。");
+  return {...await save(canonicalRoot, path, content, expectedHash), canonicalRoot};
+}
 export async function changes(root) {
   try {
     const status = await git(root, ["status", "--porcelain=v1", "-z"]);
@@ -157,8 +169,13 @@ export async function worktree(root, sessionId, dataDir) {
   const target = join(dataDir, "worktrees", sessionId);
   try {
     await access(target);
+    await inspectSessionWorktree(target, {sessionId});
+    const common = async path => realpath(resolve(path, (await git(path, ["rev-parse", "--git-common-dir"])).trim()));
+    if (await common(root) !== await common(target)) throw Error("现有工作树不属于当前项目仓库");
+    // Recover the path after an older version or crash, without adopting its
+    // current branch. The explicit binding UI handles unbound/paused state.
     return target;
-  } catch {}
+  } catch (error) { if (error.code !== "ENOENT") throw error; }
   await mkdir(dirname(target), { recursive: true });
   await git(root, [
     "worktree",
@@ -168,6 +185,7 @@ export async function worktree(root, sessionId, dataDir) {
     target,
     "HEAD",
   ]);
+  await bindSessionWorktree(target, {sessionId, expectedBranch:`rpo/${sessionId.slice(0, 8)}`});
   return target;
 }
 export async function providers() {

@@ -1,3 +1,5 @@
+import { validateUsage } from "./providers/usage.mjs";
+import { publicConfiguration } from "./providers/configuration.mjs";
 import { fileScopes, branchName, planIds } from "./overlap.mjs";
 import { WebSocketServer } from "ws";
 import { EventEmitter } from "node:events";
@@ -330,11 +332,15 @@ export class Hub extends EventEmitter {
     if (method.startsWith("handoff.") && a.id) workspaceId = this.db.handoffs.find(v => v.id === a.id)?.workspaceId;
     if (method.startsWith("subtask.") && a.id) workspaceId = this.db.subtasks.find(v => v.id === a.id)?.workspaceId;
     if (["tool.decide", "tool.claim"].includes(method)) workspaceId = this.db.toolApprovals.find(v => v.id === a.id)?.workspaceId;
-    if (["memory.update", "memory.retire"].includes(method)) workspaceId = this.db.memories.find(v => v.id === a.id)?.workspaceId;
+    if (["memory.update", "memory.retire"].includes(method)) {
+      const targetWorkspaceId = this.db.memories.find(v => v.id === a.id)?.workspaceId;
+      if (targetWorkspaceId && ((workspaceId && workspaceId !== targetWorkspaceId) || (a.workspaceId && a.workspaceId !== targetWorkspaceId))) throw Error("记忆不属于当前工作区");
+      workspaceId = targetWorkspaceId;
+    }
     if (!workspaceId) return; // The target handler supplies its specific missing-resource error.
     this.workspace(peer, workspaceId);
     const required = ["invite.create", "invite.revoke", "member.role", "member.remove"].includes(method) ? "owner"
-      : ["session.export", "coordination.context"].includes(method) ? "viewer"
+      : ["session.export", "coordination.context", "memory.list"].includes(method) ? "viewer"
       : ["comment.add", "comment.resolve", "plan.add", "plan.claim", "plan.status", "plan.toggle", "plan.transfer", "plan.transfer.accept", "plan.transfer.decline"].includes(method) ? "commenter" : "editor";
     if (ROLES.indexOf(this.role(peer, workspaceId)) < ROLES.indexOf(required)) throw Error(`此操作需要 ${required} 权限`);
   }
@@ -469,6 +475,13 @@ export class Hub extends EventEmitter {
       s.status = a.restore ? "active" : "archived";
       return true;
     }
+    if (method === "lane.configure") {
+      const { s, l } = this.lane(peer, a);
+      if (s.status !== "active") throw Error("请先恢复会话");
+      if (Object.keys(a).some(k => !["sessionId", "workspaceId", "laneId", "model", "effort"].includes(k))) throw Error("模型配置只能包含公开名称");
+      l.configuration = { ...publicConfiguration(a), updatedAt: now() };
+      return l.configuration;
+    }
     if (method === "lane.create") {
       const s = this.session(peer, a.sessionId);
       if (s.status !== "active") throw Error("请先恢复会话");
@@ -565,6 +578,8 @@ export class Hub extends EventEmitter {
       delete l.stopRequested;
       delete l.offlineSince;
       l.acceptedEventIds = [];
+      delete l.usage;
+      delete l.runConfiguration;
       this.entry(l, "user", ap.prompt);
       return {
         approval: ap,
@@ -573,6 +588,46 @@ export class Hub extends EventEmitter {
           (m) => m.workspaceId === s.workspaceId && !m.retired,
         ),
       };
+    }
+    if (method === "run.configuration") {
+      const { l } = this.lane(peer, a);
+      if (l.status !== "running" || l.activeRunId !== a.runId || l.stopRequested || l.fencedRunId === a.runId) throw Error("执行已结束");
+      if (Object.keys(a).some(k => !["sessionId", "workspaceId", "laneId", "runId", "phase", "sequence", "model", "effort"].includes(k))) throw Error("模型配置只能包含公开名称");
+      if (!["requested", "reported"].includes(a.phase)) throw Error("模型配置阶段无效");
+      const selection = publicConfiguration(a);
+      const prior = l.runConfiguration;
+      if (a.phase === "requested") {
+        if (prior) {
+          if (JSON.stringify(prior.requested) !== JSON.stringify(selection)) throw Error("本轮发送参数已固定");
+          return { accepted: true, duplicate: true };
+        }
+        l.runConfiguration = { runId: a.runId, requested: selection, requestedAt: now() };
+      } else {
+        if (!prior) throw Error("请先记录本轮发送参数");
+        if (!Number.isSafeInteger(a.sequence) || a.sequence < 1 || a.sequence > 10000) throw Error("模型配置序号无效");
+        if (prior.reported && a.sequence <= prior.reported.sequence) {
+          if (a.sequence === prior.reported.sequence && JSON.stringify(publicConfiguration(prior.reported)) !== JSON.stringify(selection)) throw Error("模型配置序号内容冲突");
+          return { accepted: true, duplicate: true };
+        }
+        prior.reported = { ...selection, sequence: a.sequence, at: now() };
+      }
+      return { accepted: true, duplicate: false };
+    }
+    if (method === "run.usage") {
+      const { l } = this.lane(peer, a);
+      if (l.status !== "running" || l.activeRunId !== a.runId || l.stopRequested || l.fencedRunId === a.runId)
+        throw Error("执行已结束");
+      if (!Number.isSafeInteger(a.sequence) || a.sequence < 1 || a.sequence > 100000) throw Error("无效用量序号");
+      const usage = validateUsage(a.usage);
+      const expectedSource = l.provider === "codex" || l.provider === "claude" ? l.provider : l.provider.startsWith("acp-") ? "acp" : "openai-compatible";
+      if (usage.source !== expectedSource) throw Error("用量来源与 Provider 不匹配");
+      const previous = l.usage;
+      if (previous?.runId === a.runId && a.sequence <= previous.sequence) {
+        if (a.sequence === previous.sequence && JSON.stringify(usage) !== JSON.stringify(validateUsage(previous))) throw Error("用量序号内容冲突");
+        return { accepted: true, duplicate: true };
+      }
+      l.usage = { ...usage, runId:a.runId, sequence:a.sequence, updatedAt:now() };
+      return { accepted:true, duplicate:false };
     }
     if (method === "run.entry") {
       const { l } = this.lane(peer, a);
@@ -674,7 +729,9 @@ export class Hub extends EventEmitter {
       const m = this.db.memories.find((m) => m.id === a.id);
       if (!m) throw Error("记忆不存在");
       this.workspace(peer, m.workspaceId);
-      m.retired = !m.retired;
+      if (a.retired !== undefined && typeof a.retired !== "boolean") throw Error("retired 必须为布尔值");
+      // Legacy UI calls retain toggle semantics; MCP always supplies an explicit target state.
+      m.retired = a.retired === undefined ? !m.retired : a.retired;
       return true;
     }
     throw Error("不支持的操作：" + method);

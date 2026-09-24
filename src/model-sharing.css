@@ -1,0 +1,2 @@
+.lane-header .lane-provider { display: block; font-size: 10px; color: #989898; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-lane > span:first-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -35,6 +35,7 @@ const publicConfig = (config) => ({
   model: config.model,
   models: config.models,
   efforts: config.efforts || [],
+  requestUsage: config.requestUsage === true,
   updatedAt: config.updatedAt,
   hasKey: Boolean(config.encryptedKey),
 });
@@ -135,6 +136,7 @@ export class ProviderConfigStore {
         )
       )
         throw Error("推理强度列表无效");
+      if (input.requestUsage !== undefined && typeof input.requestUsage !== "boolean") throw Error("用量统计选项无效");
       let encryptedKey = old?.encryptedKey || null;
       if (input.removeKey) encryptedKey = null;
       if (input.apiKey) {
@@ -153,6 +155,7 @@ export class ProviderConfigStore {
         model,
         models: [...new Set(models)],
         efforts: [...new Set(efforts)],
+        requestUsage: input.requestUsage ?? old?.requestUsage ?? false,
         encryptedKey,
         updatedAt: new Date().toISOString(),
       };

@@ -205,7 +205,7 @@ test("MCP tools preserve scope and perform real Hub role authorization", async t
   assert.equal(denied.result.isError, true); assert.match(denied.result.content[0].text, /commenter 权限/);
 });
 test("stdio MCP subprocess performs JSON-RPC handshake, list and live claim without leaking config", async t => {
-  const { hub, owner, w, s } = await setup(t); await hub.listen();
+  const { hub, owner, w, s, peers } = await setup(t); await hub.listen();
   const token = hub.act(owner, "invite.create", { workspaceId: w.id }).token;
   const secret = randomBytes(32).toString("hex");
   const proc = spawn(process.execPath, [resolve("core/mcp-coordination.mjs")], { env: { ...process.env, RPO_HUB_URL: `ws://127.0.0.1:${hub.port}`, RPO_HUB_TOKEN: token, RPO_CLIENT_SECRET: secret, RPO_SESSION_ID: s.id } });
@@ -225,6 +225,19 @@ test("stdio MCP subprocess performs JSON-RPC handshake, list and live claim with
   const plan = JSON.parse(add.result.content[0].text);
   const claim = await rpc("tools/call", { name: "rpo_plan_claim", arguments: { id: plan.id } });
   assert.equal(JSON.parse(claim.result.content[0].text).status, "in-progress");
+  const tool = async (name, args) => {
+    const response = await rpc("tools/call", { name: `rpo_${name}`, arguments: args });
+    assert.equal(response.result.isError, false, JSON.stringify(response));
+    return JSON.parse(response.result.content[0].text);
+  };
+  const next = await tool("plan_add", { text: "交付检查" });
+  assert.equal((await tool("plan_assign", { id: next.id, assigneeId: peers.commenter.id })).assigneeId, peers.commenter.id);
+  const memory = await tool("memory_add", { title: "协作规则", text: "旧规则" });
+  assert.equal((await tool("memory_update", { id: memory.id, text: "新规则" })).text, "新规则");
+  await tool("memory_retire", { id: memory.id, retired: true });
+  await tool("memory_retire", { id: memory.id, retired: true });
+  assert.deepEqual(await tool("memory_list", {}), []);
+  assert.equal((await tool("memory_list", { includeRetired: true }))[0].retired, true);
   assert.equal(allOutput.includes(token), false); assert.equal(allOutput.includes(secret), false);
   const exited = new Promise(resolve => proc.once("exit", resolve)); proc.stdin.end(); assert.equal(await exited, 0);
 });

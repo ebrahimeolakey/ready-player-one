@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { JsonLineProcess, Requests } from "./transport.mjs";
 import { codexInput, claudeInput } from "./input.mjs";
 
+import { codexUsage, ClaudeUsage } from "./usage.mjs";
+import { emitReportedConfiguration } from "./configuration.mjs";
+
 const noOp = () => {};
 
 class BaseRun {
@@ -134,6 +137,8 @@ export class CodexRun extends BaseRun {
       ...(this.options.effort ? { effort: this.options.effort } : {}),
     });
     this.turnId = turn.turn.id;
+    // thread response confirms the model; an explicit turn effort is not echoed by turn/start.
+    emitReportedConfiguration(this, result.model, this.options.effort ? null : result.reasoningEffort);
     this.emit({
       type: "started",
       sessionId: this.sessionId,
@@ -268,7 +273,7 @@ export class CodexRun extends BaseRun {
         });
     }
     if (message.method === "thread/tokenUsage/updated")
-      this.emit({ type: "usage", usage: p.tokenUsage });
+      this.emit({ type: "usage", usage: p.tokenUsage, usageSnapshot: codexUsage(p.tokenUsage) });
     if (message.method === "serverRequest/resolved") {
       this.approvals.delete(String(p.requestId));
       this.emit({ type: "approvalResolved", approvalId: String(p.requestId) });
@@ -460,6 +465,15 @@ export class ClaudeRun extends BaseRun {
       return;
     }
     this.rememberSession(message.session_id);
+    if (!message.parent_tool_use_id) {
+      const model = message.type === "system" && message.subtype === "init" ? message.model
+        : message.type === "assistant" ? message.message?.model
+        : message.type === "stream_event" && message.event?.type === "message_start" ? message.event.message?.model : undefined;
+      if (model) emitReportedConfiguration(this, model);
+    }
+    this.usageTracker ??= new ClaudeUsage();
+    const usageSnapshot = this.usageTracker.receive(message);
+    if (usageSnapshot) this.emit({ type: "usage", usageSnapshot });
     if (message.type === "stream_event") {
       const event = message.event || {};
       if (event.type === "message_start") this.messageId = event.message?.id;
@@ -539,11 +553,6 @@ export class ClaudeRun extends BaseRun {
     }
     if (message.type === "result") {
       this.inflightMessages--;
-      this.emit({
-        type: "usage",
-        usage: message.usage,
-        costUsd: message.total_cost_usd,
-      });
       if (message.is_error || this.inflightMessages <= 0)
         this.finish(
           message.is_error

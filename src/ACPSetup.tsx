@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, TerminalSquare } from "lucide-react";
 import { Modal, type Call } from "./ui";
+function errorText(error: unknown) {
+  if (error instanceof SyntaxError) return "参数和环境变量需要使用有效的 JSON";
+  const message = (
+    error instanceof Error ? error.message : String(error)
+  ).replace(/^Error invoking remote method 'rpo:invoke': Error: /, "");
+  if (/\bENOENT\b/.test(message))
+    return "未找到本机程序。请先安装，或填写程序的完整路径。";
+  if (/\bEACCES\b|\bEPERM\b/.test(message))
+    return "无法启动此程序，请检查文件的执行权限。";
+  return message;
+}
 type ACP = {
   id?: string;
   name: string;
@@ -26,7 +37,7 @@ export function ACPSetup({ call }: { call: Call }) {
     try {
       setProviders(await call("providers.acp.list"));
     } catch (e) {
-      setError(String(e));
+      setError(errorText(e));
     }
   };
   useEffect(() => {
@@ -55,7 +66,7 @@ export function ACPSetup({ call }: { call: Call }) {
       setEnv("");
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -72,7 +83,7 @@ export function ACPSetup({ call }: { call: Call }) {
           : `${p.name}：已连接 · ${r.models.length} 个模型`,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -112,7 +123,7 @@ export function ACPSetup({ call }: { call: Call }) {
                 await call("providers.acp.remove", { id: p.id });
                 await refresh();
               } catch (e) {
-                setError(String(e));
+                setError(errorText(e));
               }
             }}
           >

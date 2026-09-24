@@ -48,3 +48,16 @@
 2026-09-24 本批完整测试 211 项通过；TypeScript / Vite 构建通过。桌面图片链路实际添加 64×64 纯蓝 PNG，发起只读审批，经本机 Codex 返回“蓝色”。这是实际账户调用，并非模拟回复。同一会话双分栏输入已验证双向同步，重启 0.4.1 打包应用后仍可恢复。
 
 用户确认先发未签名测试版，Apple Developer 证书、GitHub OAuth 应用与固定 HTTPS 回调配置以后补。本节内容随 0.4.1-beta.1 发布；原 0.4.0 安装包保持不变。
+
+## 0.4.2-beta.1 源码进展
+
+- 上下文用量：原生 Codex / Claude、ACP 与兼容 API 统一口径，当前占用与累计分开、缺失值明确未知；共享、持久化和重传。真实 Codex 返回 `USAGE_OK`，UI 读数与 Hub 一致并跨重启保留。见 [PROVIDER-USAGE](PROVIDER-USAGE.md)。
+- 成员模型：成员栏和通道标题显示模型；下次选择、本轮发送和 Provider 确认分开记录。真实 Codex `MODEL_OK` 已核对。见 [MODEL-SHARING](MODEL-SHARING.md)。
+- 快捷键：七项动作可改、停用和恢复默认，校验冲突、系统保留键、输入法及终端焦点。Mac 真实修改与重启恢复已通过。见 [KEYBOARD-SHORTCUTS](KEYBOARD-SHORTCUTS.md)。
+- 同步分支：绑定确切 linked worktree 分支，误切普通/其他 rpo/分离 HEAD 都暂停；旧会话显式确认绑定。真实桌面在本机 bare remote 成功同步，误切后暂停，切回后恢复。子任务应用前复核父分支。见 [SESSION-BRANCHES](SESSION-BRANCHES.md)。
+- MCP：补齐计划分配、记忆更新、显式停用/恢复和限定工作区的记忆查询；保留实时权限与只读列表。子任务 MCP 本机桥仍未实现。见 [MCP-COORDINATION](MCP-COORDINATION.md)。
+- 修复 macOS 调试停止时短暂僵尸进程组导致的 EPERM：等待系统确认退出，持续权限错误仍保留阻塞状态；ACP 缺程序报错中文化。
+
+Windows 原生 CI 已验证实际 Electron、加密设置、PowerShell PTY、退出清理与 ZIP/NSIS 构建，见 [WINDOWS-NATIVE-CI](WINDOWS-NATIVE-CI.md)。仍未覆盖实体设备首次安装、真实账号 GUI 登录及两台实体机器公网协作。
+
+本批发行源码隔离构建的完整回归 **247/247 通过**，TypeScript / Vite 构建通过。新增目录绑定保存校验：进入工作树或重新关联项目后，文件/Git 面板刷新，旧编辑内容不会写进新目录；草稿按真实目录隔离，旧草稿可明确预览并载入，载入本身不保存文件。

@@ -11,19 +11,24 @@ const definitions = [
   ["plan_add", "plan.add", "在当前会话拆分一个可分配的计划步骤。", { text: string, assigneeId: string, fileScopes:scopes }, ["text"]],
   ["overlap_check", "coordination.check", "检查当前通道的文件/目录、计划和其他活动任务是否相交；结果为确定性建议，不阻止本机写入。", {prompt:string,fileScopes:scopes,planIds:{type:"array",items:string,maxItems:50},branch:string}, []],
   ["plan_claim", "plan.claim", "认领尚未由其他成员领取的步骤。", { id: string }, ["id"]],
+  ["plan_assign", "plan.assign", "分配当前会话的已有步骤；进行中步骤仍需双方确认转交。", { id: string, assigneeId: string }, ["id", "assigneeId"]],
   ["plan_status", "plan.status", "更新步骤进度。", { id: string, status: { enum: ["todo", "in-progress", "blocked", "done"] } }, ["id", "status"]],
   ["plan_transfer", "plan.transfer", "将自己负责的步骤转交给工作区成员。", { id: string, assigneeId: string }, ["id", "assigneeId"]],
   ["message", "coordination.message", "给当前会话或指定 Agent 通道发送协调消息。", { text: string, laneId: string }, ["text"]],
   ["memory_add", "memory.add", "写入共享记忆，可绑定文件、commit 及文件内容哈希。", { title: string, text: string, files: { type: "array", items: ref, maxItems: 100 } }, ["title", "text"]],
+  ["memory_list", "memory.list", "读取当前工作区记忆，可包含停用项；不会查询其他工作区。", { includeRetired: { type: "boolean" } }, []],
+  ["memory_update", "memory.update", "更新当前工作区的已有记忆；引用应来自实际文件，不自动验证本机内容。", { id: string, title: string, text: string, files: { type: "array", items: ref, maxItems: 100 } }, ["id"]],
+  ["memory_retire", "memory.retire", "明确停用或恢复当前工作区记忆，重复相同决定不会反转状态。", { id: string, retired: { type: "boolean" } }, ["id", "retired"]],
   ["lock_acquire", "lock.acquire", "申请建议性文件锁；冲突时返回持有人，不会强制阻止文件写入。", { path: string, kind:{enum:["file","directory"]}, ttlMs: { type: "integer", minimum: 1000, maximum: 1800000 } }, ["path"]],
   ["lock_renew", "lock.renew", "续期当前成员持有的建议性文件锁。", { id: string, ttlMs: { type: "integer", minimum: 1000, maximum: 1800000 } }, ["id"]],
   ["lock_release", "lock.release", "释放当前成员持有的建议性文件锁。", { id: string }, ["id"]],
 ];
-export const coordinationTools = definitions.map(([name, , description, properties, required]) => ({ name: `rpo_${name}`, description, inputSchema: { type: "object", properties, required, additionalProperties: false }, annotations: { readOnlyHint: ["context","overlap_check"].includes(name), destructiveHint: false, idempotentHint: ["context","overlap_check"].includes(name), openWorldHint: false } }));
+export const coordinationTools = definitions.map(([name, , description, properties, required]) => ({ name: `rpo_${name}`, description, inputSchema: { type: "object", properties, required, additionalProperties: false }, annotations: { readOnlyHint: ["context","overlap_check","memory_list"].includes(name), destructiveHint: false, idempotentHint: ["context","overlap_check","memory_list","memory_retire"].includes(name), openWorldHint: false } }));
 
 function valid(value, schema) {
   if (schema.enum && !schema.enum.includes(value)) return false;
   if (schema.type === "string") return typeof value === "string";
+  if (schema.type === "boolean") return typeof value === "boolean";
   if (schema.type === "integer") return Number.isInteger(value) && value >= (schema.minimum ?? -Infinity) && value <= (schema.maximum ?? Infinity);
   if (schema.type === "array") return Array.isArray(value) && value.length <= (schema.maxItems ?? Infinity) && value.every(v => valid(v, schema.items));
   if (schema.type === "object") return value && typeof value === "object" && !Array.isArray(value) && (schema.required || []).every(k => Object.hasOwn(value, k)) && Object.keys(value).every(k => Object.hasOwn(schema.properties, k) && valid(value[k], schema.properties[k]));
@@ -51,6 +56,10 @@ export function createCoordinationMcp({ client, sessionId, laneId }) {
       // Fetch current scope each time; removed sessions/role changes cannot use cached authorization.
       const context = await client.call("coordination.context", { sessionId });
       const method = definitions[index][1];
+      if (["memory.update", "memory.retire"].includes(method)) {
+        const memories = await client.call("memory.list", { sessionId, workspaceId: context.session.workspaceId, includeRetired: true });
+        if (!memories.some(m => m.id === args.id)) throw Error("记忆不属于当前工作区");
+      }
       if ((method.startsWith("lock.") || method === "coordination.check") && !laneId) throw Error("当前 MCP 未绑定 Agent 通道");
       if (["lock.renew", "lock.release"].includes(method) && !context.locks.some(l => l.id === args.id && l.laneId === laneId)) throw Error("只能操作当前 Agent 通道的文件锁");
       const result = method === "coordination.context" ? context : await client.call(method, { ...args, sessionId, workspaceId: context.session.workspaceId, ...((method.startsWith("lock.") || method === "coordination.check") ? { laneId } : {}) });

@@ -111,3 +111,40 @@ test("pending start reserves workspace, owner close before spawn does not leave 
   await service.closeAll();release();await assert.rejects(start,/关闭/);
   assert.equal(service.isBusy(root),false);assert.equal(service.records.size,0);
 });
+
+test('macOS zombie-only process group is EPERM until reaped; debugger must wait for ESRCH', {skip:process.platform!=='darwin',timeout:10000},async t=>{
+  const {spawn,execFileSync}=await import('node:child_process');
+  const {once}=await import('node:events');
+  // Only these two test-created processes receive signals. The helper is held
+  // before its child exits, making the kernel's unreaped-zombie state observable.
+  const helper=spawn(process.execPath,['-e',`const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore'});console.log(c.pid);c.on('exit',()=>process.exit(0));`],{stdio:['ignore','pipe','pipe']});
+  const helperExit=once(helper,'exit');let pid;
+  const service=new DebuggerService({resolveContext:()=>null});
+  try {
+    pid=Number(String((await once(helper.stdout,'data'))[0]).trim());assert.ok(Number.isSafeInteger(pid)&&pid>1);
+    const state=target=>{try{return execFileSync('/bin/ps',['-o','stat=','-p',String(target)],{encoding:'utf8'}).trim();}catch{return '';}};
+    const until=async check=>{const deadline=Date.now()+2000;while(!check()){if(Date.now()>=deadline)throw Error('fixture process state timed out');await new Promise(r=>setTimeout(r,10));}};
+    process.kill(helper.pid,'SIGSTOP');await until(()=>state(helper.pid).startsWith('T'));
+    process.kill(pid,'SIGKILL');await until(()=>state(pid).startsWith('Z'));
+    assert.throws(()=>process.kill(-pid,0),{code:'EPERM'});
+    const record={process:{pid},processExited:true,treeStopped:false};let completed=false;
+    const waiting=service.waitTree(record).then(()=>{completed=true;});
+    await new Promise(r=>setTimeout(r,60));assert.equal(completed,false);assert.equal(record.treeStopped,false);
+    process.kill(helper.pid,'SIGCONT');await helperExit;await waiting;
+    assert.equal(record.treeStopped,true);assert.throws(()=>process.kill(-pid,0),{code:'ESRCH'});
+  } finally {
+    if(helper.exitCode===null&&helper.signalCode===null){try{process.kill(helper.pid,'SIGCONT');}catch{}helper.kill('SIGKILL');await helperExit;}
+    if(pid)try{process.kill(pid,'SIGKILL');}catch{}
+  }
+});
+
+test('persistent EPERM fails closed at deadline; unknown/live group never releases workspace',async t=>{
+  const {realpathSync}=await import('node:fs');
+  const service=new DebuggerService({resolveContext:()=>null});
+  const root=realpathSync('.'),record={root,process:{pid:999999},processExited:true,treeStopped:false};service.records.set('fixture',record);
+  const denied=Object.assign(Error('synthetic EPERM'),{code:'EPERM'});let calls=0;
+  t.mock.method(process,'kill',(pid,signal)=>{assert.equal(pid,-999999);assert.equal(signal,0);calls++;throw denied;});
+  let time=0;t.mock.method(Date,'now',()=>{const result=time;time+=5001;return result;});
+  await assert.rejects(service.waitTree(record),error=>/尚未确认退出/.test(error.message)&&error.cause===denied);
+  assert.equal(calls,1);assert.equal(record.treeStopped,false);assert.equal(service.isBusy(root),true);
+});

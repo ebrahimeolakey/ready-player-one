@@ -33,9 +33,11 @@ function location(value) {
 }
 
 const methods = new Set(["member.role", "member.remove", "plan.add", "plan.toggle", "plan.assign", "plan.claim", "plan.status", "plan.transfer", "plan.transfer.accept", "plan.transfer.decline", "comment.add", "comment.resolve", "comment.task", "comment.check", "memory.add", "memory.update", "memory.check", "lock.acquire", "lock.renew", "lock.release", "coordination.context", "coordination.message", "coordination.activity", "coordination.check"]);
-export function handlesCoordination(method) { return methods.has(method); }
+export function handlesCoordination(method) { return method === "memory.list" || methods.has(method); }
 export function coordination(hub, peer, method, a) {
-  const workspaceId = a.workspaceId || (a.sessionId ? hub.session(peer, a.sessionId).workspaceId : undefined);
+  const sessionWorkspaceId = a.sessionId ? hub.session(peer, a.sessionId).workspaceId : undefined;
+  if (sessionWorkspaceId && a.workspaceId && sessionWorkspaceId !== a.workspaceId) throw Error("工作区与当前会话不匹配");
+  const workspaceId = sessionWorkspaceId || a.workspaceId;
   const member = memberId => {
     const value = hub.db.members.find(m => m.workspaceId === workspaceId && m.id === memberId && !m.removed);
     if (!value || ROLES.indexOf(value.role) < 1) throw Error("负责人必须是此工作区的 Commenter、Editor 或 Owner");
@@ -137,6 +139,11 @@ export function coordination(hub, peer, method, a) {
     if(approval) { approval.planIds = [p.id]; hub.refreshOverlaps(approval); }
     p.commentId = c.id; c.taskId = p.id; c.status = "task"; if (approval) c.approvalId = approval.id;
     return { plan: p, approval, comment: c };
+  }
+  if (method === "memory.list") {
+    hub.workspace(peer, workspaceId);
+    if (a.includeRetired !== undefined && typeof a.includeRetired !== "boolean") throw Error("includeRetired 必须为布尔值");
+    return redactRecord(hub.db.memories.filter(m => m.workspaceId === workspaceId && (a.includeRetired === true || !m.retired)));
   }
   if (method === "memory.add" || method === "memory.update") {
     let m = method === "memory.update" ? hub.db.memories.find(m => m.id === a.id) : null;

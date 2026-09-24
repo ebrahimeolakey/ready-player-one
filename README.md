@@ -53,7 +53,7 @@ Mac 解压后将「头号玩家.app」拖入「应用程序」。Windows 运行�
 - GitHub 仓库授权可以使用；**团队身份登录还需要自己的 OAuth 应用与固定 HTTPS 服务**，本测试版不预置这项外部服务。
 - 代码快照与冲突处理已实现；不等于所有文件或任意附件自动共享。共享前请检查项目内容。
 - 语言服务限 JS/TS，调试器限 Node.js JavaScript；不包含通用 VS Code 扩展兼容。
-- Mac 本机验收与同机双客户端公网协议测试已进行；两台实体电脑、Windows 真机及新账号完整流程仍需同事测试。Linux 安装包暂未提供。
+- Mac 本机验收、同机双客户端公网协议测试及 [Windows 原生 CI](docs/WINDOWS-NATIVE-CI.md) 已通过；两台实体电脑、新账号完整流程和安装升级仍需同事测试。Linux 安装包暂未提供。
 - 公网经过 Cloudflare 中继，使用传输加密，非端到端加密。语音真实录入仍待验收；Mac 更新已验证安装服务，旧版界面直接升级尚待验收。
 
 [功能与验证记录](docs/IMPLEMENTATION-TRACKER.md) · [公网测试](docs/INTERNET-VERIFICATION.md) · [房主离线架构](docs/HOSTING-DESIGN.md)

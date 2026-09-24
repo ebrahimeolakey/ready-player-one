@@ -1,3 +1,4 @@
+import { useKeyboard, shortcutsAllowed } from "./KeyboardSettings";
 import { useState, useEffect, useRef } from "react";
 import {
   Files,
@@ -30,6 +31,7 @@ import { BrowserPanel } from "./BrowserPanel";
 import { DebuggerPanel } from "./DebuggerPanel";
 import { GitPanel } from "./GitPanel";
 import { TaskCoordination } from "./TaskCoordination";
+import { LaneModel } from "./LaneModel";
 import { ToolApprovals } from "./ToolApprovals";
 import { CollaborationPanel, roleNames } from "./CollaborationPanel";
 import { Avatar, Mark, Empty, statusNames, time, type Call } from "./ui";
@@ -54,6 +56,7 @@ export function Studio({
   onShare: () => void;
   onRepos: () => void;
 }) {
+  const keyboard = useKeyboard();
   const [tool, setTool] = useState(compact ? "none" : "files"),
     [dock, setDock] = useState("agent"),
     [terminalOpened, setTerminalOpened] = useState<string[]>([]),
@@ -116,30 +119,33 @@ export function Studio({
     const key = (e: KeyboardEvent) => {
       const focused = document.activeElement?.closest(".studio");
       if (focused ? focused !== root.current : secondary) return;
-      if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.key === "j") {
+      if (!shortcutsAllowed(e.target)) return;
+      if (keyboard.matches(e, "toggleTerminal")) {
         e.preventDefault();
-        setShowDock((v) => !v);
+        if (dock !== "terminal" || !showDock) {
+          setDock("terminal");
+          setShowDock(true);
+        } else setShowDock(false);
       }
-      if (e.key === "p") {
+      if (keyboard.matches(e, "searchFiles")) {
         e.preventDefault();
         setTool("search");
       }
-      if (e.shiftKey && e.key.toLowerCase() === "l") {
+      if (keyboard.matches(e, "newAgent")) {
         e.preventDefault();
         onAddLane();
       }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [onAddLane, secondary]);
+  }, [onAddLane, secondary, keyboard.bindings, keyboard.os, dock, showDock]);
   const welcome = (
     <div className="editor-welcome">
       <Mark />
       <p>开始处理这个项目</p>
       <div className="shortcut-list">
         <button onClick={onAddLane}>
-          新建 Agent<kbd>{modifier}⇧L</kbd>
+          新建 Agent<kbd>{keyboard.label("newAgent")}</kbd>
         </button>
         <button
           onClick={() => {
@@ -147,10 +153,10 @@ export function Studio({
             setDock("terminal");
           }}
         >
-          终端<kbd>{modifier}J</kbd>
+          终端<kbd>{keyboard.label("toggleTerminal")}</kbd>
         </button>
         <button onClick={() => setTool("search")}>
-          查找文件<kbd>{modifier}P</kbd>
+          查找文件<kbd>{keyboard.label("searchFiles")}</kbd>
         </button>
         <button onClick={onRepos}>
           打开仓库
@@ -199,6 +205,7 @@ export function Studio({
         {mapped ? (
           <Editor
             key={params.laneId || s.id}
+            rootRevision={(params.laneId && state.local.lanePaths?.[params.laneId]) || state.local.sessionPaths[s.id] || state.local.paths[s.workspaceId] || ""}
             params={params}
             mapped
             call={call}
@@ -266,6 +273,7 @@ export function Studio({
               <GitPanel
                 call={window.rpo.invoke}
                 context={params}
+                rootRevision={JSON.stringify([(params.laneId && state.local.lanePaths?.[params.laneId]) || state.local.sessionPaths[s.id] || state.local.paths[s.workspaceId], state.local.sync?.[s.id]?.status === "paused"])}
                 busy={own.some((l) => l.status === "running")}
               />
             )}
@@ -570,6 +578,7 @@ export function Studio({
                                         : l.provider === "claude"
                                           ? "Claude"
                                           : "自定义 API")}
+                                    {" · "}<LaneModel lane={l} />
                                   </span>
                                   <small>
                                     <span

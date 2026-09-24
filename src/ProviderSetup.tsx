@@ -10,6 +10,7 @@ export interface CustomProvider {
   model: string;
   models: string[];
   efforts?: string[];
+  requestUsage?: boolean;
   hasKey: boolean;
   updatedAt: string;
 }
@@ -216,6 +217,19 @@ export function ProviderSetup({
                 ))}
               </div>
             </details>
+            <label
+              className="provider-checkbox"
+              title="仅在接口支持 stream_options.include_usage 时开启；关闭后仍显示接口主动返回的用量。"
+            >
+              <input
+                type="checkbox"
+                checked={editing.requestUsage === true}
+                onChange={(e) =>
+                  setEditing({ ...editing, requestUsage: e.target.checked })
+                }
+              />
+              请求用量统计
+            </label>
             <label>
               API Key
               <input

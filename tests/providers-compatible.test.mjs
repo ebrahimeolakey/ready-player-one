@@ -20,6 +20,20 @@ const stream = (events) =>
     }),
   );
 
+test("compatible model reporting uses response model and deduplicates repeated chunks", async () => {
+  const runtime = new ProviderRuntime(), events = []; let ended;
+  const done = new Promise(resolve => { ended = resolve; });
+  registerOpenAICompatible(runtime, "model-report", { baseUrl: "http://127.0.0.1:12345/v1", model: "configured-alias", fetch: async () => stream([
+    { model: "actual-model", choices: [{ delta: { content: "a" } }] },
+    { model: "actual-model", choices: [{ delta: { content: "b" } }] },
+  ]) });
+  await runtime.start({ runId: "model", provider: "model-report", cwd: "/tmp", prompt: "fixture", effort: "high", onEvent: e => events.push(e), onEnd: ended });
+  await done;
+  const reports = events.filter(e => e.type === "configuration");
+  assert.equal(reports.length, 1); assert.equal(reports[0].model, "actual-model"); assert.equal(reports[0].effort, null);
+  await runtime.close();
+});
+
 test("compatible provider waits for approval, refuses tool, then continues without running code", async () => {
   const runtime = new ProviderRuntime({
     env: { TEST_PROVIDER_KEY: "local-test-only" },
@@ -139,4 +153,24 @@ test("compatible provider validates endpoints and refuses missing credentials wi
     /Missing provider credential/,
   );
   assert.equal(runtime.runs.size, 0);
+});
+
+test('compatible request opts into real streaming usage and emits a normalized snapshot',async()=>{
+ const runtime=new ProviderRuntime();const events=[];let resolve;const done=new Promise(r=>resolve=r);
+ registerOpenAICompatible(runtime,'usage-test',{baseUrl:'http://127.0.0.1:12345/v1',model:'model-with-no-known-limit',requestUsage:true,fetch:async(_url,options)=>{
+  assert.deepEqual(JSON.parse(options.body).stream_options,{include_usage:true});
+  return stream([{choices:[{delta:{content:'ok'}}]},{choices:[],usage:{prompt_tokens:100,completion_tokens:3,total_tokens:103}}]);
+ }});
+ await runtime.start({runId:'usage',provider:'usage-test',cwd:'/tmp',prompt:'synthetic',onEvent:e=>events.push(e),onEnd:resolve});await done;
+ const v=events.find(e=>e.type==='usage').usageSnapshot;assert.equal(v.context.usedTokens,100);assert.equal(v.context.limitTokens,null);assert.equal(v.cumulative.totalTokens,103);await runtime.close();
+});
+
+test('legacy compatible endpoints receive no new usage request field and are never silently retried',async()=>{
+ const runtime=new ProviderRuntime();const events=[];let resolve,calls=0;const done=new Promise(r=>resolve=r);
+ registerOpenAICompatible(runtime,'legacy-usage',{baseUrl:'http://127.0.0.1:12345/v1',model:'legacy',fetch:async(_url,options)=>{
+  calls++;assert.equal(Object.hasOwn(JSON.parse(options.body),'stream_options'),false);
+  return stream([{choices:[{delta:{content:'legacy endpoint'}}]}]);
+ }});
+ await runtime.start({runId:'legacy',provider:'legacy-usage',cwd:'/tmp',prompt:'synthetic',onEvent:e=>events.push(e),onEnd:resolve});await done;
+ assert.equal(calls,1);const v=events.find(e=>e.type==='usage').usageSnapshot;assert.equal(v.context.usedTokens,null);assert.equal(v.cumulative.totalTokens,null);await runtime.close();
 });

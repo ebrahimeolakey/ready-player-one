@@ -127,3 +127,16 @@ test("custom reasoning levels are explicit, deduplicated and retained on edits",
   );
   assert.deepEqual((await store.list())[0].efforts, ["low", "high"]);
 });
+
+test("usage request is opt-in and survives edits without changing old endpoint behavior", async () => {
+  const {store} = await setup();
+  const old = await store.save(input);
+  assert.equal(old.requestUsage,false);
+  await store.save({...old,requestUsage:true});
+  await store.save({id:old.id,name:"Renamed",baseUrl:input.baseUrl,model:input.model});
+  assert.equal((await store.getRuntimeConfig(old.id)).requestUsage,true);
+  await assert.rejects(store.save({...old,requestUsage:"true"}),/用量/);
+  assert.equal((await store.list())[0].requestUsage,true);
+  await store.save({...old,requestUsage:false});
+  assert.equal((await store.getRuntimeConfig(old.id)).requestUsage,false);
+});

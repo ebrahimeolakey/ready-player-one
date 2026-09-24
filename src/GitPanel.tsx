@@ -36,10 +36,12 @@ interface Branch {
 export function GitPanel({
   call,
   context,
+  rootRevision = "",
   busy = false,
 }: {
   call: Call;
   context: Record<string, unknown>;
+  rootRevision?: string;
   busy?: boolean;
 }) {
   const [status, setStatus] = useState<GitState | null>(null),
@@ -56,7 +58,7 @@ export function GitPanel({
       staged: boolean;
     } | null>(null),
     [diff, setDiff] = useState("");
-  const contextKey = JSON.stringify(context);
+  const contextKey = JSON.stringify([context, rootRevision]);
   const activeContext = useRef(contextKey);
   const previewVersion = useRef(0);
   activeContext.current = contextKey;

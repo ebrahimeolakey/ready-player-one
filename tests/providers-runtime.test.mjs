@@ -24,6 +24,7 @@ class FakeTransport extends EventEmitter {
           id: message.id,
           result: {
             thread: { id: message.params.threadId || "native-thread" },
+            ...(this.threadConfiguration || {}),
           },
         }),
       );
@@ -87,6 +88,31 @@ function harness(provider = "codex", options = {}) {
     },
   };
 }
+
+test("Codex model confirmation comes from protocol response, not requested alias or turn effort", async () => {
+  const h = harness("codex", { model: "requested-alias", effort: "high" });
+  h.transport.threadConfiguration = { model: "resolved-model", reasoningEffort: "low" };
+  await h.start;
+  const event = h.events.find(e => e.type === "configuration");
+  assert.equal(event.model, "resolved-model"); assert.equal(event.effort, null);
+  await h.runtime.close();
+  const missing = harness("codex", { model: "requested-alias" });
+  await missing.start;
+  assert.equal(missing.events.some(e => e.type === "configuration"), false);
+  await missing.runtime.close();
+});
+
+test("Claude reports resolved parent model once and ignores subagent models and credentials", async () => {
+  const h = harness("claude", { model: "alias", effort: "high" }); await h.start;
+  for (let i = 0; i < 3; i++) h.transport.emit("message", { type: "system", subtype: "init", session_id: "s", model: "actual-model" });
+  h.transport.emit("message", { type: "assistant", parent_tool_use_id: "child", message: { model: "child-model", content: [] } });
+  h.transport.emit("message", { type: "system", subtype: "init", model: "sk-secret-model-key" });
+  const events = h.events.filter(e => e.type === "configuration");
+  assert.equal(events.length, 1); assert.equal(events[0].model, "actual-model"); assert.equal(events[0].effort, null);
+  h.transport.emit("message", { type: "stream_event", event: { type: "message_start", message: { id: "response", model: "fallback-model" } } });
+  assert.equal(h.events.filter(e => e.type === "configuration").at(-1).model, "fallback-model");
+  await h.runtime.close();
+});
 
 test("Codex resumes native session and steers active turn without replaying fabricated history", async () => {
   const h = harness("codex", {
@@ -571,4 +597,21 @@ test("Claude thinking blocks reconcile separately from answer; signature/redacte
   );
   assert.equal(JSON.stringify(h.events).includes("SECRET_"), false);
   await h.runtime.close();
+});
+
+test('native usage frames are normalized and unrelated thread/subagent frames cannot replace context',async()=>{
+ const codex=harness('codex');await codex.start;
+ const frame={method:'thread/tokenUsage/updated',params:{threadId:'native-thread',tokenUsage:{last:{totalTokens:100},total:{totalTokens:900},modelContextWindow:1000}}};
+ codex.transport.emit('message',frame);
+ assert.equal(codex.events.at(-1).usageSnapshot.context.usedTokens,100);
+ codex.transport.emit('message',{...frame,params:{...frame.params,threadId:'other'}});
+ assert.equal(codex.events.filter(e=>e.type==='usage').length,1);await codex.runtime.close();
+ const claude=harness('claude');await claude.start;
+ claude.transport.emit('message',{type:'stream_event',event:{type:'message_start',message:{id:'m',model:'exact',usage:{input_tokens:5,cache_read_input_tokens:10,cache_creation_input_tokens:20}}}});
+ assert.equal(claude.events.at(-1).usageSnapshot.context.usedTokens,35);
+ claude.transport.emit('message',{type:'assistant',parent_tool_use_id:'sub',message:{id:'sub',usage:{input_tokens:900}}});
+ assert.equal(claude.events.filter(e=>e.type==='usage').length,1);
+ claude.transport.emit('message',{type:'result',modelUsage:{exact:{inputTokens:5,cacheReadInputTokens:10,cacheCreationInputTokens:20,outputTokens:2,contextWindow:200000}},total_cost_usd:0.1});
+ assert.equal(claude.events.at(-1).usageSnapshot.context.limitTokens,200000);
+ await claude.runtime.close();
 });

@@ -1,3 +1,6 @@
+import { useKeyboard, shortcutsAllowed } from "./KeyboardSettings";
+import { ContextUsage } from "./ContextUsage";
+import { LaneModel } from "./LaneModel";
 import { useComposer } from "./useComposer";
 import React, { useEffect, useRef, useState, useMemo } from "react";
 
@@ -76,6 +79,7 @@ export function AgentLane({
   mapped: boolean;
   onBrowse?: (url: string) => void;
 }) {
+  const keyboard = useKeyboard();
   const composer = useComposer(l.id);
   const {
     text: prompt,
@@ -329,7 +333,7 @@ export function AgentLane({
             {l.owner}
             <span>{mine ? "我" : ""}</span>
           </strong>
-          <small>{providerLabel}</small>
+          <small className="lane-provider">{providerLabel} · <LaneModel lane={l} /></small>
         </div>
         <span className={"lane-status " + l.status}>
           {l.status === "running" ? (
@@ -480,16 +484,17 @@ export function AgentLane({
                 })
               }
             />
+            <ContextUsage usage={l.usage} />
           </div>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Escape" && busy) {
+              if (shortcutsAllowed(e.target) && keyboard.matches(e, "stopRun") && busy) {
                 e.preventDefault();
                 void call("lane.stop", { sessionId: s.id, laneId: l.id });
               }
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              if (shortcutsAllowed(e.target) && keyboard.matches(e, "sendPrompt")) {
                 e.preventDefault();
                 submit();
               }
@@ -695,7 +700,7 @@ export function AgentLane({
             </p>
           )}
           <div className="composer-hint">
-            {state.local.os && state.local.os !== "darwin" ? "Ctrl" : "⌘"} ↵
+            {keyboard.label("sendPrompt")}
           </div>
         </form>
       ) : (
@@ -729,15 +734,18 @@ export function Editor({
   welcome,
   hidden = false,
   search = false,
+  rootRevision = "",
 }: {
   welcome?: React.ReactNode;
   hidden?: boolean;
   search?: boolean;
+  rootRevision?: string;
   params: { workspaceId: string; sessionId: string; laneId?: string };
   mapped: boolean;
   call: Call;
   notify: (s: string) => void;
 }) {
+  const keyboard = useKeyboard();
   const codeRef = useRef<ReactCodeMirrorRef>(null),
     openRef = useRef<(path: string) => Promise<void>>(async () => {});
   const [pendingDefinition, setPendingDefinition] =
@@ -750,6 +758,12 @@ export function Editor({
     [content, setContent] = useState(""),
     [original, setOriginal] = useState(""),
     [hash, setHash] = useState(""),
+    [fileRoot, setFileRoot] = useState(""),
+    [openedRevision, setOpenedRevision] = useState(""),
+    [draftKey, setDraftKey] = useState(""),
+    [legacyDraft, setLegacyDraft] = useState<{content:string;canonicalRoot?:string}|null>(null),
+    [legacyPreview, setLegacyPreview] = useState(false),
+    [legacyLoading, setLegacyLoading] = useState(false),
     [pendingFile, setPendingFile] = useState(""),
     [filter, setFilter] = useState(""),
     [results, setResults] = useState<any[]>([]),
@@ -759,8 +773,15 @@ export function Editor({
     [comment, setComment] = useState(""),
     [commentBusy, setCommentBusy] = useState(false),
     [anchorStatus, setAnchorStatus] = useState("");
+  const rootChanged = Boolean(file && openedRevision !== rootRevision);
+  const currentView = useRef("");
+  const currentContent = useRef(content);
+  currentContent.current = content;
+  currentView.current = contextKey + "\n" + rootRevision;
+  const viewIdentity = currentView.current;
+  const listSequence = useRef(0), openSequence = useRef(0);
   useEffect(() => {
-    if (!params.laneId || !mapped) return;
+    if (!params.laneId || !mapped || rootChanged) return;
     let pending = false;
     const publish = async () => {
       if (pending) return;
@@ -788,17 +809,19 @@ export function Editor({
         })
         .catch(() => {});
     };
-  }, [file, contextKey, mapped]);
+  }, [file, contextKey, mapped, rootChanged]);
   const list = async (p: string) => {
+    const request = ++listSequence.current;
     const f = await call("files", { ...params, path: p });
-    if (f) {
+    if (f && currentView.current === viewIdentity && request === listSequence.current) {
       setListing(f);
       setPath(p);
     }
   };
   useEffect(() => {
+    setListing([]); setPath(""); setResults([]);
     if (mapped) list("");
-  }, [mapped, contextKey]);
+  }, [mapped, contextKey, rootRevision]);
   useEffect(() => {
     let cancelled = false;
     if (!search || !filter.trim()) {
@@ -807,35 +830,41 @@ export function Editor({
     }
     const timer = setTimeout(async () => {
       const found = await call("file.search", { ...params, query: filter });
-      if (!cancelled) setResults(found || []);
+      if (!cancelled && currentView.current === viewIdentity) setResults(found || []);
     }, 180);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [search, filter, contextKey]);
-  const open = async (p: string, force = false) => {
-    if (force && file) await removeDraft(`rpo-file-${contextKey}-${file}`);
+  }, [search, filter, contextKey, rootRevision]);
+  const open = async (p: string, force = false, keepDraft = false) => {
+    if (force && draftKey) {
+      if (keepDraft) await writeDraft(draftKey, JSON.stringify({content,original,hash,canonicalRoot:fileRoot}));
+      else await removeDraft(draftKey);
+    }
     if (content !== original && !force) {
       setPendingFile(p);
       return;
     }
+    const request = ++openSequence.current;
     const r = await call("file.read", { ...params, path: p });
-    if (r) {
-      const key = `rpo-file-${contextKey}-${p}`,
-        oldKey = `rpo-file-${params.sessionId}-${p}`;
-      let stored = await readDraft(key);
-      if (stored === null) {
-        stored = await readDraft(oldKey);
-        if (stored !== null) {
-          await writeDraft(key, stored);
-          await removeDraft(oldKey);
-        }
-      }
+    if (r && typeof r.canonicalRoot === "string" && currentView.current === viewIdentity && request === openSequence.current) {
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(r.canonicalRoot));
+      const rootKey = [...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,"0")).join("");
+      const key = `rpo-file-${contextKey}-${rootKey}-${p}`;
+      const stored = await readDraft(key);
       let draft;
-      try {
-        draft = stored ? JSON.parse(stored) : null;
-      } catch {}
+      try { draft = stored ? JSON.parse(stored) : null; } catch {}
+      if (draft?.canonicalRoot !== r.canonicalRoot) draft = null;
+      const legacy = await readDraft(`rpo-file-${contextKey}-${p}`) ?? await readDraft(`rpo-file-${params.sessionId}-${p}`);
+      let recoverableLegacy = null;
+      if (legacy) {
+        try { const parsed = JSON.parse(legacy); if (typeof parsed?.content === "string") recoverableLegacy = parsed; } catch {}
+        if (!recoverableLegacy) notify("旧草稿格式无法解析，原记录已保留");
+      }
+      if (currentView.current !== viewIdentity || request !== openSequence.current) return;
+      setLegacyDraft(recoverableLegacy); setLegacyPreview(false);
+      setDraftKey(key); setFileRoot(r.canonicalRoot); setOpenedRevision(rootRevision);
       setFile(p);
       setOpenedFor(contextKey);
       setSelection({ startLine: 1, endLine: 1 });
@@ -850,12 +879,12 @@ export function Editor({
     }
   };
   useEffect(() => {
-    if (!file || openedFor !== contextKey) return;
-    const key = `rpo-file-${contextKey}-${file}`;
+    if (!file || openedFor !== contextKey || !draftKey) return;
+    const key = draftKey;
     const persist = () =>
       void (
         content !== original
-          ? writeDraft(key, JSON.stringify({ content, original, hash }))
+          ? writeDraft(key, JSON.stringify({ content, original, hash, canonicalRoot:fileRoot }))
           : removeDraft(key)
       ).catch((e) => notify(e.message));
     const timer = setTimeout(persist, 300);
@@ -863,9 +892,9 @@ export function Editor({
       clearTimeout(timer);
       persist();
     };
-  }, [content, original, hash, file, openedFor, contextKey]);
+  }, [content, original, hash, file, openedFor, contextKey, draftKey, fileRoot]);
   const addComment = async () => {
-    if (!comment.trim() || content !== original || openedFor !== contextKey)
+    if (rootChanged || !comment.trim() || content !== original || openedFor !== contextKey)
       return;
     setCommentBusy(true);
     try {
@@ -891,6 +920,7 @@ export function Editor({
     }
   };
   const checkAnchors = async () => {
+    if (rootChanged) return;
     const files = await call("references.check", {
       ...params,
       references: [{ path: file }],
@@ -906,18 +936,34 @@ export function Editor({
     }
   };
   const save = async () => {
-    if (openedFor !== contextKey) return;
-    const r = await call("file.save", { ...params, path: file, content, hash });
-    if (r) {
+    if (openedFor !== contextKey || rootChanged || !fileRoot) return;
+    const openedRequest = openSequence.current;
+    const r = await call("file.save", { ...params, path: file, content, hash, expectedRoot:fileRoot });
+    if (r && currentView.current === viewIdentity && openedRequest === openSequence.current) {
       setHash(r.hash);
       setOriginal(content);
       notify("文件已保存到本机");
     }
   };
+  const loadLegacyDraft = async () => {
+    if (!legacyDraft || rootChanged || !fileRoot || legacyLoading || content !== original) return;
+    const openedRequest = openSequence.current;
+    setLegacyLoading(true);
+    try {
+      // Explicitly reread the selected target: legacy hashes/root assumptions
+      // must never become the save baseline for a different directory.
+      const disk = await call("file.read", {...params,path:file});
+      if (!disk || currentView.current !== viewIdentity || openedRequest !== openSequence.current) return;
+      if (disk.canonicalRoot !== fileRoot) { notify("目标目录已改变，请重新打开目标文件后再载入旧草稿"); return; }
+      if (currentContent.current !== content) { notify("编辑内容已改变，未载入旧草稿"); return; }
+      setOriginal(disk.content); setHash(disk.hash); setContent(legacyDraft.content);
+      setLegacyPreview(false); notify("旧草稿已载入编辑器，尚未保存；旧记录仍保留");
+    } finally { setLegacyLoading(false); }
+  };
   openRef.current = open;
   const intelligence = useMemo(
     () =>
-      languageExtensions({
+      rootChanged ? [] : languageExtensions({
         call: window.rpo.invoke,
         context: params,
         path: file,
@@ -927,7 +973,7 @@ export function Editor({
           if (location.path !== file) void openRef.current(location.path);
         },
       }),
-    [contextKey, file],
+    [contextKey, file, rootChanged, rootRevision],
   );
   useEffect(() => {
     if (!pendingDefinition || pendingDefinition.path !== file) return;
@@ -993,8 +1039,8 @@ export function Editor({
       </aside>
       <div
         className="editor-pane"
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "s" && file) {
+        onKeyDownCapture={(e) => {
+          if (shortcutsAllowed(e.target) && keyboard.matches(e, "saveFile") && file) {
             e.preventDefault();
             if (content !== original) save();
           }
@@ -1021,7 +1067,7 @@ export function Editor({
                     ? "先保存文件，再绑定评论"
                     : "评论当前选中代码行"
                 }
-                disabled={content !== original || commentBusy}
+                disabled={rootChanged || content !== original || commentBusy}
                 onClick={() => setCommentOpen(!commentOpen)}
               >
                 <MessageSquare size={13} />
@@ -1031,6 +1077,7 @@ export function Editor({
                 className="icon-button"
                 title="检查此文件的评论是否过期"
                 aria-label="检查评论"
+                disabled={rootChanged}
                 onClick={checkAnchors}
               >
                 <RefreshCw size={13} />
@@ -1038,11 +1085,21 @@ export function Editor({
               <button
                 className="button"
                 onClick={save}
-                disabled={content === original}
+                disabled={rootChanged || !fileRoot || content === original}
               >
                 保存
               </button>
             </div>
+            {rootChanged && <div className="attention"><span>目录已切换，当前文件与未保存内容仍属于原目录。请切回原目录保存，或保留草稿后打开新文件。</span></div>}
+            {legacyDraft && <div className="attention"><span>有旧版未保存草稿</span><button onClick={()=>setLegacyPreview(!legacyPreview)}>{legacyPreview ? "收起旧草稿" : "查看旧草稿"}</button></div>}
+            {legacyDraft && legacyPreview && <section style={{padding:12,borderBottom:"1px solid #303030"}}>
+              <div>载入目标：{fileRoot}/{file}</div>
+              <small>旧草稿来源：{legacyDraft.canonicalRoot || "未记录"}。仅载入编辑器，不自动保存；旧草稿继续保留。</small>
+              <pre style={{maxHeight:200,overflow:"auto",whiteSpace:"pre-wrap"}}>{legacyDraft.content}</pre>
+              {content !== original && <small>请先保存当前编辑内容，或保留当前草稿后重新打开文件。</small>}
+              <button className="button" disabled={rootChanged || !fileRoot || legacyLoading || content !== original} onClick={loadLegacyDraft}>{legacyLoading ? "读取目标…" : "载入当前文件"}</button>
+              <button onClick={()=>setLegacyPreview(false)}>关闭</button>
+            </section>}
             {anchorStatus && (
               <div className="attention">
                 <span>{anchorStatus}</span>
@@ -1074,7 +1131,7 @@ export function Editor({
                 <button
                   className="button"
                   disabled={
-                    commentBusy || !comment.trim() || content !== original
+                    rootChanged || commentBusy || !comment.trim() || content !== original
                   }
                 >
                   {commentBusy ? "发送中…" : "发送"}
@@ -1091,6 +1148,7 @@ export function Editor({
             {pendingFile && (
               <div className="attention">
                 <span>当前文件尚未保存</span>
+                <button onClick={() => open(pendingFile, true, true)}>保留草稿并打开</button>
                 <button onClick={() => open(pendingFile, true)}>
                   放弃修改并打开
                 </button>

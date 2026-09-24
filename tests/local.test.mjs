@@ -103,3 +103,37 @@ test("project file search finds nested paths and excludes ignored and external t
   assert.deepEqual(await local.searchFiles(root, "external"), []);
   assert.deepEqual(await local.searchFiles(root, ""), []);
 });
+
+test('existing unbound worktree recovers its path without adopting current branch; foreign repository is rejected',async t=>{
+ const {inspectSessionWorktree}=await import('../core/snapshots.mjs');
+ const dir=await fixture(t),root=join(dir,'repo'),data=join(dir,'data');await mkdir(root);
+ await local.git(root,['init','-b','main']);await local.git(root,['config','user.name','Test']);await local.git(root,['config','user.email','test@local']);
+ await writeFile(join(root,'a.txt'),'base');await local.git(root,['add','.']);await local.git(root,['commit','-m','base']);
+ const wt=await local.worktree(root,'recovery-session',data);const gitDir=(await local.git(wt,['rev-parse','--absolute-git-dir'])).trim();await rm(join(gitDir,'rpo-session-binding.json'));
+ await local.git(wt,['switch','-c','ordinary']);await writeFile(join(wt,'a.txt'),'staged');await local.git(wt,['add','.']);await writeFile(join(wt,'a.txt'),'working');
+ const before=[await local.git(wt,['diff']),await local.git(wt,['diff','--cached'])];
+ assert.equal(await local.worktree(root,'recovery-session',data),wt);
+ assert.equal((await inspectSessionWorktree(wt,{sessionId:'recovery-session'})).status,'unbound');
+ assert.deepEqual([await local.git(wt,['diff']),await local.git(wt,['diff','--cached'])],before);
+ const other=join(dir,'other');await local.git(dir,['clone',root,other]);const target=join(data,'worktrees','foreign-session');await local.git(other,['worktree','add','-b','rpo/foreign',target]);
+ await assert.rejects(local.worktree(root,'foreign-session',data),/不属于当前项目仓库/);
+});
+
+test('editor save fences canonical opened root across a new worktree and project remap even when hashes match',async t=>{
+ const dir=await fixture(t),root=join(dir,'repo'),remap=join(dir,'remap');await mkdir(root);await mkdir(remap);
+ await local.git(root,['init','-b','main']);await local.git(root,['config','user.name','Test']);await local.git(root,['config','user.email','test@local']);
+ await writeFile(join(root,'same.txt'),'identical\n');await writeFile(join(remap,'same.txt'),'identical\n');await local.git(root,['add','.']);await local.git(root,['commit','-m','base']);
+ const opened=await local.readBound(root,'same.txt'),wt=await local.worktree(root,'editor-root-session',join(dir,'data'));
+ for(const destination of [wt,remap]){
+  assert.equal((await local.readBound(destination,'same.txt')).hash,opened.hash);
+  await assert.rejects(local.saveBound(destination,'same.txt','old root draft',opened.hash,opened.canonicalRoot),/项目目录已改变/);
+  assert.equal(await readFile(join(destination,'same.txt'),'utf8'),'identical\n');
+ }
+ await assert.rejects(local.saveBound(root,'same.txt','unguarded',opened.hash),/项目目录已改变/);
+ assert.equal(await readFile(join(root,'same.txt'),'utf8'),'identical\n');
+ const alias=join(dir,'alias');await symlink(root,alias);
+ assert.equal((await local.readBound(alias,'same.txt')).canonicalRoot,opened.canonicalRoot);
+ const saved=await local.saveBound(alias,'same.txt','old root draft',opened.hash,opened.canonicalRoot);
+ assert.equal(saved.canonicalRoot,opened.canonicalRoot);assert.equal(await readFile(join(root,'same.txt'),'utf8'),'old root draft');
+ assert.equal(await readFile(join(wt,'same.txt'),'utf8'),'identical\n');assert.equal(await readFile(join(remap,'same.txt'),'utf8'),'identical\n');
+});

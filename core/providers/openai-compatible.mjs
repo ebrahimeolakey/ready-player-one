@@ -1,3 +1,5 @@
+import { CompatibleUsage } from "./usage.mjs";
+import { emitReportedConfiguration } from "./configuration.mjs";
 import { randomUUID } from "node:crypto";
 import { normalizeImages } from "./input.mjs";
 const compatibleInput = (text, images = []) => {
@@ -51,6 +53,7 @@ class CompatibleRun {
     this.controller = new AbortController();
     this.approvals = new Map();
     this.pending = [];
+    this.usageTracker = new CompatibleUsage();
     this.ended = false;
     this.messages = [
       ...(options.history || []),
@@ -102,6 +105,7 @@ class CompatibleRun {
             model: this.options.model || this.config.model,
             messages: this.messages,
             stream: true,
+            ...(this.config.requestUsage === true ? { stream_options: { include_usage: true } } : {}),
             ...(this.options.effort
               ? { reasoning_effort: this.options.effort }
               : {}),
@@ -128,6 +132,7 @@ class CompatibleRun {
       const calls = new Map();
       let usage;
       for await (const event of readSse(response.body)) {
+        if (event.model) emitReportedConfiguration(this, event.model);
         if (event.usage) usage = event.usage;
         const delta = event.choices?.[0]?.delta || {};
         if (typeof delta.content === "string") {
@@ -166,7 +171,7 @@ class CompatibleRun {
           text,
           streamed: true,
         });
-      if (usage) this.emit({ type: "usage", usage });
+      this.emit({ type: "usage", usage, usageSnapshot: this.usageTracker.receive(itemId, usage) });
       for (const call of calls.values()) {
         const tool = this.config.tools?.find(
           (t) => t.name === call.function.name,

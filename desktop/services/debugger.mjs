@@ -194,10 +194,18 @@ export class DebuggerService extends EventEmitter {
   async waitTree(record) {
     if (this.platform !== "win32" && record.process?.pid) {
       const deadline = Date.now() + 5000;
+      let probeError;
       for (;;) {
-        try { process.kill(-record.process.pid, 0); }
-        catch (error) { if (error.code === "ESRCH") break; throw error; }
-        if (Date.now() >= deadline) throw Error("调试进程树尚未确认退出");
+        try { process.kill(-record.process.pid, 0); probeError = undefined; }
+        catch (error) {
+          if (error.code === "ESRCH") break;
+          // Darwin killpg filters zombies: an unreaped zombie-only group can
+          // report EPERM until its parent reaps it. Permission denial is NOT
+          // evidence of exit; keep waiting for ESRCH, bounded by the deadline.
+          if (error.code !== "EPERM") throw error;
+          probeError = error;
+        }
+        if (Date.now() >= deadline) throw Error("调试进程树尚未确认退出", { cause: probeError });
         await new Promise(resolve => setTimeout(resolve, 25));
       }
     }
