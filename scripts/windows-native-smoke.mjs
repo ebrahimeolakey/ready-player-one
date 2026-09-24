@@ -11,10 +11,11 @@ const artifacts = resolve('ci-evidence');
 mkdirSync(artifacts, { recursive: true });
 const evidence = { platform: process.platform, arch: process.arch, versions: process.versions, checks: [] };
 const writeEvidence = () => writeFileSync(join(artifacts, 'windows-native.json'), JSON.stringify(evidence, null, 2));
-let terminal;
+let terminal, output = ''; 
 const deadline = setTimeout(() => fail(Error('Windows desktop smoke timed out after 120 seconds')), 120000);
 function fail(error) {
   evidence.error = error.stack || String(error);
+  evidence.ptyOutput = output;
   writeEvidence(); console.error(error);
   terminal?.closeAll(); app.exit(1);
 }
@@ -48,7 +49,7 @@ try {
   writeFileSync(join(artifacts, 'windows-desktop.png'), (await win.webContents.capturePage()).toPNG());
 
   terminal = new TerminalService();
-  let output = '', exit;
+  let exit;
   terminal.on('event', (_owner, event) => {
     if (event.type === 'data') output += event.data;
     if (event.type === 'exit') exit = event;

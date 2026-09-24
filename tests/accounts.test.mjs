@@ -117,12 +117,12 @@ test("repository arguments exclude options and path traversal", () => {
 test("official installer architecture selection and SHA-256 fail closed", () => {
   for (const arch of ["arm64", "x64"]) {
     assert.ok(
-      assetSpec("codex", arch).match(
+      assetSpec("codex", arch, "darwin").match(
         `codex-${arch === "arm64" ? "aarch64" : "x86_64"}-apple-darwin.tar.gz`,
       ),
     );
     assert.ok(
-      assetSpec("github", arch).match(
+      assetSpec("github", arch, "darwin").match(
         `gh_2.101.0_macOS_${arch === "arm64" ? "arm64" : "amd64"}.zip`,
       ),
     );
