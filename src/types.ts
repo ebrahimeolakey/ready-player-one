@@ -69,6 +69,26 @@ export type State = {
     remote: boolean;
     dataDir: string;
     name: string;
+    accounts?: {
+      id: string;
+      available: boolean;
+      authenticated: boolean;
+      status: string;
+      label: string;
+      version: string;
+      plan?: string;
+    }[];
+    authJobs?: { id: string; status: string; log: string; url?: string }[];
+    installations?: { id: string; status: string; message: string }[];
+    tunnel?: {
+      status: string;
+      url?: string;
+      message: string;
+      installed: boolean;
+    };
+    accountLoading?: boolean;
+    appVersion?: string;
+    platform?: string;
   };
 };
 export type RPO = {

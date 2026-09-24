@@ -17,6 +17,7 @@ export const localEnv = () => ({
   ...process.env,
   PATH: [
     ...new Set([
+      ...(process.env.RPO_BIN_DIR ? [process.env.RPO_BIN_DIR] : []),
       ...(process.env.PATH || "").split(":"),
       "/opt/homebrew/bin",
       "/usr/local/bin",

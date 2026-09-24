@@ -46,6 +46,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { json } from "@codemirror/lang-json";
 import type { State, Session, Lane, RPO } from "./types";
 import "./style.css";
+import { Accounts, GitHubPicker } from "./Accounts";
 const empty: State = {
   workspaces: [],
   sessions: [],
@@ -108,7 +109,9 @@ function App() {
     [search, setSearch] = useState(""),
     [sessionTab, setSessionTab] = useState("agents"),
     [share, setShare] = useState<any>(null),
-    [loading, setLoading] = useState(false);
+    [loading, setLoading] = useState(false),
+    [repoPicker, setRepoPicker] = useState(false),
+    [internet, setInternet] = useState(true);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -374,6 +377,27 @@ function App() {
                     >
                       <Plus size={16} />
                       {ws ? "新建会话" : "打开本地项目"}
+                    </button>
+                  </div>
+                  <div className="onboarding-strip">
+                    <div>
+                      <ShieldCheck size={17} />
+                      <span>准备好你的协作工作台</span>
+                    </div>
+                    <button
+                      className="button"
+                      onClick={() => setView("settings")}
+                    >
+                      连接账号
+                    </button>
+                    <button
+                      className="button"
+                      onClick={() => setRepoPicker(true)}
+                    >
+                      从 GitHub 打开
+                    </button>
+                    <button className="button" onClick={() => setModal("join")}>
+                      加入伙伴
                     </button>
                   </div>
                   <div className="stats">
@@ -655,35 +679,11 @@ function App() {
                     title="按你的方式工作"
                     subtitle="应用默认中文，无需登录 Amoeba，也不依赖它的云端服务。"
                   />
-                  <div className="settings-section">
-                    <h2>智能体与提供商</h2>
-                    <p>
-                      使用已安装并登录的本机 CLI。模型调用由对应提供商处理。
-                    </p>
-                    {state.local.providers.map((p) => (
-                      <div className="provider-row" key={p.id}>
-                        <div className={"provider-icon " + p.id}>
-                          {p.id === "codex" ? <Code2 /> : <span>✳</span>}
-                        </div>
-                        <div>
-                          <strong>
-                            {p.id === "codex" ? "OpenAI Codex" : "Claude Code"}
-                          </strong>
-                          <small>{p.version}</small>
-                        </div>
-                        <span className={"tag " + (p.available ? "green" : "")}>
-                          {p.available ? "已检测到" : "未安装"}
-                        </span>
-                      </div>
-                    ))}
-                    <button
-                      className="button"
-                      onClick={() => call("providers.refresh")}
-                    >
-                      <RefreshCw size={14} />
-                      重新检测
-                    </button>
-                  </div>
+                  <Accounts
+                    state={state}
+                    call={call}
+                    onRepos={() => setRepoPicker(true)}
+                  />
                   <div className="settings-section">
                     <h2>个人资料</h2>
                     <form
@@ -714,8 +714,8 @@ function App() {
                       Git diff。邀请 24 小时有效，可随时撤销。
                     </p>
                     <p>
-                      当前支持可信局域网 / VPN 内协作。跨公网请使用加密
-                      VPN；应用不提供云端中继。
+                      互联网模式使用 Cloudflare
+                      临时加密通道。邀请是工作区访问凭据，请只发给参与协作的同事。
                     </p>
                   </div>
                 </>
@@ -733,11 +733,25 @@ function App() {
             </span>
             <span className="status-end">
               UTF-8 <span>简体中文</span>
-              <span>v0.1.0</span>
+              <span>v{state.local.appVersion || "0.2.0-beta.1"}</span>
             </span>
           </footer>
         </main>
       </div>
+      {repoPicker && (
+        <GitHubPicker
+          call={call}
+          workspaceId={state.local.remote ? workspace : undefined}
+          onClose={() => setRepoPicker(false)}
+          onImported={(w) => {
+            setRepoPicker(false);
+            setWorkspace(w.id);
+            setSelected("");
+            setView("sessions");
+            notify("仓库已克隆并关联本机");
+          }}
+        />
+      )}
       {toast && (
         <div className="toast" role="status">
           <span>{toast}</span>
@@ -843,14 +857,23 @@ function App() {
                       <small>
                         {p.available
                           ? "使用我的本地账号"
-                          : "请先安装 CLI，再在设置里重新检测"}
+                          : "请前往账号设置安装并登录"}
                       </small>
                     </span>
                     <ArrowRight size={16} />
                   </button>
                 ))}
                 <p className="small-note">
-                  尚未登录？请在系统终端运行 codex login 或 claude 完成登录。
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      setModal("");
+                      setSelected("");
+                      setView("settings");
+                    }}
+                  >
+                    安装 CLI / 登录提供商账号 →
+                  </button>
                 </p>
               </>
             )}
@@ -924,9 +947,64 @@ function App() {
                       </div>
                       <div className="share-network">
                         <Radio size={15} />
-                        可信局域网或 VPN 内连接；房主需保持应用打开。
+                        {internet
+                          ? "跨互联网加密连接；房主需保持应用打开。"
+                          : "可信局域网内连接；房主需保持应用打开。"}
                       </div>
                     </div>
+                    {!share && (
+                      <>
+                        <label>
+                          协作网络
+                          <select
+                            disabled={loading}
+                            value={internet ? "internet" : "lan"}
+                            onChange={(e) =>
+                              setInternet(e.target.value === "internet")
+                            }
+                          >
+                            <option value="internet">
+                              互联网 · 不同办公室 / 在家
+                            </option>
+                            <option value="lan">可信局域网 / VPN</option>
+                          </select>
+                        </label>
+                        {internet && !state.local.tunnel?.installed && (
+                          <div className="info-box">
+                            首次共享需要安装官方网络组件。
+                            <button
+                              className="button full gap-top"
+                              disabled={state.local.installations?.some(
+                                (j) =>
+                                  j.id === "cloudflared" &&
+                                  j.status === "running",
+                              )}
+                              onClick={() =>
+                                call("tools.install", { id: "cloudflared" })
+                              }
+                            >
+                              安装互联网协作组件
+                            </button>
+                            {
+                              state.local.installations?.find(
+                                (j) => j.id === "cloudflared",
+                              )?.message
+                            }
+                          </div>
+                        )}
+                        {internet && (
+                          <p className="small-note">
+                            通过 Cloudflare
+                            中继传输，适合同事内测。临时地址不保证持续可用，重启后请重新生成邀请。
+                          </p>
+                        )}
+                        {loading && (
+                          <p className="small-note">
+                            {state.local.tunnel?.message}
+                          </p>
+                        )}
+                      </>
+                    )}
                     {share ? (
                       <>
                         <label>
@@ -968,10 +1046,14 @@ function App() {
                     ) : (
                       <button
                         className="button primary full"
-                        disabled={loading}
+                        disabled={
+                          loading ||
+                          (internet && !state.local.tunnel?.installed)
+                        }
                         onClick={async () => {
                           setLoading(true);
                           const result = await call("share.create", {
+                            internet,
                             workspaceId: workspace,
                             sessionId: session?.id,
                           });
@@ -1039,7 +1121,7 @@ function App() {
                       name="url"
                       required
                       rows={3}
-                      placeholder="rpo://join?host=…"
+                      placeholder="rpo://join?server=wss…"
                     />
                   </label>
                   <button disabled={loading} className="button primary full">
@@ -1086,6 +1168,15 @@ function App() {
                     打开本地项目
                   </button>
                 )}
+                <button
+                  className="button full gap-top"
+                  onClick={() => {
+                    setModal("");
+                    setRepoPicker(true);
+                  }}
+                >
+                  从 GitHub 克隆{state.local.remote ? "并关联" : "项目"}
+                </button>
                 <button
                   className="button full gap-top"
                   onClick={() => setModal("join")}

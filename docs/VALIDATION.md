@@ -5,7 +5,7 @@
 ## 自动化检查
 
 - TypeScript 无错误，Vite 生产构建成功。
-- `npm test`：13 项通过，0 项失败。
+- `npm test`：22 项通过，0 项失败。
 - 两个真实 WebSocket 客户端验证通道、计划、评论和共享记忆同步。
 - 验证工作区范围、错误邀请、所有权检查、并发领取只成功一次、旧 run ID 被拒绝。
 - 验证文件重叠提示、取消与拒绝、正在执行的会话不能归档。
@@ -40,8 +40,21 @@
 
 输出：`PASS: invitation → guest approval → host Codex execution → shared transcript → shared plan`。
 
-验收是在同一台电脑上的独立进程之间进行，尚未在第二台物理电脑、跨公网网络和多种防火墙环境下测试。当前共享功能面向可信局域网或 VPN。
+上述桌面 Agent 验收是在同一台电脑上的独立进程之间进行。v0.2 新增的公网地址测试见下文；尚未在第二台物理电脑及多种防火墙环境下测试。
+
+## v0.2 账号、仓库与互联网验收
+
+- 本机真实 Codex / Claude / GitHub CLI 授权状态均为已连接；桌面设置页正确显示状态。
+- GitHub 授权后，桌面仓库选择器能读取本项目私有仓库；临时目录中通过 `gh repo clone` 成功克隆并识别 main 分支。
+- 官方 cloudflared 2026.9.1 arm64 下载、SHA-256 校验、解压与安装成功；临时目录中完整安装 gh 2.101.0 并成功执行，测试后清理。
+- `node scripts/smoke-internet.mjs --live`：新建临时合成工作区，经真实 Cloudflare Quick Tunnel 公网 WSS 地址连接独立客户端，验证受邀工作区范围、评论实时同步、无效凭据拒绝、撤销后断线。测试后关闭通道、清理合成数据，没有把用户项目内容放入该测试。
+- 公网验证输出：`PASS: public WSS → scoped invitation → guest comment → host sync → invalid auth rejected → revocation disconnect`。
+- 自动化覆盖登录命令白名单、凭据日志隐藏、登录取消、授权码本机输入、下载校验失败、两种芯片安装包匹配、WSS 邀请解析、隧道注册完成后就绪、建立中取消，以及恶意 JSON 消息关闭连接。
+- UI 观察确认：账号卡片、仓库搜索、默认互联网邀请模式、网络组件状态，布局和操作入口可用。
+- `npm audit --omit=dev`：0 个已知生产依赖漏洞。
+
+尚未实测的项目：全新同事账号从零完成 OAuth 登录、第二台物理 Mac、Intel 硬件运行、不同地区网络策略。已登录账号检测与模拟登录生命周期通过，不把这些结果表述为所有登录场景均已验收。
 
 ## 构建产物
 
-`npm run package` 生成 macOS arm64 应用；本机安装至 `~/Applications/头号玩家.app`。应用包含原创图标、中文原生菜单和隔离的 preload 桥。未做 Developer ID 签名或公证。
+`npm run distribute` 生成 macOS arm64 和 x64 ZIP；本机安装至 `~/Applications/头号玩家.app`。应用包含原创图标、中文原生菜单和隔离的 preload 桥。两种 ZIP 的 app.asar 与打包目录一致，所有 core / desktop / dist 运行文件与当前源码构建逐文件哈希匹配。arm64 安装版已启动，界面显示 0.2.0-beta.1、原有会话保留。未做 Developer ID 签名或公证。

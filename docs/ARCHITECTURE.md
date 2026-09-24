@@ -41,3 +41,13 @@ Hub 默认只监听 loopback。只有房主在界面开启共享才绑定 `0.0.0
 ## 有意识的实现边界
 
 当前以本机 / 小型可信团队为目标，使用 JSON 原子替换持久化和完整快照广播。大规模团队需要增量事件协议、数据库、背压、保留策略、成员角色和 TLS。客户端断连不会触发任何自动代码合并。源码同步应交给 Git；共享 diff 是供协作者审阅的视图。
+
+## v0.2 账号与公网扩展
+
+`core/accounts.mjs` 在本机运行官方 CLI 登录与状态查询。主进程只把必要账号状态和经过隐藏处理的登录输出传给自己的渲染进程；这些字段不进入 Hub 快照。GitHub 使用 gh 的授权与 Git 凭据助手，不创建自有 OAuth 密钥。GitHub 仓库访问授权与协作邀请是独立权限。
+
+`core/installers.mjs` 安装 Apple Silicon / Intel 官方 CLI。Codex、gh、cloudflared 读取各自 GitHub 官方 release 的 asset digest，校验 SHA-256 后再解包。可执行文件保存在用户数据目录的 bin 中；Claude 运行 Anthropic 的官方本机安装程序。没有管理员权限安装或修改系统 PATH。
+
+`core/tunnel.mjs` 启动 cloudflared，将临时 HTTPS/WSS 公网端点转到已有 loopback Hub。地址与 tunnel 注册均成功才生成邀请。关闭应用时终止隧道。此链路在 Cloudflare 处终止 TLS，不是端到端加密；适合同事 beta，不提供云端常驻和可用性承诺。邀请仍是随机 256-bit、工作区限定、24 小时有效且可即时撤销。
+
+远程身份使用本机身份密钥和目标端点派生，每个服务器得到不同身份值。不同临时域名之间不保证通道所有权自动迁移。Hub 设置连接数和消息频率上限，未认证请求失败即关闭；客户端对异常 JSON 响应关闭连接而非崩溃。

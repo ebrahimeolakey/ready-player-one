@@ -133,6 +133,13 @@ export class Hub extends EventEmitter {
     heartbeat.unref();
     this.servers.push({ wss, heartbeat });
     wss.on("connection", (ws, req) => {
+      ws.on("error", () => {});
+      if (wss.clients.size > 128) {
+        ws.close(1013, "协作连接数量已达上限");
+        return;
+      }
+      let messageWindow = Date.now(),
+        messageCount = 0;
       ws.isAlive = true;
       ws.on("pong", () => {
         ws.isAlive = true;
@@ -146,7 +153,16 @@ export class Hub extends EventEmitter {
       ws.on("message", (raw) => {
         let msg;
         try {
+          if (Date.now() - messageWindow > 1000) {
+            messageWindow = Date.now();
+            messageCount = 0;
+          }
+          if (++messageCount > 120) {
+            ws.close(1008, "请求过于频繁");
+            return;
+          }
           msg = JSON.parse(raw.toString());
+          if (!msg || typeof msg !== "object") throw Error("请求格式无效");
           if (!this.peers.has(ws)) {
             if (msg.method !== "auth") throw Error("请先验证邀请");
             const { token, secret, name } = msg.args || {};
@@ -184,6 +200,7 @@ export class Hub extends EventEmitter {
           this.broadcast();
         } catch (e) {
           ws.send(JSON.stringify({ id: msg?.id, error: e.message }));
+          if (!this.peers.has(ws)) ws.close(1008, "认证失败");
         }
       });
       ws.on("close", () => {

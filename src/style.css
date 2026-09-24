@@ -2213,3 +2213,190 @@ main {
     scroll-behavior: auto !important;
   }
 }
+/* Local account onboarding */
+.onboarding-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+.onboarding-strip > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  color: var(--muted);
+}
+.account-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.account-heading p {
+  margin-bottom: 14px;
+}
+.account-card {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 12px 0;
+  background: #131b19;
+}
+.account-detail {
+  flex: 1;
+  min-width: 0;
+}
+.account-detail strong,
+.account-detail small {
+  display: block;
+}
+.account-detail small {
+  color: #a7b5af;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.account-detail small svg {
+  vertical-align: middle;
+  color: #a8e6c4;
+  margin-right: 5px;
+}
+.account-detail .account-version {
+  font-size: 10px;
+  color: #7b8e85;
+  overflow-wrap: anywhere;
+}
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.account-actions .button {
+  font-size: 12px;
+  padding: 8px 11px;
+}
+.provider-icon.github {
+  background: #2b3440;
+  color: #edf2f8;
+}
+.account-notice {
+  display: flex;
+  gap: 9px;
+  color: #94a59c;
+  font-size: 12px;
+  line-height: 1.7;
+  margin-top: 18px;
+}
+.account-notice svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.network-settings {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.install-progress {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #b7d8c4;
+  margin-top: 8px;
+}
+.install-progress.error {
+  color: #edb49f;
+}
+.auth-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+.auth-log {
+  font:
+    11px/1.7 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: #101613;
+  padding: 14px;
+  border-radius: 9px;
+  color: #bccdc1;
+}
+.auth-modal,
+.repo-modal {
+  width: 620px;
+  max-height: 85vh;
+  overflow: auto;
+}
+.repo-list {
+  max-height: 340px;
+  overflow: auto;
+  margin: 15px 0;
+}
+.repo-list > button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  width: 100%;
+  padding: 13px;
+  border-bottom: 1px solid var(--line);
+}
+.repo-list > button:hover {
+  background: #24332b;
+}
+.repo-list > button > div {
+  flex: 1;
+  min-width: 0;
+}
+.repo-list strong {
+  display: block;
+  font-size: 13px;
+}
+.repo-list small {
+  display: block;
+  font-size: 11px;
+  color: #91a59a;
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag.amber {
+  color: #e7c27e;
+  background: #423720;
+}
+.toast {
+  z-index: 200;
+}
+@media (max-width: 1050px) {
+  .account-card {
+    flex-wrap: wrap;
+  }
+  .account-actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 55px;
+  }
+  .onboarding-strip {
+    flex-wrap: wrap;
+  }
+  .onboarding-strip > div {
+    flex-basis: 100%;
+  }
+}

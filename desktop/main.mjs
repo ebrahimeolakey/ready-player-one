@@ -9,17 +9,31 @@ import {
 } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { homedir, networkInterfaces, userInfo } from "node:os";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { Hub } from "../core/hub.mjs";
 import { HubClient } from "../core/client.mjs";
 import * as local from "../core/local.mjs";
+import {
+  AccountManager,
+  repositories,
+  cloneRepository,
+  validateRepo,
+  safeAuthUrl,
+} from "../core/accounts.mjs";
+import { installTool } from "../core/installers.mjs";
+import { Tunnel, parseInvitation, makeInvitation } from "../core/tunnel.mjs";
 const base = dirname(fileURLToPath(import.meta.url));
 app.setName("头号玩家");
 const dir = process.env.RPO_DATA_DIR || join(homedir(), ".ready-player-one");
 mkdirSync(dir, { recursive: true, mode: 0o700 });
+process.env.RPO_BIN_DIR = join(dir, "bin");
+const accounts = new AccountManager();
+const tunnel = new Tunnel();
+const installations = new Map();
+let accountLoading = true;
 let config;
 try {
   config = JSON.parse(readFileSync(join(dir, "client.json"), "utf8"));
@@ -69,11 +83,37 @@ const state = () => ({
     remote,
     dataDir: dir,
     name: config.name,
+    ...accounts.snapshot(),
+    installations: [...installations.values()],
+    tunnel: {
+      ...tunnel.state,
+      installed: existsSync(join(dir, "bin", "cloudflared")),
+    },
+    accountLoading,
+    appVersion: app.getVersion(),
+    platform: process.arch,
   },
 });
 const emit = () => {
   if (win && !win.isDestroyed()) win.webContents.send("rpo:event", state());
 };
+accounts.on("change", () => {
+  providerList = accounts.accounts
+    .filter((a) => a.id !== "github")
+    .map((a) => ({ id: a.id, available: a.available, version: a.version }));
+  emit();
+});
+tunnel.on("change", emit);
+async function refreshAccounts() {
+  accountLoading = true;
+  emit();
+  try {
+    return await accounts.refresh();
+  } finally {
+    accountLoading = false;
+    emit();
+  }
+}
 const localRoot = (a) => {
   const p =
     (a.sessionId && config.sessionPaths[a.sessionId]) ||
@@ -98,7 +138,15 @@ async function connect(url, token) {
     runner.close();
     emit();
   });
-  await next.connect(url, { token, name: config.name, secret: config.secret });
+  await next.connect(url, {
+    token,
+    name: config.name,
+    secret: remote
+      ? createHmac("sha256", config.secret)
+          .update(new URL(url).host)
+          .digest("hex")
+      : config.secret,
+  });
   emit();
 }
 async function processRuns() {
@@ -195,6 +243,87 @@ const hubMethods = new Set([
 ]);
 async function invoke(method, a) {
   if (method === "bootstrap") return state();
+  if (method === "accounts.refresh") return refreshAccounts();
+  if (method === "accounts.login") {
+    if (!accounts.accounts.find((p) => p.id === a.id)?.available)
+      throw Error("请先安装此提供商组件");
+    return accounts.start(a.id, a.device === true);
+  }
+  if (method === "accounts.code") return accounts.submit(a.id, a.code);
+  if (method === "accounts.cancel") {
+    accounts.cancel(a.id);
+    return true;
+  }
+  if (method === "accounts.open") {
+    const job = accounts.jobs.get(a.id);
+    const url = safeAuthUrl(job?.url);
+    if (!url) throw Error("尚未收到官方登录地址");
+    await shell.openExternal(url);
+    return true;
+  }
+  if (method === "tools.install") {
+    if (!["codex", "claude", "github", "cloudflared"].includes(a.id))
+      throw Error("未知组件");
+    if (installations.get(a.id)?.status === "running") return true;
+    const job = { id: a.id, status: "running", message: "准备安装……" };
+    installations.set(a.id, job);
+    emit();
+    installTool(a.id, join(dir, "bin"), (message) => {
+      job.message = message;
+      emit();
+    })
+      .then(async () => {
+        job.status = "done";
+        job.message = "安装完成";
+        await refreshAccounts();
+      })
+      .catch((error) => {
+        job.status = "error";
+        job.message = error.message;
+      })
+      .finally(emit);
+    return true;
+  }
+  if (method === "github.repositories") return repositories();
+  if (method === "github.clone") {
+    validateRepo(a.repo);
+    if (
+      a.workspaceId &&
+      !client.state.workspaces.some((w) => w.id === a.workspaceId)
+    )
+      throw Error("工作区不存在");
+    if (remote && !a.workspaceId) throw Error("请先选择要关联的共享工作区");
+    const result = await dialog.showOpenDialog(win, {
+      title: "选择仓库的保存位置",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (result.canceled) return null;
+    const target = join(result.filePaths[0], a.repo.split("/")[1]);
+    await cloneRepository(a.repo, target);
+    const p = await local.inspectProject(target);
+    if (a.workspaceId) {
+      if (!client.state.workspaces.some((w) => w.id === a.workspaceId))
+        throw Error("工作区不存在");
+      config.paths[a.workspaceId] = p.root;
+      saveConfig();
+      emit();
+      return { id: a.workspaceId };
+    }
+    const w = await client.call("workspace.create", {
+      name: basename(p.root),
+      branch: p.branch,
+      remote: p.remote,
+    });
+    config.paths[w.id] = p.root;
+    saveConfig();
+    emit();
+    return w;
+  }
+  if (method === "share.stopInternet") {
+    tunnel.stop();
+    return true;
+  }
+
   if (hubMethods.has(method)) {
     if (method === "run.request") {
       localRoot(a);
@@ -271,8 +400,7 @@ async function invoke(method, a) {
     return client.call(method, { ...a, ...change });
   }
   if (method === "providers.refresh") {
-    providerList = await local.providers();
-    emit();
+    await refreshAccounts();
     return providerList;
   }
   if (method === "settings.name") {
@@ -283,46 +411,51 @@ async function invoke(method, a) {
   }
   if (method === "share.create") {
     if (remote) throw Error("请由房主生成邀请");
-    if (!hub.shared) {
-      await hub.listen({ host: "0.0.0.0", port: 0 });
+    let server,
+      addresses = [],
+      port;
+    if (a.internet) {
+      const endpoint = await tunnel.start(hub.port);
+      server = endpoint.replace(/^https:/, "wss:");
+    } else {
+      if (!hub.sharePort) await hub.listen({ host: "0.0.0.0", port: 0 });
+      port = hub.sharePort;
+      addresses = Object.values(networkInterfaces())
+        .flat()
+        .filter((n) => n && n.family === "IPv4" && !n.internal)
+        .map((n) => n.address);
     }
     const invite = await client.call("invite.create", {
       workspaceId: a.workspaceId,
     });
-    const addresses = Object.values(networkInterfaces())
-      .flat()
-      .filter((n) => n && n.family === "IPv4" && !n.internal)
-      .map((n) => n.address);
-    const host = addresses[0] || "127.0.0.1";
-    const url = `rpo://join?host=${host}&port=${hub.sharePort}&token=${invite.token}${a.sessionId ? "&session=" + encodeURIComponent(a.sessionId) : ""}`;
+    const url = makeInvitation({
+      server,
+      host: addresses[0] || "127.0.0.1",
+      port,
+      token: invite.token,
+      sessionId: a.sessionId,
+    });
     clipboard.writeText(url);
-    return { url, addresses, port: hub.sharePort, expires: invite.expires };
+    return {
+      url,
+      addresses,
+      port,
+      expires: invite.expires,
+      internet: !!a.internet,
+    };
   }
   if (method === "share.join") {
-    const u = new URL(a.url.trim());
-    if (u.protocol !== "rpo:" || u.hostname !== "join")
-      throw Error("请输入有效的 rpo://join 邀请链接");
-    const host = u.searchParams.get("host"),
-      port = Number(u.searchParams.get("port")),
-      token = u.searchParams.get("token");
-    if (
-      !host ||
-      !/^[-a-zA-Z0-9.]+$/.test(host) ||
-      port < 1 ||
-      port > 65535 ||
-      !token
-    )
-      throw Error("邀请链接不完整");
+    const invitation = parseInvitation(a.url);
     remote = true;
     try {
-      await connect(`ws://${host}:${port}`, token);
+      await connect(invitation.url, invitation.token);
     } catch (e) {
       remote = false;
       await connect(`ws://127.0.0.1:${hub.port}`, hub.db.hostToken);
       throw e;
     }
     return {
-      sessionId: u.searchParams.get("session"),
+      sessionId: invitation.sessionId,
       workspaceId: client.state.workspaces[0]?.id,
     };
   }
@@ -405,7 +538,6 @@ app
     } else {
       hub = new Hub(join(dir, "hub"));
       await hub.listen();
-      providerList = await local.providers();
       await connect(`ws://127.0.0.1:${hub.port}`, hub.db.hostToken);
       Menu.setApplicationMenu(
         Menu.buildFromTemplate([
@@ -470,6 +602,7 @@ app
       win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
       win.webContents.on("will-navigate", (event) => event.preventDefault());
       await win.loadFile(entry);
+      refreshAccounts().catch(console.error);
       win.on("closed", () => {
         win = null;
         app.quit();
@@ -488,6 +621,8 @@ app
 app.on("before-quit", () => {
   if (shutting) return;
   shutting = true;
+  accounts.close();
+  tunnel.stop();
   for (const p of terminals) stopTerminal(p);
   runner.close();
   client?.close();

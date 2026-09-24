@@ -9,16 +9,26 @@ export class HubClient extends EventEmitter {
     this.closed = false;
   }
   async connect(url, auth) {
+    clearTimeout(this.retry);
+    this.ws?.close();
     this.url = url;
     this.auth = auth;
     this.closed = false;
     this.ws = new WebSocket(url, {
       maxPayload: 32 * 1024 * 1024,
-      handshakeTimeout: 6000,
+      handshakeTimeout: 15000,
     });
     const socket = this.ws;
     socket.on("message", (raw) => {
-      const msg = JSON.parse(raw.toString());
+      if (this.ws !== socket) return;
+      let msg;
+      try {
+        msg = JSON.parse(raw.toString());
+        if (!msg || typeof msg !== "object") throw Error("Invalid response");
+      } catch {
+        socket.close(1008, "无效协作响应");
+        return;
+      }
       if (msg.event === "state") {
         this.state = msg.data;
         this.emit("state", msg.data);
@@ -32,6 +42,7 @@ export class HubClient extends EventEmitter {
       }
     });
     socket.on("close", () => {
+      if (this.ws !== socket) return;
       for (const p of this.pending.values()) {
         clearTimeout(p.timer);
         p.reject(Error("协作连接已断开"));
@@ -48,6 +59,7 @@ export class HubClient extends EventEmitter {
     await new Promise((resolve, reject) => {
       socket.once("open", resolve);
       socket.once("error", reject);
+      socket.once("close", () => reject(Error("协作连接已断开")));
     });
     try {
       this.state = await this.call("auth", auth);

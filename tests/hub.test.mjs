@@ -323,3 +323,22 @@ test("full transcripts remain exportable after the live window is trimmed", asyn
   assert.equal(full.lanes[0].entries.length, 611);
   assert.equal(full.lanes[0].entries[1].text, "事件 0");
 });
+test("malformed remote messages close the client without crashing", async (t) => {
+  const { WebSocketServer } = await import("ws");
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  await new Promise((r) => server.once("listening", r));
+  const client = new HubClient();
+  t.after(() => {
+    client.close();
+    for (const s of server.clients) s.terminate();
+    server.close();
+  });
+  server.on("connection", (socket) => socket.send("not json"));
+  await assert.rejects(
+    client.connect(`ws://127.0.0.1:${server.address().port}`, {
+      token: "test",
+    }),
+    /断开|未连接/,
+  );
+  client.close();
+});
