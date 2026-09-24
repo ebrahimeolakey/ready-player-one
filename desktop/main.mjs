@@ -1,21 +1,70 @@
 import {
   app,
   BrowserWindow,
+  WebContentsView,
   ipcMain,
   dialog,
   clipboard,
   shell,
   Menu,
+  Notification,
+  session as electronSession,
+  webContents,
+  safeStorage,
+  nativeImage,
 } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  statSync,
+  realpathSync,
+} from "node:fs";
 import { homedir, networkInterfaces, userInfo } from "node:os";
-import { randomBytes, createHmac } from "node:crypto";
+import { randomBytes, createHmac, randomUUID, createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { Hub } from "../core/hub.mjs";
 import { HubClient } from "../core/client.mjs";
 import * as local from "../core/local.mjs";
+import * as snapshots from "../core/snapshots.mjs";
+import { ProviderRuntime } from "../core/providers/runtime.mjs";
+import { listProviderModels } from "../core/providers/catalog.mjs";
+import { RunCoordinator } from "../core/run-coordinator.mjs";
+import { SecureStore } from "../core/secure-store.mjs";
+import { loadDesktopDataKey } from "./services/data-key.mjs";
+import { ProviderConfigStore } from "../core/provider-config.mjs";
+import { registerOpenAICompatible } from "../core/providers/openai-compatible.mjs";
+import { createWorkspaceTools } from "../core/providers/workspace-tools.mjs";
+import { normalizeImages, IMAGE_LIMITS } from "../core/providers/input.mjs";
+import {
+  DictationService,
+  dictationHelperPath,
+} from "./services/dictation.mjs";
+import {
+  createTaskCoordination,
+  handlesTaskCoordination,
+} from "./services/task-coordination.mjs";
+import {
+  createTeamIdentity,
+  handlesTeamIdentity,
+} from "./services/team-identity.mjs";
+import { createIdentityVerifier } from "../core/team-identity.mjs";
+import { DebuggerService, handlesDebugger } from "./services/debugger.mjs";
+import { LanguageService } from "./services/language.mjs";
+import { DraftStore } from "./services/drafts.mjs";
+import { GitService } from "./services/git.mjs";
+import {
+  captureReference,
+  fileReferences,
+  checkReferences,
+} from "./services/references.mjs";
+import { UpdateService } from "./services/updater.mjs";
+import { TerminalService } from "./services/terminal.mjs";
+import { BrowserService } from "./services/browser.mjs";
+import { shellCommand, binaryName, stopProcess } from "../core/platform.mjs";
 import {
   AccountManager,
   repositories,
@@ -29,6 +78,10 @@ const base = dirname(fileURLToPath(import.meta.url));
 app.setName("头号玩家");
 const dir = process.env.RPO_DATA_DIR || join(homedir(), ".ready-player-one");
 mkdirSync(dir, { recursive: true, mode: 0o700 });
+if (process.env.RPO_DATA_DIR) {
+  mkdirSync(join(dir, "electron"), { recursive: true, mode: 0o700 });
+  app.setPath("userData", join(dir, "electron"));
+}
 process.env.RPO_BIN_DIR = join(dir, "bin");
 const accounts = new AccountManager();
 const tunnel = new Tunnel();
@@ -46,11 +99,11 @@ try {
     sessionPaths: {},
   };
 }
-const saveConfig = () =>
-  writeFileSync(join(dir, "client.json"), JSON.stringify(config), {
-    mode: 0o600,
-  });
-saveConfig();
+let settingsStore, drafts, pendingTeamConnection;
+const saveConfig = () => {
+  if (!settingsStore) throw Error("本机加密存储尚未就绪");
+  settingsStore.writeJSON("client.json", config);
+};
 let win,
   hub,
   client,
@@ -58,15 +111,153 @@ let win,
   online = false,
   providerList = [],
   shutting = false;
+const syncStates = new Map();
+const syncBusy = new Set();
+const notifiedApprovals = new Set();
+config.syncSessions ??= {};
+config.lanePaths ??= {};
+let customProviders = [];
+let updater;
+const runImages = new Map();
+const saveRunImages = () =>
+  settingsStore.writeJSON("run-images.json", Object.fromEntries(runImages));
+const providerStore = new ProviderConfigStore({
+  path: join(dir, "providers.json"),
+  encrypt: (value) => safeStorage.encryptString(value),
+  decrypt: (value) => safeStorage.decryptString(value),
+  isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+});
+const allProviders = () => [
+  ...providerList,
+  ...customProviders.map((p) => ({
+    id: p.id,
+    name: p.name,
+    available: true,
+    version: p.model,
+  })),
+];
+async function refreshCustomProviders() {
+  customProviders = await providerStore.list();
+  emit();
+}
+const dictation = new DictationService({
+  helperPath: dictationHelperPath({
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+    isPackaged: app.isPackaged,
+  }),
+  onEvent: (event) => {
+    if (win && !win.isDestroyed()) win.webContents.send("rpo:dictation", event);
+  },
+});
+const terminalService = new TerminalService();
+const browserService = new BrowserService({
+  BrowserWindow,
+  WebContentsView,
+  getOwnerWindow: (id) => BrowserWindow.fromWebContents(webContents.fromId(id)),
+  session: electronSession,
+  openExternal: (url) => shell.openExternal(url),
+});
+for (const [service, channel] of [
+  [terminalService, "rpo:terminal"],
+  [browserService, "rpo:browser"],
+])
+  service.on("event", (ownerId, payload) => {
+    const target = webContents.fromId(ownerId);
+    if (target && !target.isDestroyed()) target.send(channel, payload);
+  });
 const terminals = new Set();
-const stopTerminal = (p) => {
+const stopTerminal = (p) => stopProcess(p);
+const languageService = new LanguageService();
+const runtime = new ProviderRuntime({ env: local.localEnv() });
+config.laneOptions ??= {};
+config.modelCatalogs ??= {};
+const repoLocks = new Set();
+const canonicalRoot = (root) => realpathSync(root);
+function agentBusy(root) {
+  if (
+    [...runtime.runs.values()].some((run) => {
+      try {
+        return canonicalRoot(run.options.cwd) === root;
+      } catch {
+        return false;
+      }
+    })
+  )
+    return true;
+  return [...coordinator.records.values()].some((r) => {
+    if (
+      r.ended ||
+      r.blocked ||
+      !client?.state ||
+      r.scope !== coordinator.scope(client)
+    )
+      return false;
+    try {
+      return canonicalRoot(localRoot(r)) === root;
+    } catch {
+      return false;
+    }
+  });
+}
+function rootBusy(root) {
+  return debuggerService.isBusy(root) || agentBusy(root);
+}
+const debuggerService = new DebuggerService({
+  resolveContext: (_owner, a) => {
+    const ws = client?.state?.workspaces.find((w) => w.id === a.workspaceId);
+    if (!ws) throw Error("工作区不存在");
+    const me = client.state.me,
+      role = me.roles?.[ws.id] || (me.host ? "owner" : "editor");
+    if (!["owner", "editor"].includes(role))
+      throw Error("当前角色不能调试代码");
+    if (a.sessionId) {
+      const session = client.state.sessions.find(
+        (s) => s.id === a.sessionId && s.workspaceId === ws.id,
+      );
+      if (!session) throw Error("会话不存在");
+      if (
+        a.laneId &&
+        !session.lanes.some((l) => l.id === a.laneId && l.ownerId === me.id)
+      )
+        throw Error("只能调试自己的 Agent 目录");
+    } else if (a.laneId) throw Error("需要关联会话");
+    return {
+      root: localRoot(a),
+      contextId: a.laneId || a.sessionId || a.workspaceId,
+    };
+  },
+  beforeStart: (root) => {
+    if (repoLocks.has(root) || agentBusy(root))
+      throw Error("请先等待或停止项目的 Agent 和 Git 操作");
+  },
+});
+async function withRepository(root, action) {
+  root = canonicalRoot(root);
+  if (repoLocks.has(root)) throw Error("项目正在执行 Git 操作，请稍后重试");
+  if (rootBusy(root)) throw Error("请先等待或停止此项目的 Agent");
+  repoLocks.add(root);
   try {
-    process.kill(-p.pid, "SIGTERM");
-  } catch {}
-};
-const runner = new local.AgentRunner(),
-  claimed = new Set(),
-  stops = new Map();
+    return await action();
+  } finally {
+    repoLocks.delete(root);
+  }
+}
+const gitService = new GitService({ env: local.localEnv(), isBusy: rootBusy });
+gitService.locks = repoLocks;
+const gitMethods = new Set([
+  "status",
+  "diff",
+  "stage",
+  "unstage",
+  "commit",
+  "fetch",
+  "pull",
+  "push",
+  "branches",
+  "createBranch",
+  "switchBranch",
+]);
 const state = () => ({
   ...(client?.state || {
     workspaces: [],
@@ -76,9 +267,16 @@ const state = () => ({
     members: [],
   }),
   local: {
+    runIssues: coordinator?.issues || [],
+    update: updater?.getState(),
+    laneOptions: config.laneOptions,
+    modelCatalogs: config.modelCatalogs,
+    sync: Object.fromEntries(syncStates),
+    syncSessions: config.syncSessions,
     paths: config.paths,
     sessionPaths: config.sessionPaths,
-    providers: providerList,
+    providers: allProviders(),
+    lanePaths: config.lanePaths,
     online,
     remote,
     dataDir: dir,
@@ -87,11 +285,12 @@ const state = () => ({
     installations: [...installations.values()],
     tunnel: {
       ...tunnel.state,
-      installed: existsSync(join(dir, "bin", "cloudflared")),
+      installed: existsSync(join(dir, "bin", binaryName("cloudflared"))),
     },
     accountLoading,
     appVersion: app.getVersion(),
     platform: process.arch,
+    os: process.platform,
   },
 });
 const emit = () => {
@@ -116,117 +315,245 @@ async function refreshAccounts() {
 }
 const localRoot = (a) => {
   const p =
+    (a.laneId && config.lanePaths[a.laneId]) ||
     (a.sessionId && config.sessionPaths[a.sessionId]) ||
     config.paths[a.workspaceId];
   if (!p) throw Error("请先为此工作区关联本机项目目录");
   return p;
 };
+const coordinator = new RunCoordinator({
+  runtime,
+  client: () => client,
+  dir: join(dir, "outbox"),
+  root: localRoot,
+  options: async (a) => {
+    const env = {
+      ELECTRON_RUN_AS_NODE: "1",
+      RPO_HUB_URL: client.url,
+      RPO_HUB_TOKEN: client.auth.token,
+      RPO_CLIENT_SECRET: client.auth.secret,
+      RPO_CLIENT_NAME: config.name,
+      RPO_SESSION_ID: a.sessionId,
+      RPO_LANE_ID: a.laneId,
+      ...(client.auth.identitySession
+        ? { RPO_IDENTITY_SESSION: client.auth.identitySession }
+        : {}),
+    };
+    const mcp = {
+      command: process.execPath,
+      args: [join(base, "../core/mcp-coordination.mjs")],
+      env,
+    };
+    const lane = client.state.sessions
+      .find((s) => s.id === a.sessionId)
+      ?.lanes.find((l) => l.id === a.laneId);
+    const queued = lane?.queue?.find((q) => q.approvalId === a.id);
+    const images = runImages.get(a.id) || runImages.get(queued?.id) || [];
+    let custom = {};
+    if (a.provider.startsWith("custom-")) {
+      const settings = await providerStore.getRuntimeConfig(a.provider);
+      registerOpenAICompatible(runtime, a.provider, {
+        baseUrl: settings.baseUrl,
+        model: settings.model,
+        apiKeyEnv: settings.apiKey ? "RPO_SELECTED_PROVIDER_KEY" : undefined,
+        tools: createWorkspaceTools(),
+      });
+      custom = { env: { RPO_SELECTED_PROVIDER_KEY: settings.apiKey } };
+    }
+    if (debuggerService.isBusy(localRoot(a))) throw Error("请先停止项目调试");
+    if (repoLocks.has(canonicalRoot(localRoot(a))))
+      throw Error("项目正在执行 Git 操作，请稍后重试");
+    return {
+      ...config.laneOptions[a.laneId],
+      ...custom,
+      images,
+      codexConfig: { "mcp_servers.rpo": mcp },
+      mcpServers: { rpo: mcp },
+      readOnlyMcpTools: ["mcp__rpo__rpo_context"],
+    };
+  },
+  steeringImages: (id) => runImages.get(id) || [],
+  onChange: emit,
+  onFinish: (result) => {
+    if (win && !win.isFocused() && Notification.isSupported())
+      new Notification({
+        title: "头号玩家",
+        body:
+          result.status === "done"
+            ? "Agent 已完成任务"
+            : "Agent 需要你查看执行结果",
+      }).show();
+    const lane = client?.state?.sessions
+      .find((s) => s.id === result.sessionId)
+      ?.lanes.find((l) => l.activeRunId === result.runId);
+    runImages.delete(result.runId);
+    for (const q of lane?.queue || [])
+      if (q.approvalId === result.runId) runImages.delete(q.id);
+    for (const q of lane?.steering || [])
+      if (q.runId === result.runId) runImages.delete(q.id);
+    saveRunImages();
+    if (config.syncSessions[result.sessionId])
+      syncSession(result.sessionId).catch(() => {});
+  },
+});
+const taskCoordination = createTaskCoordination({
+  client: () => client,
+  runtime,
+  localRoot,
+  config,
+  saveConfig,
+  dataDir: dir,
+  withRepository,
+});
+const teamIdentity = createTeamIdentity({
+  client: () => client,
+  endpoint: () => client?.url,
+  localConfig: config,
+  saveConfig,
+  openExternal: (url) => shell.openExternal(url),
+  scopeKey: (url) =>
+    hub && url === `ws://127.0.0.1:${hub.port}`
+      ? `local:${hub.identity.info.audience}`
+      : url,
+});
+const connectionSecret = (url) =>
+  remote
+    ? createHmac("sha256", config.secret)
+        .update(new URL(url).host)
+        .digest("hex")
+    : config.secret;
 async function connect(url, token) {
-  runner.close();
+  await coordinator.close();
   client?.close();
   client = new HubClient();
   const next = client;
   next.on("state", () => {
     if (client !== next) return;
     online = true;
+    for (const a of [
+      ...(next.state.approvals || []),
+      ...(next.state.toolApprovals || []),
+    ])
+      if (a.status === "pending" && !notifiedApprovals.has(a.id)) {
+        notifiedApprovals.add(a.id);
+        if (win && !win.isFocused() && Notification.isSupported())
+          new Notification({
+            title: "头号玩家",
+            body: "有一项操作等待审批",
+          }).show();
+      }
     emit();
-    processRuns();
+    processRuns().catch(console.error);
   });
   next.on("offline", () => {
     if (client !== next) return;
     online = false;
-    runner.close();
     emit();
   });
-  await next.connect(url, {
+  const auth = {
     token,
     name: config.name,
-    secret: remote
-      ? createHmac("sha256", config.secret)
-          .update(new URL(url).host)
-          .digest("hex")
-      : config.secret,
-  });
+    secret: connectionSecret(url),
+    ...teamIdentity.getAuth(url),
+  };
+  try {
+    await next.connect(url, auth);
+    pendingTeamConnection = null;
+    await coordinator.resume();
+  } catch (error) {
+    if (/GitHub.*身份|GitHub.*用户/.test(error.message))
+      pendingTeamConnection = { url, ...auth, remote };
+    throw error;
+  }
   emit();
 }
 async function processRuns() {
-  if (!client?.state) return;
-  for (const s of client.state.sessions)
-    for (const l of s.lanes)
-      if (
-        l.ownerId === client.state.me.id &&
-        l.stopRequested &&
-        stops.get(l.id) !== l.stopRequested
-      ) {
-        stops.set(l.id, l.stopRequested);
-        runner.stop(l.id);
-      }
-  for (const a of client.state.approvals) {
-    if (
-      a.status !== "approved" ||
-      a.ownerId !== client.state.me.id ||
-      claimed.has(a.id)
+  await coordinator.process();
+}
+async function syncSession(sessionId) {
+  if (!online || syncBusy.has(sessionId)) return;
+  const s = client?.state?.sessions.find((s) => s.id === sessionId);
+  const lane = s?.lanes.find((l) => l.ownerId === client.state.me.id);
+  if (!s || !lane) return;
+  if (
+    s.lanes.some(
+      (l) => l.ownerId === client.state.me.id && l.status === "running",
     )
-      continue;
-    claimed.add(a.id);
-    const c = client;
-    try {
-      const data = await c.call("run.claim", { id: a.id });
-      const cwd = localRoot(a);
-      const project = await local.inspectProject(cwd);
-      if (project.branch === "未初始化 Git" && a.provider === "codex")
-        throw Error(
-          "Codex 需要 Git 仓库。请先在终端执行 git init 并创建首次提交。",
-        );
-      const prior = data.session.lanes
-        .flatMap((l) =>
-          l.entries
-            .filter((e) => ["user", "assistant"].includes(e.role))
-            .slice(-12)
-            .map((e) => `[${l.owner} / ${l.provider} / ${e.role}] ${e.text}`),
-        )
-        .join("\n")
-        .slice(-30000);
-      const prompt = `请用中文协作完成任务。\n共享任务：${data.session.title}\n任务说明：${data.session.description}\n计划：${data.session.plan.map((p) => `${p.done ? "[x]" : "[ ]"} ${p.text}`).join("\n")}\n团队记忆：${data.memories.map((m) => `${m.title}: ${m.text}`).join("\n")}\n其他通道的最近上下文（仅作参考）：\n${prior}\n\n当前用户要求：${a.prompt}`;
-      let queue = Promise.resolve();
-      runner.run({
-        key: a.laneId,
-        provider: a.provider,
-        mode: a.mode,
-        cwd,
-        prompt,
-        onEntry: (item) => {
-          queue = queue
-            .then(() => c.call("run.entry", { ...a, runId: a.id, ...item }))
-            .catch(() => {});
-        },
-        onEnd: (status, message) => {
-          queue.then(async () => {
-            try {
-              await c.call("run.finish", {
-                ...a,
-                runId: a.id,
-                status,
-                message,
-              });
-            } catch {}
-            emit();
-          });
-        },
-      });
-    } catch (e) {
-      await c
-        .call("run.finish", {
-          ...a,
-          runId: a.id,
-          status: "error",
-          message: e.message,
-        })
-        .catch(() => {});
+  ) {
+    syncStates.set(sessionId, {
+      status: "waiting",
+      message: "本机 Agent 运行中，完成后同步",
+    });
+    emit();
+    return;
+  }
+  const root = config.sessionPaths[sessionId];
+  if (!root) throw Error("请先创建会话独立工作树");
+  const canonical = canonicalRoot(root);
+  if (repoLocks.has(canonical) || rootBusy(canonical)) return;
+  syncBusy.add(sessionId);
+  repoLocks.add(canonical);
+  try {
+    const conflicts = await snapshots.conflictFiles(root);
+    if (conflicts.length) {
+      syncStates.set(sessionId, { status: "conflict", files: conflicts });
+      return;
     }
+    syncStates.set(sessionId, { status: "syncing" });
+    emit();
+    for (const peer of s.lanes.filter(
+      (l) => l.ownerId !== lane.ownerId && l.snapshot,
+    )) {
+      const result = await snapshots.receiveSnapshot(root, {
+        sessionId,
+        snapshot: peer.snapshot,
+      });
+      if (result.status === "conflict") {
+        syncStates.set(sessionId, result);
+        await client.call("snapshot.status", {
+          sessionId,
+          laneId: lane.id,
+          status: "conflict",
+        });
+        return;
+      }
+    }
+    const snapshot = await snapshots.publishSnapshot(root, {
+      sessionId,
+      ownerId: lane.ownerId,
+    });
+    if (lane.snapshot?.commit !== snapshot.commit)
+      await client.call("snapshot.publish", {
+        sessionId,
+        laneId: lane.id,
+        ...snapshot,
+      });
+    syncStates.set(sessionId, { status: "synced", ...snapshot });
+    await client.call("snapshot.status", {
+      sessionId,
+      laneId: lane.id,
+      status: "synced",
+    });
+  } catch (e) {
+    syncStates.set(sessionId, { status: "error", message: e.message });
+  } finally {
+    syncBusy.delete(sessionId);
+    repoLocks.delete(canonical);
+    emit();
   }
 }
+const syncTimer = setInterval(() => {
+  for (const [id, enabled] of Object.entries(config.syncSessions))
+    if (enabled) syncSession(id).catch(() => {});
+}, 5000);
+syncTimer.unref();
 const hubMethods = new Set([
+  "storage.retention",
+  "handoff.request",
+  "handoff.offline",
+  "handoff.cancel",
+  "handoff.reject",
+  "subtask.cancel",
   "workspace.create",
   "session.create",
   "session.archive",
@@ -240,9 +567,199 @@ const hubMethods = new Set([
   "memory.add",
   "memory.retire",
   "invite.revoke",
+  "run.steer",
+  "run.queue",
+  "run.queue.cancel",
+  "tool.decide",
+  "plan.transfer.accept",
+  "plan.transfer.decline",
+  "member.role",
+  "member.remove",
+  "plan.assign",
+  "plan.claim",
+  "plan.status",
+  "plan.transfer",
+  "comment.resolve",
+  "comment.task",
+  "comment.check",
+  "memory.update",
+  "memory.check",
+  "lock.acquire",
+  "lock.renew",
+  "lock.release",
+  "coordination.context",
+  "coordination.message",
 ]);
 async function invoke(method, a) {
   if (method === "bootstrap") return state();
+  if (handlesDebugger(method))
+    return debuggerService.invoke(win.webContents.id, method, a);
+  if (
+    [
+      "language.diagnostics",
+      "language.completions",
+      "language.definition",
+      "language.update",
+      "language.close",
+    ].includes(method)
+  )
+    return languageService[
+      method === "language.close" ? "closeDocument" : method.split(".")[1]
+    ](localRoot(a), a);
+  if (handlesTeamIdentity(method)) {
+    if (method === "team.status" && pendingTeamConnection)
+      return {
+        configured: true,
+        github: null,
+        jobs: (await teamIdentity.invoke(method, a)).jobs,
+      };
+    if (method === "team.begin" && pendingTeamConnection)
+      return teamIdentity.beginJoin(pendingTeamConnection);
+    const result = await teamIdentity.invoke(method, a);
+    if (method === "team.poll" && result.status === "verified") {
+      if (pendingTeamConnection) {
+        const saved = pendingTeamConnection;
+        remote = saved.remote;
+        await connect(saved.url, saved.token);
+      } else if (client)
+        Object.assign(client.auth, teamIdentity.getAuth(client.url));
+      emit();
+    }
+    return result;
+  }
+  if (method === "draft.read") return drafts.read(a.key);
+  if (method === "draft.set") return drafts.set(a.key, a.value);
+  if (method === "draft.remove") return drafts.remove(a.key);
+  if (method.startsWith("git.") && gitMethods.has(method.slice(4)))
+    return gitService[method.slice(4)](localRoot(a), a);
+  if (method === "references.capture") return captureReference(localRoot(a), a);
+  if (method === "references.files") return fileReferences(localRoot(a), a);
+  if (method === "references.check") return checkReferences(localRoot(a), a);
+  if (method === "updates.state") return updater.getState();
+  if (
+    [
+      "updates.check",
+      "updates.download",
+      "updates.cancel",
+      "updates.install",
+    ].includes(method)
+  ) {
+    if (
+      method === "updates.install" &&
+      (runtime.runs.size ||
+        repoLocks.size ||
+        [...debuggerService.records.values()].some((r) =>
+          debuggerService.isBusy(r.root),
+        ))
+    )
+      throw Error("请先等待或停止正在运行的 Agent，再安装更新");
+    return updater[method.split(".")[1]]();
+  }
+  if (handlesTaskCoordination(method)) {
+    const result = await taskCoordination.invoke(method, a);
+    emit();
+    return result;
+  }
+  if (method === "providers.custom.list") return providerStore.list();
+  if (method === "providers.custom.save") {
+    const result = await providerStore.save(a);
+    await refreshCustomProviders();
+    return result;
+  }
+  if (method === "providers.custom.remove") {
+    const result = await providerStore.remove(a.id);
+    await refreshCustomProviders();
+    return result;
+  }
+  if (method === "providers.images.pick") {
+    const chosen = await dialog.showOpenDialog(win, {
+      title: "添加图片",
+      properties: ["openFile", "multiSelections"],
+      filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "webp"] }],
+    });
+    if (chosen.canceled) return [];
+    if (chosen.filePaths.length > IMAGE_LIMITS.count)
+      throw Error("最多添加 5 张图片");
+    const images = chosen.filePaths.map((path) => {
+      const stat = statSync(path);
+      if (!stat.isFile() || stat.size > IMAGE_LIMITS.each)
+        throw Error("单张图片不能超过 8 MB");
+      const bytes = readFileSync(path),
+        decoded = nativeImage.createFromBuffer(bytes),
+        size = decoded.getSize();
+      if (decoded.isEmpty() || size.width * size.height > 40000000)
+        throw Error("图片无效或尺寸过大");
+      return { name: basename(path), data: bytes.toString("base64") };
+    });
+    return normalizeImages(images);
+  }
+  if (method === "dictation.probe") return dictation.probe("zh-CN");
+  if (method === "dictation.start")
+    return dictation.start("zh-CN", { targetId: String(a.targetId || "") });
+  if (method === "dictation.stop") return dictation.stop();
+  if (method === "terminal.open")
+    return terminalService.open(win.webContents.id, {
+      cwd: localRoot(a),
+      contextId: a.laneId || a.sessionId,
+      cols: a.cols,
+      rows: a.rows,
+    });
+  if (
+    [
+      "terminal.read",
+      "terminal.input",
+      "terminal.resize",
+      "terminal.close",
+    ].includes(method)
+  )
+    return terminalService[method.split(".")[1]](win.webContents.id, a);
+  if (
+    [
+      "browser.open",
+      "browser.navigate",
+      "browser.action",
+      "browser.close",
+      "browser.external",
+      "browser.bounds",
+    ].includes(method)
+  )
+    return browserService[method.split(".")[1]](win.webContents.id, a);
+  if (method === "provider.models") {
+    if (a.provider?.startsWith("custom-")) {
+      const p = customProviders.find((p) => p.id === a.provider);
+      if (!p) throw Error("Provider 不存在");
+      return p.models.map((id) => ({ id, label: id, default: id === p.model }));
+    }
+    try {
+      const models = await listProviderModels(a.provider, {
+        cwd: localRoot(a),
+        env: local.localEnv(),
+      });
+      config.modelCatalogs[a.provider] = models;
+      saveConfig();
+      emit();
+      return models;
+    } catch (error) {
+      if (config.modelCatalogs[a.provider]?.length)
+        return config.modelCatalogs[a.provider];
+      throw error;
+    }
+  }
+  if (method === "lane.options") {
+    const session = client.state.sessions.find((s) => s.id === a.sessionId);
+    const lane = session?.lanes.find(
+      (l) => l.id === a.laneId && l.ownerId === client.state.me.id,
+    );
+    if (!lane) throw Error("只能设置自己的 Agent");
+    const model =
+      typeof a.model === "string" ? a.model.trim().slice(0, 150) : undefined;
+    const effort =
+      typeof a.effort === "string" ? a.effort.slice(0, 30) : undefined;
+    config.laneOptions[lane.id] = { model, effort };
+    saveConfig();
+    emit();
+    return true;
+  }
   if (method === "accounts.refresh") return refreshAccounts();
   if (method === "accounts.login") {
     if (!accounts.accounts.find((p) => p.id === a.id)?.available)
@@ -328,7 +845,7 @@ async function invoke(method, a) {
     if (method === "run.request") {
       localRoot(a);
       if (
-        !providerList.find(
+        !allProviders().find(
           (p) =>
             p.id ===
             client.state.sessions
@@ -336,13 +853,35 @@ async function invoke(method, a) {
               ?.lanes.find((l) => l.id === a.laneId)?.provider,
         )?.available
       )
-        throw Error("本机尚未安装此 Agent CLI");
+        throw Error("请先在提供商设置中配置此 Agent");
+    }
+    if (["run.request", "run.queue", "run.steer"].includes(method)) {
+      const { images: rawImages, ...args } = a,
+        images = normalizeImages(rawImages || []);
+      if (method === "run.steer") {
+        args.eventId = randomUUID();
+        runImages.set(args.eventId, images);
+        saveRunImages();
+        try {
+          return await client.call(method, args);
+        } catch (error) {
+          runImages.delete(args.eventId);
+          saveRunImages();
+          throw error;
+        }
+      }
+      const result = await client.call(method, args);
+      if (images.length) {
+        runImages.set(result.id, images);
+        saveRunImages();
+      }
+      return result;
     }
     return client.call(method, a);
   }
   if (method === "project.add") {
     const selected = await dialog.showOpenDialog(win, {
-      title: "选择本地 Git 项目",
+      title: "选择本地项目目录",
       properties: ["openDirectory"],
     });
     if (selected.canceled) return null;
@@ -389,6 +928,37 @@ async function invoke(method, a) {
     emit();
     return path;
   }
+  if (method === "sync.enable") {
+    const s = client.state.sessions.find((s) => s.id === a.sessionId);
+    if (!s || s.workspaceId !== a.workspaceId) throw Error("会话不存在");
+    const role =
+      client.state.me.roles?.[s.workspaceId] ||
+      (client.state.me.host ? "owner" : "editor");
+    if (!["owner", "editor"].includes(role))
+      throw Error("当前角色不能同步代码");
+    if (a.enabled && !config.sessionPaths[s.id])
+      await invoke("worktree.create", a);
+    config.syncSessions[s.id] = a.enabled === true;
+    saveConfig();
+    emit();
+    if (a.enabled) await syncSession(s.id);
+    return true;
+  }
+  if (method === "sync.now") {
+    await syncSession(a.sessionId);
+    return true;
+  }
+  if (method === "sync.conflict")
+    return snapshots.conflictVersions(localRoot(a), a.path);
+  if (method === "sync.resolve") {
+    if (syncBusy.has(a.sessionId)) throw Error("代码正在同步，请稍后重试");
+    const result = await withRepository(localRoot(a), () =>
+      snapshots.resolveConflict(localRoot(a), a),
+    );
+    syncStates.set(a.sessionId, result);
+    emit();
+    return result;
+  }
   if (method === "files") return local.files(localRoot(a), a.path);
   if (method === "file.search") return local.searchFiles(localRoot(a), a.query);
   if (method === "file.read") return local.read(localRoot(a), a.path);
@@ -428,6 +998,8 @@ async function invoke(method, a) {
     }
     const invite = await client.call("invite.create", {
       workspaceId: a.workspaceId,
+      role: a.role || "editor",
+      ...(a.githubLogin ? { githubLogin: a.githubLogin } : {}),
     });
     const url = makeInvitation({
       server,
@@ -451,6 +1023,8 @@ async function invoke(method, a) {
     try {
       await connect(invitation.url, invitation.token);
     } catch (e) {
+      if (pendingTeamConnection?.url === invitation.url)
+        return { needsIdentity: true };
       remote = false;
       await connect(`ws://127.0.0.1:${hub.port}`, hub.db.hostToken);
       throw e;
@@ -494,10 +1068,12 @@ async function invoke(method, a) {
     if (typeof a.command !== "string" || a.command.length > 8000)
       throw Error("命令无效");
     return new Promise((resolve) => {
-      const p = spawn("/bin/zsh", ["-lc", a.command], {
+      const [program, args] = shellCommand(a.command);
+      const p = spawn(program, args, {
         cwd,
         env: local.localEnv(),
-        detached: true,
+        detached: process.platform !== "win32",
+        windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
       });
       terminals.add(p);
@@ -506,9 +1082,7 @@ async function invoke(method, a) {
         stopTerminal(p);
         setTimeout(() => {
           if (terminals.has(p)) {
-            try {
-              process.kill(-p.pid, "SIGKILL");
-            } catch {}
+            stopProcess(p, "SIGKILL");
           }
         }, 3000).unref();
       }, 60000);
@@ -537,9 +1111,83 @@ app
     if (!app.requestSingleInstanceLock()) {
       app.quit();
     } else {
-      hub = new Hub(join(dir, "hub"));
+      updater = new UpdateService({
+        version: app.getVersion(),
+        cacheDir: join(app.getPath("cache"), "rpo-updates"),
+        execPath: process.execPath,
+        isPackaged: app.isPackaged,
+        appImagePath: process.env.APPIMAGE,
+        onState: () => emit(),
+        quit: () => app.quit(),
+      });
+      const dataKey = loadDesktopDataKey({
+        safeStorage,
+        keyFile: join(dir, "data-key.json"),
+        dataDir: dir,
+      });
+      settingsStore = new SecureStore({ dir, key: dataKey });
+      if (settingsStore.exists("client.json"))
+        Object.assign(config, settingsStore.readJSON("client.json"));
+      saveConfig();
+      drafts = new DraftStore(settingsStore);
+      coordinator.attachStore(
+        new SecureStore({ dir: join(dir, "outbox"), key: dataKey }),
+      );
+      if (settingsStore.exists("run-images.json"))
+        for (const [id, images] of Object.entries(
+          settingsStore.readJSON("run-images.json"),
+        ))
+          runImages.set(id, images);
+      const identityVerifier =
+        process.env.RPO_IDENTITY_ISSUER &&
+        process.env.RPO_IDENTITY_PUBLIC_KEY_FILE
+          ? createIdentityVerifier({
+              issuer: process.env.RPO_IDENTITY_ISSUER,
+              publicKey: readFileSync(
+                process.env.RPO_IDENTITY_PUBLIC_KEY_FILE,
+                "utf8",
+              ),
+            })
+          : undefined;
+      hub = new Hub(join(dir, "hub"), {
+        store: new SecureStore({ dir: join(dir, "hub"), key: dataKey }),
+        identityVerifier,
+      });
+      const localOwnerId = createHash("sha256")
+        .update(config.secret)
+        .digest("hex")
+        .slice(0, 24);
+      coordinator.migrateLegacyLocalRecords({
+        hubId: hub.identity.info.audience,
+        secret: config.secret,
+        verify: (r) => {
+          const a = hub.db.approvals.find((a) => a.id === r.runId),
+            s = hub.db.sessions.find((s) => s.id === r.sessionId),
+            l = s?.lanes.find((l) => l.id === r.laneId);
+          return (
+            !!a &&
+            !!l &&
+            a.ownerId === localOwnerId &&
+            l.ownerId === localOwnerId &&
+            a.sessionId === r.sessionId &&
+            a.laneId === r.laneId &&
+            a.workspaceId === r.workspaceId &&
+            s.workspaceId === r.workspaceId &&
+            l.activeRunId === r.runId
+          );
+        },
+      });
+      hub.on("storage-error", (error) => {
+        console.error(error);
+        if (win && !win.isDestroyed())
+          dialog.showErrorBox("数据清理失败", error.message);
+      });
       await hub.listen();
-      await connect(`ws://127.0.0.1:${hub.port}`, hub.db.hostToken);
+      try {
+        await connect(`ws://127.0.0.1:${hub.port}`, hub.db.hostToken);
+      } catch (error) {
+        if (!pendingTeamConnection) throw error;
+      }
       Menu.setApplicationMenu(
         Menu.buildFromTemplate([
           {
@@ -581,7 +1229,8 @@ app
         minHeight: 700,
         title: "头号玩家",
         backgroundColor: "#121212",
-        titleBarStyle: "hiddenInset",
+        titleBarStyle:
+          process.platform === "darwin" ? "hiddenInset" : "default",
         webPreferences: {
           preload: join(base, "preload.cjs"),
           contextIsolation: true,
@@ -604,6 +1253,8 @@ app
       win.webContents.on("will-navigate", (event) => event.preventDefault());
       await win.loadFile(entry);
       refreshAccounts().catch(console.error);
+      refreshCustomProviders().catch(console.error);
+      if (app.isPackaged) updater.check().catch(console.error);
       win.on("closed", () => {
         win = null;
         app.quit();
@@ -619,13 +1270,25 @@ app
     dialog.showErrorBox("启动失败", error.message);
     app.quit();
   });
-app.on("before-quit", () => {
+app.on("before-quit", async (event) => {
   if (shutting) return;
+  event.preventDefault();
   shutting = true;
+  languageService.dispose();
+  dictation.close();
+  terminalService.closeAll();
+  browserService.closeAll();
+  clearInterval(syncTimer);
   accounts.close();
   tunnel.stop();
   for (const p of terminals) stopTerminal(p);
-  runner.close();
-  client?.close();
-  hub?.close();
+  try {
+    await Promise.all([coordinator.close(), debuggerService.closeAll()]);
+    client?.close();
+    await hub?.close();
+  } catch (error) {
+    console.error(error);
+  } finally {
+    app.quit();
+  }
 });

@@ -12,23 +12,9 @@ import {
 import { join, resolve, relative, isAbsolute, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
+import { platformEnv, stopProcess } from "./platform.mjs";
 const exec = promisify(execFile);
-export const localEnv = () => ({
-  ...process.env,
-  PATH: [
-    ...new Set([
-      ...(process.env.RPO_BIN_DIR ? [process.env.RPO_BIN_DIR] : []),
-      ...(process.env.PATH || "").split(":"),
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
-      "/usr/bin",
-      "/bin",
-      join(homedir(), ".local/bin"),
-      "/Applications/ChatGPT.app/Contents/Resources",
-      "/Applications/Codex.app/Contents/Resources",
-    ]),
-  ].join(":"),
-});
+export const localEnv = platformEnv;
 export async function git(cwd, args) {
   const r = await exec("git", args, {
     cwd,
@@ -291,7 +277,8 @@ export class AgentRunner {
     const child = spawn(provider, providerCommand(provider, mode), {
       cwd,
       env: localEnv(),
-      detached: true,
+      detached: process.platform !== "win32",
+      windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
     this.running.set(key, child);
@@ -351,14 +338,9 @@ export class AgentRunner {
     child.stdin.end(prompt);
     child.stop = () => {
       stopped = true;
-      try {
-        process.kill(-child.pid, "SIGTERM");
-      } catch {}
+      stopProcess(child);
       const timer = setTimeout(() => {
-        if (!ended)
-          try {
-            process.kill(-child.pid, "SIGKILL");
-          } catch {}
+        if (!ended) stopProcess(child, "SIGKILL");
       }, 3000);
       timer.unref();
     };

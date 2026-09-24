@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { Hub } from "../core/hub.mjs";
+import { Hub } from "./helpers/secure-hub.mjs";
 import { HubClient } from "../core/client.mjs";
 const secret = () => randomBytes(32).toString("hex");
 async function setup(t) {

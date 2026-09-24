@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 
 import {
   Activity,
@@ -40,7 +40,10 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import CodeMirror from "@uiw/react-codemirror";
+import { ProviderControls, ImageAttachments, DictationControl, type ProviderImage } from "./ProviderControls";
+import {readDraft,writeDraft,removeDraft} from "./drafts";
+import {languageExtensions,type DefinitionLocation} from "./language-extension";
+import CodeMirror, {type ReactCodeMirrorRef} from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import { markdown } from "@codemirror/lang-markdown";
 import { json } from "@codemirror/lang-json";
@@ -60,38 +63,63 @@ export function AgentLane({
   call: Call;
   mapped: boolean;
 }) {
-  const [prompt, setPrompt] = useState(
-      () => localStorage.getItem("rpo-prompt-" + l.id) || "",
-    ),
+  const [prompt, setPrompt] = useState(""),
+    [draftReady,setDraftReady]=useState(false),
     [mode, setMode] = useState("read-only"),
     [files, setFiles] = useState(""),
-    [expanded, setExpanded] = useState(false);
+    [expanded, setExpanded] = useState(false),
+    [intent,setIntent]=useState("steer");
+  const [images,setImages]=useState<ProviderImage[]>([]),[voice,setVoice]=useState({supported:false,listening:false,busy:false,error:""});
+  const voiceBase=useRef("");
+  const providerLabel=l.providerLabel || state.local.providers.find(p=>p.id===l.provider)?.name || (l.provider==="codex"?"Codex":l.provider==="claude"?"Claude Code":"自定义 API");
+  const selection={model:state.local.laneOptions?.[l.id]?.model||"",effort:state.local.laneOptions?.[l.id]?.effort||""};
   const bottom = useRef<HTMLDivElement>(null),
     scroll = useRef<HTMLDivElement>(null),
     [follow, setFollow] = useState(true);
   const mine = l.ownerId === state.me?.id,
     busy = ["running", "awaiting"].includes(l.status);
+  useEffect(()=>{
+    if(!mine)return;
+    let active=true;
+    void window.rpo.invoke("dictation.probe").then(result=>{if(active)setVoice(v=>({...v,supported:result.supported}));}).catch(()=>{});
+    const unsubscribe=window.rpo.subscribeDictation(event=>{
+      if(event.targetId!==l.id)return;
+      if(event.type==="transcript")setPrompt(voiceBase.current+(voiceBase.current?"\n":"")+event.text);
+      if(event.type==="listening")setVoice(v=>({...v,listening:true,busy:false,error:""}));
+      if(["stopped","closed","error"].includes(event.type))setVoice(v=>({...v,listening:false,busy:false,error:event.type==="error"?event.message:""}));
+    });
+    return()=>{active=false;unsubscribe();};
+  },[l.id,mine]);
+  async function startVoice(){voiceBase.current=prompt;setVoice(v=>({...v,busy:true,error:""}));try{await window.rpo.invoke("dictation.start",{targetId:l.id});}catch(e){setVoice(v=>({...v,busy:false,error:e instanceof Error?e.message:"语音启动失败"}));}}
+  useEffect(()=>{let active=true;void readDraft("rpo-prompt-"+l.id).then(value=>{if(active){setPrompt(current=>current||value||"");setDraftReady(true);}}).catch(e=>{if(active)setVoice(v=>({...v,error:e.message}));});return()=>{active=false;};},[l.id]);
   useEffect(() => {
-    localStorage.setItem("rpo-prompt-" + l.id, prompt);
-  }, [prompt, l.id]);
+    if(!draftReady)return;
+    const persist=()=>void writeDraft("rpo-prompt-"+l.id,prompt).catch(e=>setVoice(v=>({...v,error:e.message})));
+    const timer=setTimeout(persist,300);return()=>{clearTimeout(timer);persist();};
+  }, [prompt, l.id,draftReady]);
   useEffect(() => {
     if (follow) bottom.current?.scrollIntoView({ block: "nearest" });
-  }, [l.entries.length, follow]);
+  }, [l.entries.length, l.entries.at(-1)?.text, follow]);
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!prompt.trim() || busy) return;
+    if (!prompt.trim() || voice.listening || voice.busy) return;
+    if(busy){
+      const result=await call(l.status==="running"&&intent==="steer"?"run.steer":"run.queue",{sessionId:s.id,laneId:l.id,runId:l.activeRunId,text:prompt,prompt,mode,images,files:files.split(",").map(f=>f.trim()).filter(Boolean)});
+      if(result){setPrompt("");setImages([]);}return;
+    }
     const a = await call("run.request", {
       workspaceId: s.workspaceId,
       sessionId: s.id,
       laneId: l.id,
       prompt,
       mode,
+      images,
       files: files
         .split(",")
         .map((f) => f.trim())
         .filter(Boolean),
     });
-    if (a) setPrompt("");
+    if (a) {setPrompt("");setImages([]);}
   };
   return (
     <section className={"agent-lane " + (mine ? "mine" : "")}>
@@ -104,7 +132,7 @@ export function AgentLane({
             {l.owner}
             <span>{mine ? "我" : ""}</span>
           </strong>
-          <small>{l.provider === "codex" ? "Codex" : "Claude Code"}</small>
+          <small>{providerLabel}</small>
         </div>
         <span className={"lane-status " + l.status}>
           {l.status === "running" ? (
@@ -143,9 +171,7 @@ export function AgentLane({
                       ? l.owner
                       : e.role === "tool"
                         ? "工具执行"
-                        : l.provider === "codex"
-                          ? "Codex"
-                          : "Claude"}
+                        : providerLabel}
                   </span>
                   <time>{time(e.at)}</time>
                 </div>
@@ -185,7 +211,8 @@ export function AgentLane({
         <form className="composer" onSubmit={submit}>
           <div className="composer-owner">
             <span className="dot mint" />
-            {l.provider === "codex" ? "Codex" : "Claude"}
+            {providerLabel}
+            <ProviderControls models={state.local.modelCatalogs?.[l.provider]} value={selection} disabled={busy} loadModels={()=>window.rpo.invoke("provider.models",{provider:l.provider,workspaceId:s.workspaceId,sessionId:s.id,laneId:l.id})} onChange={value=>void call("lane.options",{sessionId:s.id,laneId:l.id,...value})}/>
           </div>
           <textarea
             value={prompt}
@@ -208,6 +235,8 @@ export function AgentLane({
             />
           )}
           <div className="composer-controls">
+            <ImageAttachments images={images} onChange={setImages} call={window.rpo.invoke} disabled={!mapped}/>
+            <DictationControl {...voice} onStart={()=>void startVoice()} onStop={()=>void call("dictation.stop")}/>
             <select
               value={mode}
               onChange={(e) => setMode(e.target.value)}
@@ -225,6 +254,9 @@ export function AgentLane({
               <Files size={14} />
             </button>
             {busy ? (
+              <>
+              <select aria-label="发送方式" value={intent} onChange={e=>setIntent(e.target.value)}><option value="steer">指导当前执行</option><option value="queue">加入下一步</option></select>
+              <button className="send" disabled={!prompt.trim()||!mapped||voice.listening||voice.busy} title={intent==="steer"?"发送指导":"加入队列"}><ArrowUp size={16}/></button>
               <button
                 type="button"
                 className="send stop"
@@ -235,23 +267,26 @@ export function AgentLane({
               >
                 <Square size={13} />
               </button>
+              </>
             ) : (
               <button
                 className="send"
-                disabled={!prompt.trim() || !mapped || s.status === "archived"}
+                disabled={!prompt.trim() || !mapped || s.status === "archived" || voice.listening || voice.busy}
                 title="发起审批并执行"
               >
                 <ArrowUp size={18} />
               </button>
             )}
           </div>
-          <div className="composer-hint">⌘ ↵</div>
+          {(l.queue||[]).filter(q=>q.status==="queued").map(q=><div className="queued-prompt" key={q.id}><span>{q.prompt}</span><button type="button" title="取消排队" onClick={()=>call("run.queue.cancel",{sessionId:s.id,laneId:l.id,id:q.id})}><X size={12}/></button></div>)}
+          {(l.steering||[]).filter(q=>q.status==="failed"||q.status==="unsupported").map(q=><button type="button" className="warning" key={q.id} onClick={()=>setPrompt(q.text)}>指导未送达 · 点击恢复草稿</button>)}
+          <div className="composer-hint">{state.local.os&&state.local.os!=="darwin"?"Ctrl":"⌘"} ↵</div>
         </form>
       ) : (
         <div className="watching">
           <Radio size={14} />
           <span>
-            {state.members.some((m) => m.id === l.ownerId)
+            {state.members.some((m) => m.id === l.ownerId && m.online!==false)
               ? `正在实时观看 ${l.owner} 的 Agent`
               : "此成员当前离线 · 历史通道已保留"}
           </span>
@@ -282,11 +317,14 @@ export function Editor({
   welcome?: React.ReactNode;
   hidden?: boolean;
   search?: boolean;
-  params: { workspaceId: string; sessionId: string };
+  params: { workspaceId: string; sessionId: string; laneId?: string };
   mapped: boolean;
   call: Call;
   notify: (s: string) => void;
 }) {
+  const codeRef=useRef<ReactCodeMirrorRef>(null),openRef=useRef<(path:string)=>Promise<void>>(async()=>{});
+  const [pendingDefinition,setPendingDefinition]=useState<DefinitionLocation|null>(null);
+  const contextKey = params.sessionId + ":" + (params.laneId || "");
   const [listing, setListing] = useState<any[]>([]),
     [path, setPath] = useState(""),
     [file, setFile] = useState(""),
@@ -295,7 +333,13 @@ export function Editor({
     [hash, setHash] = useState(""),
     [pendingFile, setPendingFile] = useState(""),
     [filter, setFilter] = useState(""),
-    [results, setResults] = useState<any[]>([]);
+    [results, setResults] = useState<any[]>([]),
+    [openedFor, setOpenedFor] = useState(""),
+    [selection, setSelection] = useState({ startLine: 1, endLine: 1 }),
+    [commentOpen, setCommentOpen] = useState(false),
+    [comment, setComment] = useState(""),
+    [commentBusy, setCommentBusy] = useState(false),
+    [anchorStatus, setAnchorStatus] = useState("");
   const list = async (p: string) => {
     const f = await call("files", { ...params, path: p });
     if (f) {
@@ -305,7 +349,7 @@ export function Editor({
   };
   useEffect(() => {
     if (mapped) list("");
-  }, [mapped, params.sessionId]);
+  }, [mapped, contextKey]);
   useEffect(() => {
     let cancelled = false;
     if (!search || !filter.trim()) {
@@ -320,22 +364,35 @@ export function Editor({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [search, filter, params.sessionId]);
+  }, [search, filter, contextKey]);
   const open = async (p: string, force = false) => {
-    if (force && file)
-      localStorage.removeItem(`rpo-file-${params.sessionId}-${file}`);
+    if (force && file) await removeDraft(`rpo-file-${contextKey}-${file}`);
     if (content !== original && !force) {
       setPendingFile(p);
       return;
     }
     const r = await call("file.read", { ...params, path: p });
     if (r) {
-      const stored = localStorage.getItem(`rpo-file-${params.sessionId}-${p}`);
+      const key = `rpo-file-${contextKey}-${p}`,
+        oldKey = `rpo-file-${params.sessionId}-${p}`;
+      let stored = await readDraft(key);
+      if (stored === null) {
+        stored = await readDraft(oldKey);
+        if (stored !== null) {
+          await writeDraft(key, stored);
+          await removeDraft(oldKey);
+        }
+      }
       let draft;
       try {
         draft = stored ? JSON.parse(stored) : null;
       } catch {}
       setFile(p);
+      setOpenedFor(contextKey);
+      setSelection({ startLine: 1, endLine: 1 });
+      setCommentOpen(false);
+      setComment("");
+      setAnchorStatus("");
       setContent(draft?.content ?? r.content);
       setOriginal(draft?.original ?? r.content);
       setHash(draft?.hash ?? r.hash);
@@ -344,13 +401,63 @@ export function Editor({
     }
   };
   useEffect(() => {
-    if (!file) return;
-    const key = `rpo-file-${params.sessionId}-${file}`;
-    if (content !== original)
-      localStorage.setItem(key, JSON.stringify({ content, original, hash }));
-    else localStorage.removeItem(key);
-  }, [content, original, hash, file, params.sessionId]);
+    if (!file || openedFor !== contextKey) return;
+    const key = `rpo-file-${contextKey}-${file}`;
+    const persist = () =>
+      void (
+        content !== original
+          ? writeDraft(key, JSON.stringify({ content, original, hash }))
+          : removeDraft(key)
+      ).catch((e) => notify(e.message));
+    const timer = setTimeout(persist, 300);
+    return () => {
+      clearTimeout(timer);
+      persist();
+    };
+  }, [content, original, hash, file, openedFor, contextKey]);
+  const addComment = async () => {
+    if (!comment.trim() || content !== original || openedFor !== contextKey)
+      return;
+    setCommentBusy(true);
+    try {
+      const location = await call("references.capture", {
+        ...params,
+        path: file,
+        ...selection,
+        expectedHash: hash,
+      });
+      if (!location) return;
+      const result = await call("comment.add", {
+        ...params,
+        text: comment,
+        location,
+      });
+      if (result) {
+        setComment("");
+        setCommentOpen(false);
+        notify("已添加代码评论");
+      }
+    } finally {
+      setCommentBusy(false);
+    }
+  };
+  const checkAnchors = async () => {
+    const files = await call("references.check", {
+      ...params,
+      references: [{ path: file }],
+    });
+    if (!files) return;
+    const result = await call("comment.check", { ...params, files });
+    if (result) {
+      setAnchorStatus(
+        files[0]?.hash !== hash
+          ? "磁盘文件已变化，请重新打开"
+          : "评论位置已检查",
+      );
+    }
+  };
   const save = async () => {
+    if (openedFor !== contextKey) return;
     const r = await call("file.save", { ...params, path: file, content, hash });
     if (r) {
       setHash(r.hash);
@@ -358,6 +465,9 @@ export function Editor({
       notify("文件已保存到本机");
     }
   };
+  openRef.current=open;
+  const intelligence=useMemo(()=>languageExtensions({call:window.rpo.invoke,context:params,path:file,onError:error=>notify(error.message),onOpenDefinition:location=>{setPendingDefinition(location);if(location.path!==file)void openRef.current(location.path);}}),[contextKey,file]);
+  useEffect(()=>{if(!pendingDefinition||pendingDefinition.path!==file)return;const view=codeRef.current?.view;if(!view)return;view.dispatch({selection:{anchor:Math.min(pendingDefinition.offset,view.state.doc.length)},scrollIntoView:true});view.focus();setPendingDefinition(null);},[file,content,pendingDefinition]);
   const ext = file.endsWith(".md")
     ? markdown()
     : file.endsWith(".json")
@@ -416,7 +526,7 @@ export function Editor({
           }
         }}
       >
-        {file ? (
+        {file && openedFor === contextKey ? (
           <>
             <div className="editor-file">
               <FileCode2 size={14} />
@@ -424,6 +534,33 @@ export function Editor({
                 {file}
                 {content !== original ? " ●" : ""}
               </span>
+              <small style={{ whiteSpace: "nowrap" }}>
+                L{selection.startLine}
+                {selection.endLine !== selection.startLine
+                  ? `–${selection.endLine}`
+                  : ""}
+              </small>
+              <button
+                className="button"
+                title={
+                  content !== original
+                    ? "先保存文件，再绑定评论"
+                    : "评论当前选中代码行"
+                }
+                disabled={content !== original || commentBusy}
+                onClick={() => setCommentOpen(!commentOpen)}
+              >
+                <MessageSquare size={13} />
+                评论
+              </button>
+              <button
+                className="icon-button"
+                title="检查此文件的评论是否过期"
+                aria-label="检查评论"
+                onClick={checkAnchors}
+              >
+                <RefreshCw size={13} />
+              </button>
               <button
                 className="button"
                 onClick={save}
@@ -432,6 +569,51 @@ export function Editor({
                 保存
               </button>
             </div>
+            {anchorStatus && (
+              <div className="attention">
+                <span>{anchorStatus}</span>
+                <button onClick={() => setAnchorStatus("")}>关闭</button>
+              </div>
+            )}
+            {commentOpen && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void addComment();
+                }}
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  padding: "8px 12px",
+                  borderBottom: "1px solid #303030",
+                }}
+              >
+                <input
+                  aria-label="代码评论"
+                  autoFocus
+                  placeholder={`评论 L${selection.startLine}${selection.endLine !== selection.startLine ? `–${selection.endLine}` : ""}`}
+                  value={comment}
+                  maxLength={5000}
+                  onChange={(e) => setComment(e.target.value)}
+                  style={{ flex: 1, minWidth: 80 }}
+                />
+                <button
+                  className="button"
+                  disabled={
+                    commentBusy || !comment.trim() || content !== original
+                  }
+                >
+                  {commentBusy ? "发送中…" : "发送"}
+                </button>
+                <button
+                  type="button"
+                  aria-label="取消评论"
+                  onClick={() => setCommentOpen(false)}
+                >
+                  <X size={14} />
+                </button>
+              </form>
+            )}
             {pendingFile && (
               <div className="attention">
                 <span>当前文件尚未保存</span>
@@ -442,11 +624,26 @@ export function Editor({
               </div>
             )}
             <CodeMirror
+              ref={codeRef}
               value={content}
               height="100%"
               theme="dark"
-              extensions={[ext]}
+              extensions={[ext,...intelligence]}
               onChange={setContent}
+              onUpdate={(update) => {
+                if (!update.selectionSet && !update.docChanged) return;
+                const range = update.state.selection.main;
+                const startLine = update.state.doc.lineAt(range.from).number;
+                const endLine = update.state.doc.lineAt(
+                  range.to > range.from ? range.to - 1 : range.to,
+                ).number;
+                setSelection((previous) =>
+                  previous.startLine === startLine &&
+                  previous.endLine === endLine
+                    ? previous
+                    : { startLine, endLine },
+                );
+              }}
               basicSetup={{
                 lineNumbers: true,
                 foldGutter: true,

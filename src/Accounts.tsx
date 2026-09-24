@@ -8,6 +8,8 @@ import {
   LoaderCircle,
   Globe,
 } from "lucide-react";
+import {TeamIdentity} from "./TeamIdentity";
+import {ProviderSetup} from "./ProviderSetup";
 import type { State } from "./types";
 import { Modal, type Call } from "./ui";
 const names: Record<string, string> = {
@@ -200,6 +202,8 @@ export function Accounts({
           </details>
         </>
       )}
+      {section === "providers" && <ProviderSetup call={call} />}
+      {section === "github" && <TeamIdentity call={window.rpo.invoke}/>}
       {selected && (
         <Modal title={"登录 " + names[selected]} close={() => setSelected("")}>
           <div className="auth-status">

@@ -31,8 +31,12 @@ import {
   Layers,
   ShieldCheck,
 } from "lucide-react";
+import {MemoryPanel} from "./MemoryPanel";
+import {MissionControl} from "./MissionControl";
+import {UpdatePanel} from "./UpdatePanel";
 import { Accounts, GitHubPicker } from "./Accounts";
 import { Studio } from "./Studio";
+import { roleNames } from "./CollaborationPanel";
 import { Avatar, Mark, Empty, Modal, type Call } from "./ui";
 import type { State, Session, RPO } from "./types";
 import "./style.css";
@@ -57,6 +61,9 @@ const api: RPO = window.rpo || {
     throw Error("请通过桌面应用打开");
   },
   subscribe: () => () => {},
+  subscribeTerminal:()=>()=>{},
+  subscribeDictation: () => () => {},
+  subscribeBrowser:()=>()=>{},
 };
 function App() {
   const [state, setState] = useState<State>(empty),
@@ -73,6 +80,8 @@ function App() {
     [repoPicker, setRepoPicker] = useState(false),
     [share, setShare] = useState<any>(null),
     [internet, setInternet] = useState(true),
+    [inviteRole, setInviteRole] = useState("editor"),
+    [inviteGithub,setInviteGithub]=useState(""),
     [loading, setLoading] = useState(false),
     [sessionMenu, setSessionMenu] = useState(""),
     [paneSession, setPaneSession] = useState("");
@@ -97,10 +106,14 @@ function App() {
     }
   };
   useEffect(() => {
-    api
-      .invoke<State>("bootstrap")
-      .then(setState)
-      .catch((e) => notify(e.message));
+    void (async()=>{
+      for(const key of Object.keys(localStorage).filter(key=>/^rpo-(prompt|file)-/.test(key))){
+        const value=localStorage.getItem(key);if(value===null)continue;
+        if(await api.invoke("draft.read",{key})===null)await api.invoke("draft.set",{key,value});
+        localStorage.removeItem(key);
+      }
+      setState(await api.invoke<State>("bootstrap"));
+    })().catch(e=>notify(e.message));
     return api.subscribe(setState);
   }, []);
   useEffect(() => {
@@ -457,6 +470,7 @@ function App() {
                       <span className="grow">语言</span>
                       <span>简体中文</span>
                     </div>
+                    <UpdatePanel call={window.rpo.invoke} state={state.local.update} />
                     <div className="setting-card">
                       <span className="grow">头号玩家</span>
                       <span className="muted">{state.local.appVersion}</span>
@@ -483,6 +497,8 @@ function App() {
                 )}
                 {setting === "data" && (
                   <>
+                    <div className="setting-card"><span className="grow">本机加密</span><span>{state.storage?.encrypted?"已开启":"连接中"}</span></div>
+                    <div className="setting-card"><label className="grow" htmlFor="retention-days">转录保留</label><select id="retention-days" disabled={!state.me?.host||state.local.remote} value={state.storage?.retentionDays??""} onChange={e=>void call("storage.retention",{days:e.target.value?Number(e.target.value):null})}><option value="">永久</option><option value="30">30 天</option><option value="90">90 天</option><option value="365">1 年</option></select></div>
                     <div className="setting-card">
                       <div>
                         <strong>本机数据</strong>
@@ -560,6 +576,7 @@ function App() {
                       新建
                     </button>
                   </header>
+                  <MissionControl state={state} sessions={shown} onOpen={openSession}/>
                   <div className="session-grid">
                     {shown.map((s) => {
                       const busy = s.lanes.some((l) => l.status === "running"),
@@ -710,52 +727,7 @@ function App() {
                   </div>
                 </>
               )}
-              {view === "memory" && (
-                <>
-                  <header className="page-heading">
-                    <h1>共享记忆</h1>
-                    <div className="grow" />
-                    <button
-                      className="button primary"
-                      disabled={!ws}
-                      onClick={() => setModal("memory")}
-                    >
-                      <Plus size={14} />
-                      新建
-                    </button>
-                  </header>
-                  {state.memories
-                    .filter((m) => m.workspaceId === workspace)
-                    .map((m) => (
-                      <article
-                        className={
-                          "memory-card " + (m.retired ? "retired" : "")
-                        }
-                        key={m.id}
-                      >
-                        <h3>{m.title}</h3>
-                        <p>{m.text}</p>
-                        <footer>
-                          <small>{m.owner}</small>
-                          <button
-                            className="text-button"
-                            onClick={() =>
-                              call("memory.retire", {
-                                id: m.id,
-                                retired: !m.retired,
-                              })
-                            }
-                          >
-                            {m.retired ? "恢复" : "停用"}
-                          </button>
-                        </footer>
-                      </article>
-                    ))}
-                  {!state.memories.some((m) => m.workspaceId === workspace) && (
-                    <Empty icon={Brain} title="暂无记忆" />
-                  )}
-                </>
-              )}
+              {view === "memory" && <MemoryPanel state={state} workspaceId={workspace} call={window.rpo.invoke}/>}
             </div>
           )}
         </main>
@@ -878,7 +850,7 @@ function App() {
           {modal === "lane" && session && (
             <>
               <div className="provider-choices">
-                {["claude", "codex"].map((id) => {
+                {[...new Set(["claude", "codex", ...state.local.providers.map(p=>p.id)])].map((id) => {
                   const p = state.local.providers.find((p) => p.id === id);
                   return (
                     <button
@@ -890,6 +862,7 @@ function App() {
                           await call("lane.create", {
                             sessionId: session.id,
                             provider: id,
+                            providerLabel:p?.name,
                           })
                         )
                           setModal("");
@@ -897,9 +870,9 @@ function App() {
                     >
                       <TerminalSquare size={18} />
                       <span className="grow">
-                        {id === "codex" ? "Codex" : "Claude Code"}
+                        {p?.name || (id === "codex" ? "Codex" : "Claude Code")}
                       </span>
-                      <small>{p?.available ? "本机账号" : "未安装"}</small>
+                      <small>{p?.available ? (id.startsWith("custom-") ? "自定义 API" : "本机账号") : "未安装"}</small>
                       <Plus size={15} />
                     </button>
                   );
@@ -984,6 +957,7 @@ function App() {
                 setLoading(false);
                 if (r) {
                   setModal("");
+                  if(r.needsIdentity){openSettings("github");notify("请先完成 GitHub 团队身份验证");return;}
                   if (r.workspaceId) setWorkspace(r.workspaceId);
                   setSelected(r.sessionId || "");
                   setView("sessions");
@@ -1025,6 +999,10 @@ function App() {
                     <option value="internet">互联网</option>
                     <option value="lan">局域网 / VPN</option>
                   </select>
+                  <select className="full" aria-label="邀请权限" value={inviteRole} disabled={loading||!!share} onChange={e=>setInviteRole(e.target.value)}>
+                    {Object.entries(roleNames).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+                  </select>
+                  {state.identity?.configured&&<input className="full" aria-label="受邀 GitHub 用户名" placeholder="GitHub 用户名（可选）" value={inviteGithub} disabled={loading||!!share} onChange={e=>setInviteGithub(e.target.value)}/>}
                   {internet && !state.local.tunnel?.installed ? (
                     <button
                       className="button primary full"
@@ -1062,6 +1040,8 @@ function App() {
                           workspaceId: workspace,
                           sessionId: session?.id,
                           internet,
+                          role: inviteRole,
+                          githubLogin:inviteGithub.trim()||undefined,
                         });
                         setShare(result);
                         setLoading(false);
@@ -1110,13 +1090,17 @@ function App() {
                 </>
               )}
               <div className="nav-label">有权访问</div>
-              {state.members.map((m) => (
+              {state.members.filter(m=>!m.workspaceId||m.workspaceId===workspace).map((m) => (
                 <div className="member-row" key={m.id}>
                   <Avatar name={m.name} small />
                   <div>
                     <strong>{m.name}</strong>
-                    <small>{m.host ? "房主" : "成员"}</small>
+                    <small>{m.host ? "房主" : roleNames[m.role||"editor"]}</small>
                   </div>
+                  {(state.me?.roles?.[workspace]==="owner"||state.me?.host)&&!m.host&&<>
+                    <select aria-label={m.name+"的权限"} value={m.role||"editor"} onChange={e=>call("member.role",{workspaceId:workspace,memberId:m.id,role:e.target.value})}>{Object.entries(roleNames).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>
+                    <button title={"移除"+m.name} onClick={()=>call("member.remove",{workspaceId:workspace,memberId:m.id})}><X size={14}/></button>
+                  </>}
                 </div>
               ))}
               {!state.local.remote && (

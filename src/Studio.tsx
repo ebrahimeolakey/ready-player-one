@@ -19,9 +19,19 @@ import {
   Settings2,
   Share2,
   FileCode2,
+  Globe,
+  Bug,
 } from "lucide-react";
 import type { State, Session } from "./types";
 import { AgentLane, Editor, CommandTerminal } from "./Panels";
+import { SyncPanel } from "./SyncPanel";
+import { InteractiveTerminal } from "./InteractiveTerminal";
+import { BrowserPanel } from "./BrowserPanel";
+import { DebuggerPanel } from "./DebuggerPanel";
+import { GitPanel } from "./GitPanel";
+import { TaskCoordination } from "./TaskCoordination";
+import { ToolApprovals } from "./ToolApprovals";
+import { CollaborationPanel, roleNames } from "./CollaborationPanel";
 import { Avatar, Mark, Empty, statusNames, time, type Call } from "./ui";
 export function Studio({
   session: s,
@@ -46,6 +56,7 @@ export function Studio({
 }) {
   const [tool, setTool] = useState(compact ? "none" : "files"),
     [dock, setDock] = useState("agent"),
+    [terminalOpened, setTerminalOpened] = useState<string[]>([]),
     [rail, setRail] = useState("session"),
     [showRail, setShowRail] = useState(!compact),
     [showDock, setShowDock] = useState(true),
@@ -55,6 +66,9 @@ export function Studio({
     [liveDiff, setLiveDiff] = useState(false),
     [height, setHeight] = useState(340),
     [commentOpen, setCommentOpen] = useState(true);
+
+  const modifier =
+    state.local.os && state.local.os !== "darwin" ? "Ctrl+" : "⌘";
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setTool(compact ? "none" : "files");
@@ -63,10 +77,22 @@ export function Studio({
   const own = s.lanes.filter((l) => l.ownerId === state.me?.id),
     lane = s.lanes.find((l) => l.id === laneId) || own[0] || s.lanes[0],
     mapped = !!state.local.paths[s.workspaceId],
-    params = { workspaceId: s.workspaceId, sessionId: s.id },
+    params = {
+      workspaceId: s.workspaceId,
+      sessionId: s.id,
+      ...(lane?.ownerId === state.me?.id ? { laneId: lane.id } : {}),
+    },
     pending = state.approvals.filter(
       (a) => a.sessionId === s.id && a.status === "pending",
     );
+  useEffect(() => {
+    if (dock === "terminal")
+      setTerminalOpened((keys) =>
+        keys.includes(params.laneId || "")
+          ? keys
+          : [...keys, params.laneId || ""],
+      );
+  }, [dock, params.laneId]);
   useEffect(() => {
     if (!liveDiff || !own[0]) return;
     let busy = false;
@@ -110,7 +136,7 @@ export function Studio({
       <p>开始处理这个项目</p>
       <div className="shortcut-list">
         <button onClick={onAddLane}>
-          新建 Agent<kbd>⇧⌘L</kbd>
+          新建 Agent<kbd>{modifier}⇧L</kbd>
         </button>
         <button
           onClick={() => {
@@ -118,10 +144,10 @@ export function Studio({
             setDock("terminal");
           }}
         >
-          终端<kbd>⌘J</kbd>
+          终端<kbd>{modifier}J</kbd>
         </button>
         <button onClick={() => setTool("search")}>
-          查找文件<kbd>⌘P</kbd>
+          查找文件<kbd>{modifier}P</kbd>
         </button>
         <button onClick={onRepos}>
           打开仓库
@@ -145,6 +171,8 @@ export function Studio({
           [Files, "files", "文件"],
           [Search, "search", "查找文件"],
           [GitBranch, "diff", "源代码管理"],
+          [Globe, "browser", "浏览器"],
+          [Bug, "debug", "调试"],
           [MessageSquare, "comments", "评论"],
         ].map(([Icon, id, label]: any) => (
           <button
@@ -167,11 +195,12 @@ export function Studio({
       </nav>
       {mapped ? (
         <Editor
+          key={params.laneId || s.id}
           params={params}
           mapped
           call={call}
           notify={notify}
-          hidden={tool === "diff"}
+          hidden={tool === "diff" || tool === "browser" || tool === "debug"}
           search={tool === "search"}
           welcome={welcome}
         />
@@ -190,6 +219,16 @@ export function Studio({
           </aside>
           <div className="editor-pane">{welcome}</div>
         </>
+      )}
+      {tool === "debug" && mapped && (
+        <section className="studio-diff">
+          <DebuggerPanel bridge={window.rpo} context={params} />
+        </section>
+      )}
+      {tool === "browser" && (
+        <section className="studio-diff">
+          <BrowserPanel bridge={window.rpo} />
+        </section>
       )}
       {tool === "diff" && (
         <section className="studio-diff">
@@ -219,6 +258,14 @@ export function Studio({
               </label>
             )}
           </header>
+          <SyncPanel state={state} session={s} call={call} />
+          {mapped && (
+            <GitPanel
+              call={window.rpo.invoke}
+              context={params}
+              busy={own.some((l) => l.status === "running")}
+            />
+          )}
           {lane?.changedFiles?.map((f) => (
             <div className="diff-file" key={f.path}>
               <span>{f.status}</span>
@@ -351,7 +398,24 @@ export function Studio({
                     : "terminal-container hidden"
                 }
               >
-                <CommandTerminal params={params} mapped={mapped} call={call} />
+                {mapped &&
+                  terminalOpened.map((id) => (
+                    <div
+                      key={id}
+                      style={{
+                        height: "100%",
+                        display:
+                          id === (params.laneId || "") ? "block" : "none",
+                      }}
+                    >
+                      <InteractiveTerminal
+                        bridge={window.rpo}
+                        workspaceId={s.workspaceId}
+                        sessionId={s.id}
+                        laneId={id || undefined}
+                      />
+                    </div>
+                  ))}
               </div>
             </div>
             {showRail && (
@@ -375,6 +439,7 @@ export function Studio({
                 <div className="rail-scroll">
                   {rail === "session" ? (
                     <>
+                      <ToolApprovals state={state} session={s} call={call} />
                       {pending.map((a) => (
                         <article className="approval-card" key={a.id}>
                           <strong>
@@ -423,7 +488,11 @@ export function Studio({
                       {[
                         ...new Map(
                           [
-                            ...state.members,
+                            ...state.members.filter(
+                              (m) =>
+                                !m.workspaceId ||
+                                m.workspaceId === s.workspaceId,
+                            ),
                             ...s.lanes.map((l) => ({
                               id: l.ownerId,
                               name: l.owner,
@@ -441,8 +510,18 @@ export function Studio({
                                 {m.id === state.me?.id ? "（我）" : ""}
                               </strong>
                               <small>
-                                {m.name === s.owner ? "创建者" : "成员"} ·{" "}
-                                {state.members.some((x) => x.id === m.id)
+                                {roleNames[
+                                  state.members.find(
+                                    (x) =>
+                                      x.id === m.id &&
+                                      (!x.workspaceId ||
+                                        x.workspaceId === s.workspaceId),
+                                  )?.role || ""
+                                ] || "成员"}{" "}
+                                ·{" "}
+                                {state.members.some(
+                                  (x) => x.id === m.id && x.online !== false,
+                                )
                                   ? "在线"
                                   : "离线"}
                               </small>
@@ -473,7 +552,12 @@ export function Studio({
                                 }}
                               >
                                 <span>
-                                  {l.provider === "codex" ? "Codex" : "Claude"}
+                                  {l.providerLabel ||
+                                    (l.provider === "codex"
+                                      ? "Codex"
+                                      : l.provider === "claude"
+                                        ? "Claude"
+                                        : "自定义 API")}
                                 </span>
                                 <small>
                                   <span
@@ -488,117 +572,12 @@ export function Studio({
                             ))}
                         </div>
                       ))}
-                      <details className="rail-section">
-                        <summary>
-                          计划{" "}
-                          <span>
-                            {s.plan.filter((p) => p.done).length}/
-                            {s.plan.length}
-                          </span>
-                        </summary>
-                        {s.plan.map((p) => (
-                          <button
-                            className={
-                              "plan-item " + (p.done ? "completed" : "")
-                            }
-                            key={p.id}
-                            onClick={() =>
-                              call("plan.toggle", { sessionId: s.id, id: p.id })
-                            }
-                          >
-                            <span className="checkbox">
-                              {p.done && <Check size={11} />}
-                            </span>
-                            {p.text}
-                          </button>
-                        ))}
-                        <form
-                          className="compact-input"
-                          onSubmit={async (e) => {
-                            e.preventDefault();
-                            if (
-                              await call("plan.add", {
-                                sessionId: s.id,
-                                text: plan,
-                              })
-                            )
-                              setPlan("");
-                          }}
-                        >
-                          <input
-                            placeholder="添加计划…"
-                            aria-label="添加计划"
-                            value={plan}
-                            onChange={(e) => setPlan(e.target.value)}
-                            required
-                          />
-                          <button
-                            title="添加计划"
-                            aria-label="添加计划"
-                            disabled={!plan.trim()}
-                          >
-                            <Plus size={13} />
-                          </button>
-                        </form>
-                      </details>
-                      <section className="rail-section">
-                        <button
-                          className="section-toggle"
-                          onClick={() => setCommentOpen(!commentOpen)}
-                        >
-                          <ChevronDown size={12} />
-                          评论 <span>{s.comments.length || "—"}</span>
-                        </button>
-                        {commentOpen && (
-                          <>
-                            <div className="comment-list">
-                              {s.comments.length ? (
-                                s.comments.map((c) => (
-                                  <article key={c.id}>
-                                    <header>
-                                      <strong>{c.owner}</strong>
-                                      <time>{time(c.at)}</time>
-                                    </header>
-                                    {c.anchor && <small>{c.anchor}</small>}
-                                    <p>{c.text}</p>
-                                  </article>
-                                ))
-                              ) : (
-                                <p className="rail-empty">暂无评论</p>
-                              )}
-                            </div>
-                            <form
-                              className="compact-input"
-                              onSubmit={async (e) => {
-                                e.preventDefault();
-                                if (
-                                  await call("comment.add", {
-                                    sessionId: s.id,
-                                    text: comment,
-                                  })
-                                )
-                                  setComment("");
-                              }}
-                            >
-                              <textarea
-                                aria-label="评论"
-                                rows={2}
-                                placeholder="评论…"
-                                required
-                                value={comment}
-                                onChange={(e) => setComment(e.target.value)}
-                              />
-                              <button
-                                title="发送评论"
-                                aria-label="发送评论"
-                                disabled={!comment.trim()}
-                              >
-                                <ArrowUp size={14} />
-                              </button>
-                            </form>
-                          </>
-                        )}
-                      </section>
+                      <CollaborationPanel
+                        state={state}
+                        session={s}
+                        call={call}
+                      />
+                      <TaskCoordination state={state} session={s} call={call} />
                     </>
                   ) : (
                     <div className="environment">

@@ -1,12 +1,26 @@
+import { readFileSync } from "node:fs";
+import { createIdentityVerifier } from "./team-identity.mjs";
 import { Hub } from "./hub.mjs";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { inspectProject } from "./local.mjs";
-const hub = new Hub(
-  process.env.RPO_HUB_DIR || join(homedir(), ".ready-player-one", "standalone"),
-);
+import { SecureStore } from "./secure-store.mjs";
+import { loadExternalDataKey } from "../desktop/services/data-key.mjs";
+const dataDir = process.env.RPO_HUB_DIR || join(homedir(), ".ready-player-one", "standalone");
+const key = loadExternalDataKey({ dataDir });
+const store = new SecureStore({ dir: dataDir, key });
+key.fill(0);
+const retentionDays = process.env.RPO_TRANSCRIPT_RETENTION_DAYS === undefined
+  ? undefined : process.env.RPO_TRANSCRIPT_RETENTION_DAYS === "forever" ? null : Number(process.env.RPO_TRANSCRIPT_RETENTION_DAYS);
+const issuer = process.env.RPO_IDENTITY_ISSUER;
+const publicKeyFile = process.env.RPO_IDENTITY_PUBLIC_KEY_FILE;
+if (Boolean(issuer) !== Boolean(publicKeyFile)) throw Error("团队身份必须同时配置 RPO_IDENTITY_ISSUER 与 RPO_IDENTITY_PUBLIC_KEY_FILE");
+const identityVerifier = issuer ? createIdentityVerifier({ issuer, publicKey: readFileSync(publicKeyFile, "utf8") }) : undefined;
+const hub = new Hub(dataDir, { store, retentionDays, identityVerifier });
 const host = process.env.RPO_SHARE === "1" ? "0.0.0.0" : "127.0.0.1";
-await hub.listen({ host, port: Number(process.env.RPO_PORT) || 47831 });
+const port = process.env.RPO_PORT === undefined ? 47831 : Number(process.env.RPO_PORT);
+if (!Number.isInteger(port) || port < 0 || port > 65535) throw Error("RPO_PORT 必须是 0–65535 的整数");
+await hub.listen({ host, port });
 const owner = { id: "standalone-host", name: "房主", host: true };
 let workspace = hub.db.workspaces[0];
 if (!workspace) {
@@ -31,5 +45,6 @@ console.log(
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, async () => {
     await hub.close();
+    store.destroy();
     process.exit(0);
   });

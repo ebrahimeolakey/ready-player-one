@@ -1,11 +1,11 @@
 # 头号玩家 · Mac 同事内测指南
 
-版本：0.3.0-beta.1。适用场景：每人一台 Mac，在不同网络里共享同一个 Agent 会话。
+版本：0.4.0-beta.1。适用场景：每人一台 Mac，在不同网络里共享同一个 Agent 会话。
 
 ## 1. 安装
 
-- Apple Silicon（M 系列）：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.3.0-beta.1/Ready-Player-One-0.3.0-beta.1-mac-arm64.zip)。
-- Intel Mac：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.3.0-beta.1/Ready-Player-One-0.3.0-beta.1-mac-x64.zip)。
+- Apple Silicon（M 系列）：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.0-beta.1/Ready-Player-One-0.4.0-beta.1-mac-arm64.zip)。
+- Intel Mac：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.0-beta.1/Ready-Player-One-0.4.0-beta.1-mac-x64.zip)。
 - 解压，把「头号玩家.app」拖到「应用程序」，然后打开。使用 Git 仓库功能时需安装 Git；普通本机文件夹可直接打开。无需 Node.js 或 Homebrew。
 - 这是未做 Developer ID 签名、公证的内部测试包。macOS 可能阻止第一次打开；仅在确认文件来自本仓库、校验与发布一致后，按系统「隐私与安全性」中的提示选择是否允许。公司设备若禁止未公证应用，请交给 IT 处理。不要关闭 Gatekeeper 或移除系统安全策略。
 - GitHub 仓库已公开。任何同事均可直接下载安装包，无需 GitHub 登录或源码仓库权限。
@@ -36,9 +36,9 @@
 1. 同事点击左侧「工作区」旁的管理按钮，再点「通过邀请加入」，粘贴整个 `rpo://join?...` 链接。
 2. 加入后，点击左侧工作区菜单，可「克隆并关联仓库」同一仓库；或在会话里关联已有的本机目录。共享会话不会自动传输整个源码目录。
 3. 打开同一个会话，点击「新建 Agent」。每人使用自己的账号在自己的电脑执行。
-4. 先发一个只读请求，例如「只回复：协作连接成功，不读取或修改文件」。另一位成员批准后，双方应都能看到输出。
+4. 先发一个只读请求，例如「只回复：协作连接成功，不读取或修改文件」。执行成员批准后，双方应都能看到输出。
 5. 在共同计划中添加 / 勾选一项，发送评论。双方应立即看到变化。
-6. 需要展示代码时，明确开启自己的 diff 共享。共享 diff 不会自动改写同事的代码；代码交换继续使用 Git。
+6. 可开启 diff 共享查看变更；需要同步源码时使用「代码同步」，在独立工作树通过 origin 交换快照。出现冲突时先处理冲突，再继续执行。
 
 ## 5. 本轮验收
 
@@ -55,7 +55,7 @@
 
 ## 当前范围
 
-包含本地编辑器、Git worktree、任务终端、多 Agent 共享、提供商登录、GitHub 授权与临时公网协作。未包含完整 VS Code 扩展生态 / LSP / 调试器、托管云端常驻房间、企业 SSO、分级只读成员、跨设备迁移 Provider 原生 session、逐工具权限请求共享等能力。
+包含原生 Agent 会话、逐工具审批、角色、代码快照与接管、独立子任务、交互终端、内嵌浏览器、JS/TS 语言服务及 Node.js 调试。暂不包含通用 VS Code 扩展、全语言调试、常驻云端房间；GitHub 团队身份需要另行配置 OAuth 服务。详见 [实施记录](IMPLEMENTATION-TRACKER.md)。
 
 ## 界面入口
 

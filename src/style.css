@@ -1985,3 +1985,23 @@ main {
   color: #666;
   padding: 8px 12px;
 }
+
+.sync-panel { padding: 12px 16px; border-bottom: 1px solid #303030; font-size: 12px; }
+.sync-toolbar, .conflict-review header { display:flex; align-items:center; gap:12px; }
+.sync-toolbar label { display:flex; align-items:center; gap:6px; }
+.sync-toolbar span { margin-left:auto; color:#999; }
+.sync-panel > button { display:block; margin-top:8px; }
+.conflict-review { margin-top:12px; }
+.conflict-review header { justify-content:space-between; }
+.conflict-columns { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0; }
+.conflict-columns section { min-width:0; background:#151515; padding:10px; border:1px solid #333; }
+.conflict-columns pre { max-height:280px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
+
+.plan-controls {display:flex;gap:6px;padding:0 0 8px 25px;}
+.plan-controls select {font-size:11px;background:#222;border:1px solid #333;border-radius:4px;max-width:115px;}
+.comment-actions {display:flex;gap:10px;font-size:11px;color:#aaa;}
+.comment-list article.resolved {opacity:.5;}
+.lock-row {display:flex;align-items:center;justify-content:space-between;margin:8px 0;font-size:12px;}
+.lock-row small {display:block;color:#888;}
+
+.mission-control{margin:-6px 0 18px}.mission-summary{display:flex;gap:20px;color:#888;font-size:11px;margin-bottom:10px}.mission-summary>span{display:flex;align-items:center;gap:6px}.mission-attention{display:flex;width:100%;gap:9px;align-items:center;padding:9px 12px;border:1px solid #373329;border-radius:6px;background:#24221b;color:#cdbd88;margin-bottom:6px;text-align:left;font-size:11px}.mission-attention span{margin-left:auto}.composer-controls{flex-wrap:wrap}.composer-owner{display:flex;gap:6px;align-items:center}

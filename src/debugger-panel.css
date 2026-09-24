@@ -1,0 +1,16 @@
+.debugger-panel {display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px;color:var(--text,#d7d7d7);font-size:12px}
+.debugger-panel header,.debugger-panel header strong,.debugger-controls,.debugger-controls button {display:flex;align-items:center;gap:8px}
+.debugger-panel header {justify-content:space-between}.debugger-panel header span,.debugger-panel small {color:var(--muted,#999)}
+.debugger-controls {flex-wrap:wrap}.debugger-controls select {flex:1;min-width:190px;max-width:450px}
+.debugger-panel button,.debugger-panel select {font:inherit;color:inherit;background:#202322;border:1px solid #343837;border-radius:5px;padding:6px 8px}
+.debugger-panel button {cursor:pointer}.debugger-panel button:disabled {cursor:default;opacity:.4}.debugger-panel button:hover:not(:disabled) {background:#303936}
+.debugger-content {display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:260px;max-height:520px;gap:12px}
+.debugger-source {overflow:auto;background:#111;border:1px solid #303332;border-radius:6px;padding:8px 0;font:12px/21px Menlo,Consolas,monospace}
+.debugger-source>div {display:flex;min-width:max-content}.debugger-source>div>button {width:45px;flex-shrink:0;border:0;border-radius:0;background:transparent;color:#707a75;font:inherit;padding:0 9px;text-align:right}
+.debugger-source>div>code {display:block;white-space:pre;padding:0 12px}.debugger-source>div.debugger-current {background:#234535}.debugger-source>div>button.debugger-breakpoint {color:#ed8181}
+.debugger-content aside {overflow:auto}.debugger-content summary,.debugger-output summary {cursor:pointer;font-weight:600;padding:6px 0}
+.debugger-content aside details {margin-bottom:12px}.debugger-content aside details>button {display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;margin:4px 0;overflow-wrap:anywhere}.debugger-content aside button.selected {border-color:#79b99d}
+.debugger-scope {margin:9px 0}.debugger-scope>div {display:grid;grid-template-columns:minmax(60px,1fr) 1.5fr;gap:8px;margin:5px 0;overflow-wrap:anywhere}.debugger-scope code {white-space:pre-wrap;font-size:11px}
+.debugger-breakpoint-row {display:flex;align-items:center;justify-content:space-between;gap:6px;margin:4px 0}.debugger-breakpoint-row small {overflow-wrap:anywhere}
+.debugger-error {color:#ed9696;margin:0}.debugger-output pre {background:#111;border-radius:5px;padding:10px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;margin:6px 0;font:11px/1.5 Menlo,Consolas,monospace}
+@media(max-width:780px){.debugger-content{grid-template-columns:minmax(0,1fr);max-height:none}.debugger-source{max-height:350px}.debugger-content aside{max-height:250px}}
