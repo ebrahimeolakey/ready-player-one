@@ -1,10 +1,10 @@
 # Windows 测试版
 
-适用于 **Windows 10 / 11 x64**。这是 Windows 移植预发布；Amoeba 功能补齐仍在开发。
+适用于 **Windows 10 / 11 x64**。当前版本 0.4.1-beta.1，与 Mac 同版；Amoeba 功能补齐仍在开发。
 
 ## 安装
 
-- 安装器：运行 `Ready-Player-One-0.3.1-beta.1-windows.1-windows-x64-setup.exe`，按提示安装到当前用户目录。
+- 安装器：运行 `Ready-Player-One-0.4.1-beta.1-windows-x64-setup.exe`，按提示安装到当前用户目录。
 - 免安装 ZIP：完整解压，再运行文件夹内的 `头号玩家.exe`。请保留旁边的所有文件，不能只拷贝 EXE。
 - 此版没有 Windows 代码签名。SmartScreen 可能显示未知发布者；请从本仓库 Release 获取并核对 SHA-256，组织电脑按所在组织的软件安装策略操作。
 
