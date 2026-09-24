@@ -1,3 +1,4 @@
+import { validatePrompt } from "./prompt-limits.mjs";
 import { fileScopes, branchName, planIds } from "./overlap.mjs";
 import { redactRecord } from "./secure-store.mjs";
 import { randomUUID, createHash } from "node:crypto";
@@ -11,7 +12,7 @@ const value = (v, max = 2000) => {
   if (typeof v !== "string" || !v.trim() || v.length > max) throw Error("内容为空或超过长度限制");
   return v.trim();
 };
-const methods = new Set(["run.session", "run.reconcile", "run.steer", "run.steer.ack", "run.steer.restore", "run.queue", "run.queue.cancel", "run.queue.next", "tool.request", "tool.decide", "tool.claim"]);
+const methods = new Set(["run.session", "run.reconcile", "run.steer", "run.steer.read", "run.steer.ack", "run.steer.restore", "run.queue", "run.queue.cancel", "run.queue.next", "tool.request", "tool.decide", "tool.claim"]);
 export const handlesRunCoordination = method => methods.has(method);
 function current(hub, peer, a) {
   const { s, l } = hub.lane(peer, a);
@@ -41,8 +42,15 @@ export function runCoordination(hub, peer, method, a) {
     const existing = l.steering.find(v => v.id === eventId);
     if (existing) return existing;
     if (l.steering.filter(v => v.status === "pending").length >= 50) throw Error("待传递指导过多");
-    const instruction = { id: eventId, text: value(a.text, 20000), runId: a.runId, ownerId: peer.id, at: stamp(), status: "pending" };
+    const instruction = { id: eventId, text: validatePrompt(a.text), runId: a.runId, ownerId: peer.id, at: stamp(), status: "pending" };
     l.steering.push(instruction); return instruction;
+  }
+  if (method === "run.steer.read") {
+    const { l } = a.restore === true ? hub.lane(peer, a) : current(hub, peer, a);
+    const instruction = l.steering?.find(v => v.id === a.id && v.runId === a.runId && v.ownerId === peer.id);
+    const allowed = a.restore === true ? ["failed", "unsupported", "restored"] : ["pending"];
+    if (!instruction || !allowed.includes(instruction.status)) throw Error("指导已结束或不属于当前执行");
+    return { id: instruction.id, runId: instruction.runId, text: instruction.text };
   }
   if (method === "run.steer.restore") {
     const {l} = hub.lane(peer,a);
@@ -67,7 +75,7 @@ export function runCoordination(hub, peer, method, a) {
     if (!["read-only", "workspace-write"].includes(a.mode)) throw Error("未知权限模式");
     l.queue ??= [];
     if (l.queue.filter(v => v.status === "queued").length >= 50) throw Error("待执行队列已满");
-    const q = { id: randomUUID(), ownerId: peer.id, prompt: value(a.prompt, 20000), mode: a.mode, files: a.files || [], status: "queued", at: stamp() };
+    const q = { id: randomUUID(), ownerId: peer.id, prompt: validatePrompt(a.prompt), mode: a.mode, files: a.files || [], status: "queued", at: stamp() };
     // Validate file declarations without generating a run request that would change lane state.
     if (!Array.isArray(q.files) || q.files.length > 30 || q.files.some(f => typeof f !== "string" || f.length > 500)) throw Error("文件列表无效");
     const scopes = fileScopes(q.files,a.fileScopes);

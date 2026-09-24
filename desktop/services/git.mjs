@@ -256,7 +256,7 @@ export class GitService {
       );
       return {
         text: output.stdout,
-        binary: output.stdout.includes("Binary files"),
+        binary: /^Binary files .+ differ$/m.test(output.stdout),
       };
     }
     args.push("--");
@@ -268,7 +268,7 @@ export class GitService {
     const output = await this.command(root, args);
     return {
       text: output.stdout,
-      binary: output.stdout.includes("Binary files"),
+      binary: /^Binary files .+ differ$/m.test(output.stdout),
     };
   }
   async commit(path, { message }) {

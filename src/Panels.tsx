@@ -1,3 +1,4 @@
+import { promptProblem, promptStats, PROMPT_LIMITS, SUMMARY_LIMIT } from "../core/prompt-limits.mjs";
 import { useKeyboard, shortcutsAllowed } from "./KeyboardSettings";
 import { ContextUsage } from "./ContextUsage";
 import { LaneModel } from "./LaneModel";
@@ -71,6 +72,7 @@ export function AgentLane({
   call,
   mapped,
   onBrowse,
+  focusEntry,
 }: {
   lane: Lane;
   session: Session;
@@ -78,7 +80,13 @@ export function AgentLane({
   call: Call;
   mapped: boolean;
   onBrowse?: (url: string) => void;
+  focusEntry?:{entryId:string;hash:string;key:string};
 }) {
+  const [commentEntry,setCommentEntry]=useState<{id:string;text:string}|null>(null),[entryComment,setEntryComment]=useState(''),[entryCommentBusy,setEntryCommentBusy]=useState(false),[entryNotice,setEntryNotice]=useState('');
+  const [focusedId,setFocusedId]=useState('');
+  const canComment=(state.me?.roles?.[s.workspaceId]||(state.me?.host?'owner':'viewer'))!=='viewer';
+  const hashText=async(text:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(b=>b.toString(16).padStart(2,'0')).join('');
+  async function addEntryComment(){if(!commentEntry||!entryComment.trim())return;setEntryCommentBusy(true);try{const expectedHash=await hashText(commentEntry.text);if(await call('comment.add',{sessionId:s.id,workspaceId:s.workspaceId,text:entryComment,transcript:{laneId:l.id,entryId:commentEntry.id,expectedHash}})){setCommentEntry(null);setEntryComment('');}}finally{setEntryCommentBusy(false);}}
   const keyboard = useKeyboard();
   const composer = useComposer(l.id);
   const {
@@ -156,11 +164,13 @@ export function AgentLane({
     model: state.local.laneOptions?.[l.id]?.model || "",
     effort: state.local.laneOptions?.[l.id]?.effort || "",
   };
+  const promptError = promptProblem(prompt, {allowEmpty:true});
+  const promptSize = promptStats(prompt);
   const [overlapHints, setOverlapHints] = useState<
     { laneId: string; owner: string; reason: string }[]
   >([]);
   useEffect(() => {
-    if (!mine || !mapped || !prompt.trim()) {
+    if (!mine || !mapped || !prompt.trim() || promptError) {
       setOverlapHints([]);
       return;
     }
@@ -192,6 +202,7 @@ export function AgentLane({
   const bottom = useRef<HTMLDivElement>(null),
     scroll = useRef<HTMLDivElement>(null),
     [follow, setFollow] = useState(true);
+  useEffect(()=>{let active=true;setFocusedId('');setEntryNotice('');if(focusEntry){setFollow(false);const entry=l.entries.find(e=>e.id===focusEntry.entryId);if(!entry)setEntryNotice('原消息已不可用');else void hashText(entry.text).then(hash=>{if(!active)return;if(hash!==focusEntry.hash){setEntryNotice('原消息内容已变化，无法定位原始片段');return;}setFocusedId(entry.id);requestAnimationFrame(()=>scroll.current?.querySelector(`[data-entry-id="${CSS.escape(entry.id)}"]`)?.scrollIntoView({block:'center'}));});}return()=>{active=false;};},[focusEntry?.key,l.id,l.entries.find(e=>e.id===focusEntry?.entryId)?.text]);
   const mine = l.ownerId === state.me?.id,
     busy = ["running", "awaiting"].includes(l.status);
   useEffect(() => {
@@ -267,6 +278,7 @@ export function AgentLane({
     e?.preventDefault();
     if (
       !prompt.trim() ||
+      !!promptError ||
       voice.listening ||
       voice.busy ||
       inputBusy ||
@@ -352,8 +364,9 @@ export function AgentLane({
           if (e) setFollow(e.scrollHeight - e.scrollTop - e.clientHeight < 80);
         }}
       >
+        {entryNotice&&<p role="status">{entryNotice}</p>}
         {l.entries.map((e) => (
-          <article className={"entry " + e.role} key={e.id}>
+          <article className={"entry " + e.role+(focusedId===e.id?" reference-selected":"")} key={e.id} data-entry-id={e.id}>
             {e.role === "system" && e.text.length > 200 ? (
               <details className="diagnostic-log">
                 <summary>运行日志</summary>
@@ -377,6 +390,7 @@ export function AgentLane({
                           : providerLabel}
                   </span>
                   <span className="entry-actions">
+                    {canComment&&<button type="button" title="评论这条消息" aria-label="评论这条消息" onClick={()=>{setCommentEntry({id:e.id,text:e.text});setEntryComment('');}}><MessageSquare size={12}/></button>}
                     <button
                       type="button"
                       title="复制消息"
@@ -414,6 +428,7 @@ export function AgentLane({
                 )}
               </>
             )}
+            {commentEntry?.id===e.id&&<form className="message-comment" onSubmit={ev=>{ev.preventDefault();void addEntryComment();}}><textarea autoFocus aria-label="消息评论" value={entryComment} maxLength={5000} onChange={ev=>setEntryComment(ev.target.value)} required/><button type="button" disabled={entryCommentBusy} onClick={()=>setCommentEntry(null)}>取消</button><button disabled={entryCommentBusy||!entryComment.trim()}>发送</button></form>}
           </article>
         ))}
         {l.entries.filter((e) => e.role === "user").length === 0 && (
@@ -509,6 +524,8 @@ export function AgentLane({
             }
             rows={3}
           />
+          {promptError && <p role="alert" className="provider-error">{promptError}。请缩短后发送；本机草稿最多保留200,000码点。</p>}
+          {!promptError && promptSize.codePoints > SUMMARY_LIMIT && <small>原文 {promptSize.codePoints.toLocaleString()} / {PROMPT_LIMITS.codePoints.toLocaleString()} 码点；协作检查仅使用前 {SUMMARY_LIMIT.toLocaleString()} 码点摘要，执行时完整投递。</small>}
           {expanded && (
             <input
               value={files}
@@ -559,6 +576,7 @@ export function AgentLane({
                   className="send"
                   disabled={
                     !prompt.trim() ||
+                    !!promptError ||
                     !mapped ||
                     voice.listening ||
                     voice.busy ||
@@ -585,6 +603,7 @@ export function AgentLane({
                 className="send"
                 disabled={
                   !prompt.trim() ||
+                  !!promptError ||
                   !mapped ||
                   s.status === "archived" ||
                   voice.listening ||

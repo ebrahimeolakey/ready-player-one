@@ -1,9 +1,10 @@
 // Run with Electron (not ELECTRON_RUN_AS_NODE) on an isolated Windows runner.
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { app, BrowserWindow, dialog } from 'electron';
 import { TerminalService } from '../desktop/services/terminal.mjs';
+import { ProviderCLIService } from '../desktop/services/provider-cli.mjs';
 
 assert.equal(process.platform, 'win32', 'This smoke test must run on native Windows');
 assert.ok(process.env.RPO_DATA_DIR, 'An isolated data directory is required');
@@ -11,13 +12,16 @@ const artifacts = resolve('ci-evidence');
 mkdirSync(artifacts, { recursive: true });
 const evidence = { platform: process.platform, arch: process.arch, versions: process.versions, checks: [] };
 const writeEvidence = () => writeFileSync(join(artifacts, 'windows-native.json'), JSON.stringify(evidence, null, 2));
-let terminal, output = ''; 
+let terminal, providerTerminal, providerFixtureDir, output = '', providerOutput = '';
 const deadline = setTimeout(() => fail(Error('Windows desktop smoke timed out after 120 seconds')), 120000);
 function fail(error) {
   evidence.error = error.stack || String(error);
   evidence.ptyOutput = output;
+  evidence.providerCLIOutput = providerOutput;
   writeEvidence(); console.error(error);
-  terminal?.closeAll(); app.exit(1);
+  terminal?.closeAll(); providerTerminal?.closeAll();
+  if (providerFixtureDir) try { rmSync(providerFixtureDir, {recursive:true,force:true,maxRetries:2,retryDelay:50}); } catch {}
+  app.exit(1);
 }
 process.on('uncaughtException', fail);
 process.on('unhandledRejection', fail);
@@ -87,6 +91,92 @@ try {
   assert.equal(terminal.terminals.size, 0);
   evidence.checks.push('Electron ABI loads native node-pty, real PowerShell input/output, console TTY, resize, Ctrl-C, exit code and owner process cleanup');
   evidence.ptyOutput = clean(output);
+
+  evidence.stage = 'provider-cli-conpty'; writeEvidence();
+  providerFixtureDir = mkdtempSync(join(process.env.RPO_DATA_DIR, 'provider-cli-'));
+  const cliCwd = join(providerFixtureDir, '中文 空格 CLI');
+  mkdirSync(cliCwd);
+  const cliFixture = join(providerFixtureDir, '独立 CLI fixture.mjs');
+  const reportPath = join(cliCwd, 'started.json'), inputPath = join(cliCwd, 'input.bin');
+  // This known Electron executable runs only this synthetic Node peer. No vendor
+  // CLI, account probe, prompt, server, token or paid model is used by this check.
+  writeFileSync(cliFixture, `
+import {writeFileSync,appendFileSync} from 'node:fs';
+import {join} from 'node:path';
+process.stdin.setRawMode(true);process.stdin.resume();
+const input=join(process.cwd(),'input.bin');
+writeFileSync(input,Buffer.alloc(0));
+writeFileSync(join(process.cwd(),'started.json'),JSON.stringify({
+  argv:process.argv.slice(2),cwd:process.cwd(),pid:process.pid,
+  stdinTTY:process.stdin.isTTY,stdoutTTY:process.stdout.isTTY
+}));
+process.stdout.write('RPO_CLI_READY\\r\\n');
+let received=Buffer.alloc(0);
+process.stdin.on('data',data=>{
+  appendFileSync(input,data);received=Buffer.concat([received,data]);
+  if(received.includes(Buffer.from('RPO_EXIT')))process.exit(9);
+});
+`, 'utf8');
+  const cliArgs = ['中文 参数', 'space name', 'double"quote', "single'quote", 'trailing\\', '& echo NOT_EXECUTED', '$(NOT_EXECUTED)'];
+  const cliState = { identity:{audience:'windows-conpty-fixture'}, me:{id:'fixture-member',roles:{fixture:'editor'}}, sessions:[{
+    id:'fixture-session',workspaceId:'fixture',lanes:[{id:'fixture-lane',ownerId:'fixture-member',provider:'codex'}]
+  }] };
+  const cliContext = {workspaceId:'fixture',sessionId:'fixture-session',laneId:'fixture-lane',cols:120,rows:30};
+  providerTerminal = new TerminalService();
+  providerTerminal.on('event', (_owner,event) => { if(event.type==='data')providerOutput += event.data; });
+  let cliLaunches = 0;
+  const providerCLI = new ProviderCLIService({
+    terminals:providerTerminal,state:()=>cliState,root:()=>cliCwd,
+    accounts:()=>[{id:'codex',authenticated:false,label:'Synthetic fixture — no vendor account'}],
+    env:()=>({...process.env,ELECTRON_RUN_AS_NODE:'1'}),
+    resolveCommand:async()=>{cliLaunches++;return {command:process.execPath,args:[cliFixture,...cliArgs],resolvedCommand:process.execPath,launcher:'synthetic-electron-node'};}
+  });
+  const cliOwner = 402;
+  const [cliOpened,cliDuplicate] = await Promise.all([providerCLI.open(cliOwner,cliContext),providerCLI.open(cliOwner,cliContext)]);
+  assert.equal(cliOpened.id,cliDuplicate.id,'Concurrent Provider CLI opens must share one PTY');
+  assert.equal(cliLaunches,1,'Duplicate opens must not start another CLI');
+  const cliId=cliOpened.id;
+  let report;
+  await waitFor(()=>{
+    try { report=JSON.parse(readFileSync(reportPath,'utf8'));return clean(providerOutput).includes('RPO_CLI_READY'); } catch { return false; }
+  });
+  assert.equal(report.stdinTTY,true);assert.equal(report.stdoutTTY,true);
+  assert.deepEqual(report.argv,cliArgs,'Windows quoting must preserve the exact Unicode/space/quote/metacharacter argv');
+  assert.equal(realpathSync(report.cwd),realpathSync(cliCwd));
+  assert.equal(cliOpened.contextId,cliContext.laneId);
+  assert.equal(cliOpened.cli.command,process.execPath);
+  await assert.rejects(providerCLI.open(cliOwner,{...cliContext,laneId:'not-owned'}),/本人/);
+  assert.throws(()=>providerTerminal.input(cliOwner+1,{id:cliId,data:'RPO_EXIT'}),/无权/);
+  evidence.checks.push('A8 Provider CLI: real Windows ConPTY, known Electron Node fixture, exact Unicode/space/quote argv and canonical cwd, owner/lane fencing');
+
+  providerTerminal.input(cliOwner,{id:cliId,data:'\x1b[Z'});
+  await waitFor(()=>readFileSync(inputPath).length>=3);
+  assert.equal(readFileSync(inputPath).toString('hex'),'1b5b5a','Shift+Tab must reach the CLI as raw ESC [ Z bytes');
+  assert.equal((await providerCLI.open(cliOwner,cliContext)).id,cliId);
+  await new Promise(resolve=>setTimeout(resolve,150));
+  assert.equal(cliLaunches,1);
+  assert.equal(readFileSync(inputPath).toString('hex'),'1b5b5a','Reopening must never replay historical input');
+  evidence.checks.push('A8 Provider CLI: Shift+Tab raw bytes, concurrent/repeated open idempotency and zero history replay');
+
+  providerTerminal.input(cliOwner,{id:cliId,data:'RPO_EXIT'});
+  await waitFor(()=>providerTerminal.read(cliOwner,{id:cliId}).exited);
+  assert.equal(providerTerminal.read(cliOwner,{id:cliId}).exitCode,9);
+  assert.equal((await providerCLI.open(cliOwner,cliContext)).id,cliId,'An exited CLI must not restart implicitly');
+  assert.equal(cliLaunches,1);
+  providerTerminal.close(cliOwner,{id:cliId});
+  const freshCLI=await providerCLI.open(cliOwner,cliContext);
+  await waitFor(()=>clean(providerTerminal.read(cliOwner,{id:freshCLI.id}).data).includes('RPO_CLI_READY'));
+  const freshPid=JSON.parse(readFileSync(reportPath,'utf8')).pid;
+  assert.ok(Number.isInteger(freshPid)&&freshPid>0&&freshPid!==process.pid);
+  providerCLI.closeAll();
+  // Only signal-probe the pid reported by our own temporary fixture.
+  await waitFor(()=>{try{process.kill(freshPid,0);return false;}catch(error){return error.code==='ESRCH';}});
+  assert.equal(providerTerminal.terminals.size,0);
+  assert.equal(cliLaunches,2);
+  evidence.checks.push('A8 Provider CLI: actual exit code, no implicit restart, explicit fresh launch and process/PTY cleanup');
+  evidence.providerCLI={synthetic:true,modelCalls:0,launches:cliLaunches,argv:cliArgs,shiftTabHex:'1b5b5a',exitCode:9,cleanup:true};
+  evidence.providerCLIOutput=clean(providerOutput);
+  rmSync(providerFixtureDir,{recursive:true,force:true,maxRetries:5,retryDelay:100});providerFixtureDir=null;
   evidence.completedAt = new Date().toISOString();
   writeEvidence();
   // Exercise the actual app before-quit async cleanup, not a synthetic app.exit success.

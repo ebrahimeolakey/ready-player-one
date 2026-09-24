@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
 } from "lucide-react";
+import {DiffReview} from "./DiffReview";
 import type { Call } from "./ui";
 import "./git-panel.css";
 interface GitFile {
@@ -38,11 +39,13 @@ export function GitPanel({
   context,
   rootRevision = "",
   busy = false,
+  canComment = false,
 }: {
   call: Call;
   context: Record<string, unknown>;
   rootRevision?: string;
   busy?: boolean;
+  canComment?: boolean;
 }) {
   const [status, setStatus] = useState<GitState | null>(null),
     [branches, setBranches] = useState<Branch[]>([]),
@@ -58,6 +61,7 @@ export function GitPanel({
       staged: boolean;
     } | null>(null),
     [diff, setDiff] = useState("");
+  const [diffPreview,setDiffPreview]=useState<{diffHash:string;canonicalRoot:string}|null>(null);
   const contextKey = JSON.stringify([context, rootRevision]);
   const activeContext = useRef(contextKey);
   const previewVersion = useRef(0);
@@ -97,6 +101,7 @@ export function GitPanel({
     const version = ++previewVersion.current;
     setSelected({ path: file.path, staged });
     setDiff("加载中…");
+    setDiffPreview(null);
     setError("");
     try {
       const result = await call("git.diff", {
@@ -108,7 +113,7 @@ export function GitPanel({
         version === previewVersion.current &&
         activeContext.current === contextKey
       )
-        setDiff(result.text || "没有文本差异");
+        {setDiff(result.text || "没有文本差异");setDiffPreview(result.binary?null:result);}
     } catch (e) {
       if (
         version === previewVersion.current &&
@@ -341,7 +346,7 @@ export function GitPanel({
               {selected.path}
               <span>{selected.staged ? "已暂存" : "未暂存"}</span>
             </header>
-            <pre>{diff}</pre>
+            <DiffReview text={diff} preview={diffPreview} context={context} path={selected.path} staged={selected.staged} call={call} canComment={canComment}/>
           </div>
         )}
       </div>

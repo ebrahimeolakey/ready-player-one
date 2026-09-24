@@ -410,6 +410,16 @@ export class SecureStore {
     }
     return result;
   }
+  // Remove one logical record and its recovery copies, never a directory tree.
+  removeFile(name) {
+    const encrypted = this.path(name), legacy = this.path(name, false), parent = dirname(encrypted);
+    const pending = existsSync(parent) ? readdirSync(parent).filter(n => n.startsWith(basename(encrypted) + ".") && n.endsWith(".pending")).map(n => this.path(relative(this.dir, join(parent,n)), false)) : [];
+    const files = [...new Set([encrypted, legacy, ...pending])].filter(existsSync);
+    for (const file of files) if (!lstatSync(file).isFile()) throw Error("只能删除存储中的普通记录文件");
+    for (const file of files) unlinkSync(file);
+    if (files.length) syncDir(parent);
+    return files.length;
+  }
   destroy() {
     this.key.fill(0);
   }

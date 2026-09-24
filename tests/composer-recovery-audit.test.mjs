@@ -1,3 +1,4 @@
+import { DRAFT_LIMITS } from "../core/prompt-limits.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,readdirSync,rmSync} from 'node:fs';
@@ -51,8 +52,8 @@ test('explicit conflict merge preserves both drafts, deduplicates images and is 
  assert.equal(saved.conflicts[0].text,'并排修改');assert.equal(saved.conflicts[0].images[0].data,png.data);
 });
 test('oversized merge keeps the current draft and unresolved conflict intact on disk',t=>{
- const {store,restart}=fixture(t);store.save({laneId:'lane',text:'a'.repeat(12000),images:[],revision:0});
- const archived=store.save({laneId:'lane',text:'b'.repeat(12000),images:[png],revision:0});const before=store.read('lane');
+ const {store,restart}=fixture(t);store.save({laneId:'lane',text:'a'.repeat(DRAFT_LIMITS.codePoints / 2 + 1),images:[],revision:0});
+ const archived=store.save({laneId:'lane',text:'b'.repeat(DRAFT_LIMITS.codePoints / 2 + 1),images:[png],revision:0});const before=store.read('lane');
  assert.throws(()=>store.restoreConflict({laneId:'lane',id:archived.conflictId}),/超过/);
  assert.deepEqual(store.read('lane'),before);assert.deepEqual(restart().read('lane'),before);assert.equal(store.listConflicts('lane').length,1);
 });

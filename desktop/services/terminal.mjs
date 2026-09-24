@@ -39,7 +39,11 @@ export class TerminalService extends EventEmitter {
     this.terminals = new Map();
     this.closedOwners = new Set();
   }
-  async open(ownerId, { cwd, contextId = "", cols = 80, rows = 24 }) {
+  open(ownerId, options) {
+    const [command,args] = interactiveShell(this.platform,this.env);
+    return this.openProgram(ownerId,{...options,command,args});
+  }
+  async openProgram(ownerId, { cwd, contextId = "", cols = 80, rows = 24, command, args = [], env = this.env, providerCLI }) {
     if (this.terminals.size >= 12) throw Error("最多同时打开 12 个终端");
     const root = await realpath(cwd);
     if (!(await stat(root)).isDirectory()) throw Error("终端需要项目文件夹");
@@ -47,11 +51,11 @@ export class TerminalService extends EventEmitter {
     if (this.terminals.size >= 12) throw Error("最多同时打开 12 个终端");
     const size = dimensions(cols, rows);
     const spawn = this.spawnPty || require("node-pty").spawn;
-    const [shell, args] = interactiveShell(this.platform, this.env);
-    const process = spawn(shell, args, {
+    if(typeof command !== "string" || !Array.isArray(args) || args.some(v=>typeof v!=="string")) throw Error("终端命令无效");
+    const process = spawn(command, args, {
       name: "xterm-256color",
       cwd: root,
-      env: { ...this.env, TERM: "xterm-256color", COLORTERM: "truecolor" },
+      env: { ...env, TERM: "xterm-256color", COLORTERM: "truecolor" },
       ...size,
     });
     const id = randomUUID();
@@ -59,6 +63,7 @@ export class TerminalService extends EventEmitter {
       id,
       ownerId,
       contextId,
+      ...(providerCLI ? {providerCLI} : {}),
       process,
       data: "",
       pending: "",

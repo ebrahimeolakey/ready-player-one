@@ -1,3 +1,4 @@
+import { DRAFT_LIMITS } from "../core/prompt-limits.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
@@ -16,5 +17,5 @@ test('encrypted composer restores unsent guidance and images once across restart
  const conflict=store.save({laneId:'a',text:'stale overwrite',images:[],revision:0});assert.ok(conflict.conflictId);assert.equal(store.read('a').text,value.text);assert.equal(store.listConflicts('a')[0].text,'stale overwrite');
 });
 test('failed recovery leaves attachments and receipt intact, so guidance remains recoverable',t=>{
- const dir=mkdtempSync(join(tmpdir(),'rpo-composer-limit-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const store=new ComposerStore(new SecureStore({dir,key:randomBytes(32)}));const before=store.save({laneId:'a',text:'x'.repeat(20000),images:[png],revision:0});assert.throws(()=>store.restore({laneId:'a',id:'g',text:'more',images:[]}),/超过/);assert.deepEqual(store.read('a'),before);assert.throws(()=>store.save({laneId:'a',text:'okay',images:[{name:'bad',data:'abcd'}],revision:before.revision}));assert.deepEqual(store.read('a'),before);
+ const dir=mkdtempSync(join(tmpdir(),'rpo-composer-limit-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const store=new ComposerStore(new SecureStore({dir,key:randomBytes(32)}));const before=store.save({laneId:'a',text:'x'.repeat(DRAFT_LIMITS.codePoints),images:[png],revision:0});assert.throws(()=>store.restore({laneId:'a',id:'g',text:'more',images:[]}),/超过/);assert.deepEqual(store.read('a'),before);assert.throws(()=>store.save({laneId:'a',text:'okay',images:[{name:'bad',data:'abcd'}],revision:before.revision}));assert.deepEqual(store.read('a'),before);
 });

@@ -29,6 +29,7 @@ import { SyncPanel } from "./SyncPanel";
 import { InteractiveTerminal } from "./InteractiveTerminal";
 import { BrowserPanel } from "./BrowserPanel";
 import { DebuggerPanel } from "./DebuggerPanel";
+import {ReferenceViewer} from "./ReferenceViewer";
 import { GitPanel } from "./GitPanel";
 import { TaskCoordination } from "./TaskCoordination";
 import { LaneModel } from "./LaneModel";
@@ -58,9 +59,13 @@ export function Studio({
   onRepos: () => void;
 }) {
   const keyboard = useKeyboard();
+  const [referenceComment,setReferenceComment]=useState<string|null>(null);
+  const [focusEntry,setFocusEntry]=useState<{entryId:string;laneId:string;hash:string;key:string}|undefined>();
+  useEffect(()=>{setReferenceComment(null);setFocusEntry(undefined);},[s.id]);
   const [tool, setTool] = useState(compact ? "none" : "files"),
     [dock, setDock] = useState("agent"),
     [terminalOpened, setTerminalOpened] = useState<string[]>([]),
+    [cliOpened, setCliOpened] = useState<string[]>([]),
     [rail, setRail] = useState("session"),
     [showRail, setShowRail] = useState(!compact),
     [showDock, setShowDock] = useState(true),
@@ -272,6 +277,7 @@ export function Studio({
             <SyncPanel state={state} session={s} call={call} />
             {mapped && (
               <GitPanel
+                  canComment={(state.me?.roles?.[s.workspaceId]||(state.me?.host?"owner":"viewer"))!=="viewer"}
                 call={window.rpo.invoke}
                 context={params}
                 rootRevision={JSON.stringify([(params.laneId && state.local.lanePaths?.[params.laneId]) || state.local.sessionPaths[s.id] || state.local.paths[s.workspaceId], state.local.sync?.[s.id]?.status === "paused"])}
@@ -347,6 +353,12 @@ export function Studio({
                 <TerminalSquare size={13} />
                 终端
               </button>
+              {lane?.ownerId === state.me?.id && ["codex","claude"].includes(lane.provider) && <button
+                disabled={!mapped}
+                className={dock === "provider-cli" ? "active" : ""}
+                title="打开此 Provider CLI · 本机独立会话"
+                onClick={()=>{setCliOpened(ids=>ids.includes(lane.id)?ids:[...ids,lane.id]);setDock("provider-cli");setShowDock(true);}}
+              ><TerminalSquare size={13}/> 打开此 Provider CLI</button>}
               {pending.length > 0 && (
                 <button
                   className="approval-count"
@@ -388,6 +400,7 @@ export function Studio({
                   {lane ? (
                     <AgentLane
                       key={lane.id}
+                      focusEntry={focusEntry?.laneId===lane.id?focusEntry:undefined}
                       lane={lane}
                       session={s}
                       state={state}
@@ -437,6 +450,12 @@ export function Studio({
                         />
                       </div>
                     ))}
+                </div>
+                <div className={dock === "provider-cli" ? "terminal-container" : "terminal-container hidden"}>
+                  {mapped && cliOpened.map(id => <div key={id} style={{height:"100%",display:id===params.laneId?"block":"none"}}>
+                    <InteractiveTerminal bridge={window.rpo} workspaceId={s.workspaceId} sessionId={s.id} laneId={id} mode="provider"
+                      onClose={()=>{setCliOpened(ids=>ids.filter(v=>v!==id));setDock("agent");}}/>
+                  </div>)}
                 </div>
               </div>
               {showRail && (
@@ -596,6 +615,7 @@ export function Studio({
                           </div>
                         ))}
                         <CollaborationPanel
+                          onOpenComment={c=>{if(c.transcript){setLaneId(c.transcript.laneId);setDock('agent');setShowDock(true);setFocusEntry({...c.transcript,key:crypto.randomUUID()});}else if(c.location)setReferenceComment(c.id);}}
                           state={state}
                           session={s}
                           call={call}
@@ -669,6 +689,7 @@ export function Studio({
             </div>
           </section>
         )}
+        {referenceComment&&<ReferenceViewer commentId={referenceComment} context={{workspaceId:s.workspaceId,sessionId:s.id,rootRevision:state.local.sessionPaths[s.id]||state.local.paths[s.workspaceId]}} call={window.rpo.invoke} close={()=>setReferenceComment(null)}/>}
         {!showDock && (
           <button
             className="restore-dock button"

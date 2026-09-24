@@ -1,3 +1,4 @@
+import { validatePrompt } from "./prompt-limits.mjs";
 import { randomUUID } from "node:crypto";
 import { claimKeyHash } from "./coordination-runs.mjs";
 const at = () => new Date().toISOString();
@@ -71,11 +72,11 @@ export function handoffs(hub, peer, method, a) {
     const { s, l } = hub.lane(peer, { sessionId: a.sessionId, laneId: a.parentLaneId });
     if (s.status !== "active") throw Error("会话已归档");
     const executorId = a.ownerId || peer.id;
-    const member = hub.db.members.find(m => m.id === executorId && m.workspaceId === s.workspaceId && !m.removed && ["editor", "owner"].includes(m.role));
+    const member = hub.membersFor(s.workspaceId, s.id).find(m => m.id === executorId && ["editor", "owner"].includes(m.role));
     if (!member) throw Error("子任务执行者需要 Editor 权限");
     const requiredCheckIds = a.requiredCheckIds;
     if (!Array.isArray(requiredCheckIds) || !requiredCheckIds.length || requiredCheckIds.length > 20 || requiredCheckIds.some(id => typeof id !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(id))) throw Error("必须指定本机明确配置的检查 ID");
-    const input = {ownerId:executorId,title:text(a.title,200),prompt:text(a.prompt),baseCommit:hash(a.baseCommit),requiredCheckIds:[...new Set(requiredCheckIds)]};
+    const input = {ownerId:executorId,title:text(a.title,200),prompt:validatePrompt(a.prompt),baseCommit:hash(a.baseCommit),requiredCheckIds:[...new Set(requiredCheckIds)]};
     if (a.requestId !== undefined || a.sourceRunId !== undefined) {
       if (typeof a.requestId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(a.requestId)) throw Error("子任务 requestId 必须是 UUID");
       const source = hub.db.approvals.find(v=>v.id===a.sourceRunId);

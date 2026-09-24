@@ -1,3 +1,6 @@
+import { workspaceLifecycle, recoverWorkspaceDeletions } from "./workspace-lifecycle.mjs";
+import { assertSessionScope, scopedResult, grantMembers } from "./access-scope.mjs";
+import { validatePrompt, summarizePrompt } from "./prompt-limits.mjs";
 import { validateFailure, isHandoffFailure } from "./providers/failure.mjs";
 import { handlesOutcomes, outcomes } from "./outcomes.mjs";
 import { validateUsage } from "./providers/usage.mjs";
@@ -65,6 +68,8 @@ export class Hub extends EventEmitter {
       };
     }
     this.db.members ??= [];
+    this.db.sessionMembers ??= [];
+    this.db.memoryHistory ??= [];
     this.db.locks ??= [];
     this.db.messages ??= [];
     this.db.outcomes ??= [];
@@ -72,6 +77,7 @@ export class Hub extends EventEmitter {
     this.db.handoffs ??= [];
     this.db.subtasks ??= [];
     this.identity = new TeamIdentity(this, identityVerifier);
+    recoverWorkspaceDeletions(this);
     for (const s of this.db.sessions) {
       for (const p of s.plan || []) { p.status ??= p.done ? "done" : "todo"; p.assigneeId ??= null; }
       for (const c of s.comments || []) c.status ??= "open";
@@ -127,27 +133,27 @@ export class Hub extends EventEmitter {
   }
   save() { this.store.writeJSON(this.file, this.db); }
   snapshot(peer) {
-    const allowed = (w) => peer.host || w.id === peer.workspaceId;
+    const allowed = (w) => { if (peer.host) return true; try { this.workspace(peer,w.id); return true; } catch { return false; } };
     const workspaces = this.db.workspaces.filter(allowed);
     const ids = new Set(workspaces.map((w) => w.id));
-    return redactRecord({
+    return scopedResult(redactRecord({
       workspaces,
-      sessions: this.db.sessions.filter((s) => ids.has(s.workspaceId)),
+      sessions: this.db.sessions.filter((s) => ids.has(s.workspaceId) && (!peer.sessionId || s.id === peer.sessionId)),
       memories: this.db.memories.filter((m) => ids.has(m.workspaceId)),
       approvals: this.db.approvals.filter((a) => ids.has(a.workspaceId)),
       outcomes: this.db.outcomes.filter(o => ids.has(o.workspaceId)),
       toolApprovals: this.db.toolApprovals.filter((a) => ids.has(a.workspaceId)),
       handoffs: this.db.handoffs.filter(h => ids.has(h.workspaceId)),
       subtasks: this.db.subtasks.filter(t => ids.has(t.workspaceId)),
-      members: this.db.members.filter(m => ids.has(m.workspaceId) && !m.removed).map(m => ({ ...m, online: [...this.peers.values()].some(p => p.id === m.id && (p.host || p.workspaceId === m.workspaceId)) })),
+      members: [...this.db.members, ...this.db.sessionMembers].filter(m => ids.has(m.workspaceId) && !m.removed && (!peer.sessionId || m.sessionId === peer.sessionId || this.db.sessions.find(s => s.id === peer.sessionId)?.lanes.some(l => l.ownerId === m.id))).map(m => ({ ...m, online: [...this.peers.values()].some(p => p.id === m.id && (p.host || p.workspaceId === m.workspaceId)) })),
       locks: this.db.locks.filter(l => ids.has(l.workspaceId) && l.expires > Date.now()),
       messages: this.db.messages.filter(m => ids.has(m.workspaceId)),
-      me: { id: peer.id, name: peer.name, host: peer.host, github: this.db.identities.find(v => v.peerId === peer.id)?.github, role: peer.host ? "owner" : this.role(peer, peer.workspaceId), roles: Object.fromEntries(workspaces.map(w => [w.id, this.role(peer, w.id)])) },
+      me: { id: peer.id, name: peer.name, host: peer.host, sessionId: peer.sessionId, github: this.db.identities.find(v => v.peerId === peer.id)?.github, role: peer.host ? "owner" : this.role(peer, peer.workspaceId), roles: Object.fromEntries(workspaces.map(w => [w.id, this.role(peer, w.id)])) },
       identity: this.identity.info,
       storage: { encrypted: true, ...this.db.storage },
       shared: this.shared,
       version: 1,
-    });
+    }), peer);
   }
   broadcast() {
     this.save();
@@ -243,12 +249,13 @@ export class Hub extends EventEmitter {
               host,
               workspaceId: invite?.workspaceId,
               inviteId: invite?.id,
+              sessionId: invite?.sessionId,
             };
-            if (!host && this.db.members.some(m => m.id === peer.id && m.workspaceId === invite.workspaceId && m.removed)) throw Error("此成员已被移除");
+            if (!host && (peer.sessionId ? this.db.sessionMembers : this.db.members).some(m => m.id === peer.id && m.workspaceId === invite.workspaceId && (!peer.sessionId || m.sessionId === peer.sessionId) && m.removed)) throw Error("此成员已被移除");
             const verified = this.identity.authenticate(peer.id, msg.args || {}, peer.workspaceId, invite?.githubLogin);
             peer.github = verified.github;
             if (invite?.githubLogin) {
-              const existingMember = this.db.members.find(m => m.id === peer.id && m.workspaceId === invite.workspaceId && !m.removed);
+              const existingMember = (peer.sessionId ? this.db.sessionMembers : this.db.members).find(m => m.id === peer.id && m.workspaceId === invite.workspaceId && (!peer.sessionId || m.sessionId === peer.sessionId) && !m.removed);
               if (!msg.args.identityProof && !existingMember?.inviteIds?.includes(invite.id)) throw Error("用户名邀请首次加入需要重新验证 GitHub 身份");
               if (invite.boundGithubId && invite.boundGithubId !== peer.github?.id) throw Error("此邀请已绑定其他 GitHub 账号");
               invite.boundGithubId = peer.github.id;
@@ -297,11 +304,14 @@ export class Hub extends EventEmitter {
     return boundPort;
   }
   registerMember(peer, workspaceId, memberRole) {
-    let member = this.db.members.find(m => m.id === peer.id && m.workspaceId === workspaceId);
+    const members = peer.sessionId ? this.db.sessionMembers : this.db.members;
+    if (peer.sessionId && this.db.members.some(m => m.workspaceId === workspaceId && m.id === peer.id && m.removed)) throw Error("此成员已被移除");
+    if (peer.sessionId && !this.db.sessions.some(s => s.id === peer.sessionId && s.workspaceId === workspaceId)) throw Error("邀请会话不存在");
+    let member = members.find(m => m.id === peer.id && m.workspaceId === workspaceId && (!peer.sessionId || m.sessionId === peer.sessionId));
     if (member?.removed && !peer.host) throw Error("此成员已被移除");
     if (!member) {
-      member = { id: peer.id, name: peer.name, workspaceId, role: memberRole, host: peer.host, at: now() };
-      this.db.members.push(member);
+      member = { id: peer.id, name: peer.name, workspaceId, ...(peer.sessionId ? {sessionId:peer.sessionId} : {}), role: memberRole, host: peer.host, at: now() };
+      members.push(member);
     } else {
       member.name = peer.name;
       if (peer.host) Object.assign(member, { role: "owner", host: true, removed: false });
@@ -311,11 +321,12 @@ export class Hub extends EventEmitter {
   }
   role(peer, workspaceId) {
     if (peer.host) return "owner";
-    const member = this.db.members.find(m => m.id === peer.id && m.workspaceId === workspaceId && !m.removed);
+    const member = (peer.sessionId ? this.db.sessionMembers : this.db.members).find(m => m.id === peer.id && m.workspaceId === workspaceId && (!peer.sessionId || m.sessionId === peer.sessionId) && !m.removed);
     return member?.role || "viewer";
   }
-  fenceMember(workspaceId, memberId) {
-    for (const s of this.db.sessions.filter(s => s.workspaceId === workspaceId))
+  membersFor(workspaceId, sessionId) { return grantMembers(this, workspaceId, sessionId); }
+  fenceMember(workspaceId, memberId, sessionId) {
+    for (const s of this.db.sessions.filter(s => s.workspaceId === workspaceId && (!sessionId || s.id === sessionId)))
       for (const l of s.lanes.filter(l => l.ownerId === memberId)) {
         if (["running", "awaiting"].includes(l.status)) {
           l.stopRequested = now(); l.fencedRunId = l.activeRunId; l.status = "interrupted";
@@ -323,35 +334,38 @@ export class Hub extends EventEmitter {
         }
       }
     for (const ap of this.db.approvals)
-      if (ap.workspaceId === workspaceId && ap.ownerId === memberId && ["pending", "approved"].includes(ap.status)) ap.status = "cancelled";
-    this.db.locks = this.db.locks.filter(l => l.workspaceId !== workspaceId || l.ownerId !== memberId);
+      if (ap.workspaceId === workspaceId && (!sessionId || ap.sessionId === sessionId) && ap.ownerId === memberId && ["pending", "approved"].includes(ap.status)) ap.status = "cancelled";
+    this.db.locks = this.db.locks.filter(l => l.workspaceId !== workspaceId || l.ownerId !== memberId || (sessionId && l.sessionId !== sessionId));
     for (const t of this.db.toolApprovals)
-      if (t.workspaceId === workspaceId && t.ownerId === memberId && t.status === "pending") t.status = "cancelled";
+      if (t.workspaceId === workspaceId && (!sessionId || t.sessionId === sessionId) && t.ownerId === memberId && t.status === "pending") t.status = "cancelled";
   }
   authorize(peer, method, a) {
-    if (["state", "workspace.create", "identity.begin", "identity.bind", "identity.revoke"].includes(method)) return;
+    assertSessionScope(this, peer, method, a);
+    if (["state", "workspace.create", "workspace.delete.status", "identity.begin", "identity.bind", "identity.revoke"].includes(method)) return;
     let workspaceId = a.workspaceId;
-    if (a.sessionId) workspaceId = this.session(peer, a.sessionId).workspaceId;
+    if (a.sessionId) { workspaceId = this.session(peer, a.sessionId).workspaceId; if (a.workspaceId && a.workspaceId !== workspaceId) throw Error("工作区与会话不匹配"); }
     if (["approval.decide", "run.claim"].includes(method)) workspaceId = this.db.approvals.find(v => v.id === a.id)?.workspaceId;
     if (method === "outcome.resolve") workspaceId = this.db.outcomes.find(v => v.id === a.id)?.workspaceId;
     if (method.startsWith("handoff.") && a.id) workspaceId = this.db.handoffs.find(v => v.id === a.id)?.workspaceId;
     if (method.startsWith("subtask.") && a.id) workspaceId = this.db.subtasks.find(v => v.id === a.id)?.workspaceId;
     if (["tool.decide", "tool.claim"].includes(method)) workspaceId = this.db.toolApprovals.find(v => v.id === a.id)?.workspaceId;
-    if (["memory.update", "memory.retire"].includes(method)) {
+    if (["memory.update", "memory.retire", "memory.history"].includes(method)) {
       const targetWorkspaceId = this.db.memories.find(v => v.id === a.id)?.workspaceId;
       if (targetWorkspaceId && ((workspaceId && workspaceId !== targetWorkspaceId) || (a.workspaceId && a.workspaceId !== targetWorkspaceId))) throw Error("记忆不属于当前工作区");
       workspaceId = targetWorkspaceId;
     }
     if (!workspaceId) return; // The target handler supplies its specific missing-resource error.
     this.workspace(peer, workspaceId);
-    const required = ["invite.create", "invite.revoke", "member.role", "member.remove"].includes(method) ? "owner"
-      : ["session.export", "coordination.context", "memory.list"].includes(method) ? "viewer"
-      : ["comment.add", "comment.resolve", "plan.add", "plan.claim", "plan.status", "plan.toggle", "plan.transfer", "plan.transfer.accept", "plan.transfer.decline"].includes(method) ? "commenter" : "editor";
+    const required = ["invite.create", "invite.revoke"].includes(method) && a.sessionId ? "editor" : ["invite.create", "invite.revoke", "member.role", "member.remove", "workspace.delete.preview", "workspace.delete"].includes(method) ? "owner"
+      : ["session.export", "coordination.context", "memory.list", "memory.history"].includes(method) ? "viewer"
+      : ["comment.add", "comment.resolve", "plan.add", "plan.claim", "plan.release", "plan.status", "plan.toggle", "plan.transfer", "plan.transfer.accept", "plan.transfer.decline"].includes(method) ? "commenter" : "editor";
     if (ROLES.indexOf(this.role(peer, workspaceId)) < ROLES.indexOf(required)) throw Error(`此操作需要 ${required} 权限`);
   }
   workspace(peer, workspaceId) {
     const w = this.db.workspaces.find((w) => w.id === workspaceId);
-    if (!w || (!peer.host && (peer.workspaceId !== w.id || this.db.members.some(m => m.workspaceId === w.id && m.id === peer.id && m.removed))))
+    if (peer.sessionId && this.db.members.some(m => m.workspaceId === workspaceId && m.id === peer.id && m.removed)) throw Error("此成员已被移除");
+    if (peer.inviteId && !this.db.invites.some(i => i.id === peer.inviteId && !i.revoked && i.workspaceId === peer.workspaceId)) throw Error("邀请已撤销");
+    if (!w || (!peer.host && (peer.workspaceId !== w.id || (peer.sessionId ? this.db.sessionMembers : this.db.members).some(m => m.workspaceId === w.id && m.id === peer.id && (!peer.sessionId || m.sessionId === peer.sessionId) && m.removed))))
       throw Error("没有此工作区的访问权限");
     return w;
   }
@@ -359,6 +373,7 @@ export class Hub extends EventEmitter {
     const s = this.db.sessions.find((s) => s.id === sessionId);
     if (!s) throw Error("会话不存在");
     this.workspace(peer, s.workspaceId);
+    if (peer.sessionId && peer.sessionId !== s.id) throw Error("会话不在邀请范围内");
     return s;
   }
   lane(peer, a, owned = true) {
@@ -381,8 +396,17 @@ export class Hub extends EventEmitter {
     if (l.entries.length > 600) l.entries.splice(0, l.entries.length - 600);
     return entry;
   }
-  act(peer, method, a) {
+  act(peer, method, a = {}) {
+    // Internal synchronous orchestration must retain live record references;
+    // only the outward API boundary projects the invitation's visible scope.
+    const nested = (this.actionDepth || 0) > 0;
+    this.actionDepth = (this.actionDepth || 0) + 1;
+    try { const result = this.perform(peer, method, a); return nested ? result : scopedResult(result, peer); }
+    finally { this.actionDepth--; }
+  }
+  perform(peer, method, a) {
     this.authorize(peer, method, a);
+    if (["workspace.delete.preview","workspace.delete","workspace.delete.status"].includes(method)) return workspaceLifecycle(this,peer,method,a);
     if (handlesOutcomes(method)) return outcomes(this, peer, method, a);
     if (handlesCoordination(method)) return coordination(this, peer, method, a);
     if (handlesRunCoordination(method)) return runCoordination(this, peer, method, a);
@@ -422,28 +446,32 @@ export class Hub extends EventEmitter {
     }
     if (method === "invite.create") {
       this.workspace(peer, a.workspaceId);
+      if (a.sessionId) this.session(peer, a.sessionId);
+      const inviteRole = role(a.role);
+      if (a.sessionId && inviteRole === "owner") throw Error("会话邀请不能授予 Owner 权限");
       if (a.githubLogin && !this.identity.info.configured) throw Error("请先配置 GitHub 团队身份服务");
       const login = a.githubLogin ? githubLogin(a.githubLogin) : undefined;
       const invite = {
-        id: id(),
-        workspaceId: a.workspaceId,
-        token: randomBytes(32).toString("hex"),
-        role: role(a.role),
-        ...(login ? { githubLogin: login } : {}),
-        expires: Date.now() + 24 * 3600e3,
+        id: id(), workspaceId: a.workspaceId,
+        ...(a.sessionId ? {sessionId:a.sessionId} : {}), createdBy:peer.id,
+        token: randomBytes(32).toString("hex"), role: inviteRole,
+        ...(login ? { githubLogin: login } : {}), expires: Date.now() + 24 * 3600e3,
       };
-      this.db.invites.push(invite);
-      return invite;
+      this.db.invites.push(invite); return invite;
     }
     if (method === "invite.revoke") {
       this.workspace(peer, a.workspaceId);
-      for (const i of this.db.invites)
-        if (i.workspaceId === a.workspaceId) i.revoked = true;
-      for (const member of this.db.members)
-        if (!member.host && member.workspaceId === a.workspaceId) this.fenceMember(a.workspaceId, member.id);
-      for (const [ws, p] of this.peers)
-        if (!p.host && p.workspaceId === a.workspaceId)
-          ws.close(1008, "邀请已撤销");
+      if (a.sessionId) this.session(peer, a.sessionId);
+      const targets = this.db.invites.filter(i => i.workspaceId === a.workspaceId && (!a.sessionId || i.sessionId === a.sessionId) && (!a.id || i.id === a.id));
+      if (a.sessionId && this.role(peer,a.workspaceId) !== "owner" && targets.some(i => i.createdBy !== peer.id)) throw Error("Editor 只能撤销自己创建的会话邀请");
+      const ids = new Set(targets.map(i => i.id));
+      for (const i of targets) i.revoked = true;
+      for (const [ws,p] of this.peers) if (!p.host && ids.has(p.inviteId)) { this.fenceMember(a.workspaceId,p.id,a.sessionId); ws.close(1008,"邀请已撤销"); }
+      // Pending/offline grants also lose execution access when every associated invitation is revoked.
+      for (const m of [...this.db.members,...this.db.sessionMembers]) {
+        if (m.host || m.workspaceId !== a.workspaceId || (a.sessionId && m.sessionId !== a.sessionId)) continue;
+        if (m.inviteIds?.length && m.inviteIds.every(id => !this.db.invites.some(i => i.id === id && !i.revoked && i.expires > Date.now()))) this.fenceMember(a.workspaceId,m.id,m.sessionId);
+      }
       return true;
     }
     if (method === "session.create") {
@@ -521,7 +549,7 @@ export class Hub extends EventEmitter {
         throw Error("当前通道已有待处理任务");
       if (!["read-only", "workspace-write"].includes(a.mode))
         throw Error("未知权限模式");
-      const prompt = text(a.prompt, 20000);
+      const prompt = validatePrompt(a.prompt);
       if (!Array.isArray(a.files || [])) throw Error("文件列表无效");
       const scopes = fileScopes(a.files, a.fileScopes, 100);
       const files = scopes.map(v => v.path), linkedPlans = planIds(s,a.planIds), branch = branchName(a.branch);
@@ -588,7 +616,7 @@ export class Hub extends EventEmitter {
       delete l.runConfiguration;
       delete l.failure;
       delete l.handoffNeeded;
-      this.entry(l, "user", ap.prompt);
+      this.entry(l, "user", summarizePrompt(ap.prompt).display);
       return {
         approval: ap,
         session: s,

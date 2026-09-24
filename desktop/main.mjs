@@ -1,3 +1,4 @@
+import { createWorkspaceLifecycle } from "./services/workspace-lifecycle.mjs";
 import { defaultBindings, validateBindings } from "../core/keybindings.mjs";
 import { ACPConfigStore } from "../core/acp-config.mjs";
 import { registerACP, probeACP } from "../core/providers/acp.mjs";
@@ -61,6 +62,8 @@ import { DebuggerService, handlesDebugger } from "./services/debugger.mjs";
 import { ComposerStore } from "./services/composer.mjs";
 import { LanguageService } from "./services/language.mjs";
 import { DraftStore } from "./services/drafts.mjs";
+import { diffPreview, captureDiffReference, openReference } from "./services/comment-anchors.mjs";
+import { ReferenceRefreshService } from "./services/reference-refresh.mjs";
 import { GitService } from "./services/git.mjs";
 import {
   captureReference,
@@ -69,6 +72,7 @@ import {
 } from "./services/references.mjs";
 import { UpdateService } from "./services/updater.mjs";
 import { TerminalService } from "./services/terminal.mjs";
+import { ProviderCLIService } from "./services/provider-cli.mjs";
 import { BrowserService, browserURL } from "./services/browser.mjs";
 import { shellCommand, binaryName, stopProcess } from "../core/platform.mjs";
 import {
@@ -199,6 +203,7 @@ config.modelCatalogs ??= {};
 const repoLocks = new Set();
 const canonicalRoot = (root) => realpathSync(root);
 function agentBusy(root) {
+  if (providerCLIService.activeIn(root)) return true;
   if (
     [...runtime.runs.values()].some((run) => {
       try {
@@ -293,6 +298,7 @@ const state = () => ({
   local: {
     keyboard: { ...defaultBindings(process.platform), ...config.keyboard },
     runIssues: coordinator?.issues || [],
+    referenceIssues: [...referenceIssues.values()],
     update: updater?.getState(),
     laneOptions: config.laneOptions,
     modelCatalogs: config.modelCatalogs,
@@ -346,6 +352,24 @@ const localRoot = (a) => {
   if (!p) throw Error("请先为此工作区关联本机项目目录");
   return p;
 };
+async function withReferenceContext(a,operation) {
+  const c=client;
+  const session=c?.state?.sessions.find(s=>s.id===a.sessionId&&s.workspaceId===a.workspaceId);
+  if(!session)throw Error('会话不存在或无权访问');
+  if(a.laneId&&!session.lanes.some(l=>l.id===a.laneId&&l.ownerId===c.state.me.id))throw Error('只能读取本机 Agent 的工作目录');
+  const root=canonicalRoot(localRoot(a));
+  const result=await operation(root,c);
+  if(c!==client||canonicalRoot(localRoot(a))!==root||!c.state.sessions.some(s=>s.id===a.sessionId&&s.workspaceId===a.workspaceId))throw Error('项目或连接已切换，请重新打开');
+  return result;
+}
+const providerCLIService = new ProviderCLIService({
+  terminals: terminalService,
+  state: () => client?.state,
+  root: localRoot,
+  accounts: () => accounts.accounts,
+  env: () => local.localEnv(),
+  isBusy: (root) => repoLocks.has(root) || rootBusy(root),
+});
 const fileSearchService = new FileSearchService({
   resolveRoot: (a) => {
     const session = client?.state?.sessions.find(s => s.id === a.sessionId && s.workspaceId === a.workspaceId);
@@ -355,6 +379,10 @@ const fileSearchService = new FileSearchService({
     return localRoot(a);
   },
 });
+const referenceIssues = new Map();
+const referenceRefresh = new ReferenceRefreshService({client:()=>client,onIssue:({workspaceId,sessionId,message})=>{
+  const key=sessionId||workspaceId;if(message)referenceIssues.set(key,{workspaceId,sessionId,message});else referenceIssues.delete(key);emit();
+}});
 const coordinator = new RunCoordinator({
   runtime,
   client: () => client,
@@ -402,6 +430,7 @@ const coordinator = new RunCoordinator({
       registerACP(runtime, a.provider, settings);
       configuredModel = settings.model;
     }
+    if (providerCLIService.activeIn(canonicalRoot(localRoot(a)))) throw Error("请先关闭此目录的 Provider CLI");
     if (debuggerService.isBusy(localRoot(a))) throw Error("请先停止项目调试");
     if (repoLocks.has(canonicalRoot(localRoot(a))))
       throw Error("项目正在执行 Git 操作，请稍后重试");
@@ -459,8 +488,10 @@ const taskCoordination = createTaskCoordination({
   saveConfig,
   dataDir: dir,
   withRepository,
+  onApplied: args=>referenceRefresh.refresh(args),
 });
 const coordinationBridge = new CoordinationBridge({client:()=>client,runtime,taskCoordination});
+const workspaceLifecycle = createWorkspaceLifecycle({client:()=>client,coordinator,runtime,store:()=>settingsStore,config,saveConfig,runImages,saveRunImages,isBusy:root=>{try{const canonical=canonicalRoot(root);return repoLocks.has(canonical)||rootBusy(canonical);}catch{return false;}},lockRoots:roots=>{const resolved=[...new Set(roots.flatMap(root=>{try{return [canonicalRoot(root)];}catch(e){if(e.code==="ENOENT")return [];throw e;}}))];if(resolved.some(root=>repoLocks.has(root)||rootBusy(root)))throw Error("本机项目仍在操作中");resolved.forEach(root=>repoLocks.add(root));return ()=>resolved.forEach(root=>repoLocks.delete(root));},localReceipt:journal=>!remote&&hub?.db.workspaceDeletionReceipts?.some(r=>r.previewId===journal.previewId&&r.workspaceId===journal.workspaceId&&r.ownerId===journal.ownerId)?{deleted:true}:null});
 const teamIdentity = createTeamIdentity({
   client: () => client,
   endpoint: () => client?.url,
@@ -479,6 +510,7 @@ const connectionSecret = (url) =>
         .digest("hex")
     : config.secret;
 async function connect(url, token) {
+  providerCLIService.closeAll();
   coordinationBridge.revokeAll();
   await coordinator.close();
   client?.close();
@@ -516,6 +548,7 @@ async function connect(url, token) {
   try {
     await next.connect(url, auth);
     pendingTeamConnection = null;
+    await workspaceLifecycle.recover();
     await coordinator.resume();
   } catch (error) {
     if (/GitHub.*身份|GitHub.*用户/.test(error.message))
@@ -529,6 +562,7 @@ async function processRuns() {
 }
 async function syncSession(sessionId) {
   if (!online || syncBusy.has(sessionId)) return;
+  const syncClient=client;
   const s = client?.state?.sessions.find((s) => s.id === sessionId);
   const lane = s?.lanes.find((l) => l.ownerId === client.state.me.id);
   if (!s || !lane) return;
@@ -586,6 +620,7 @@ async function syncSession(sessionId) {
         laneId: lane.id,
         ...snapshot,
       });
+    await referenceRefresh.refresh({root,workspaceId:s.workspaceId,sessionId,reason:"快照同步",expectedClient:syncClient,isCurrent:()=>canonicalRoot(config.sessionPaths[sessionId])===canonical});
     syncStates.set(sessionId, { status: "synced", ...snapshot });
     await client.call("snapshot.status", {
       sessionId,
@@ -689,6 +724,7 @@ const hubMethods = new Set([
   "member.remove",
   "plan.assign",
   "plan.claim",
+  "plan.release",
   "plan.status",
   "plan.transfer",
   "comment.resolve",
@@ -696,6 +732,7 @@ const hubMethods = new Set([
   "comment.check",
   "memory.update",
   "memory.check",
+  "memory.history",
   "lock.acquire",
   "lock.renew",
   "lock.release",
@@ -704,6 +741,7 @@ const hubMethods = new Set([
 ]);
 async function invoke(method, a) {
   if (method === "bootstrap") return state();
+  if (["workspace.delete.preview","workspace.delete"].includes(method)) { const result=await workspaceLifecycle.invoke(method,a); emit(); return result; }
   if (method === "link.open") {
     await shell.openExternal(browserURL(a.url));
     return true;
@@ -762,10 +800,11 @@ async function invoke(method, a) {
       !["failed", "unsupported", "restored"].includes(instruction.status)
     )
       throw Error("这条指导还不能恢复");
+    const original = await client.call("run.steer.read", { sessionId: a.sessionId, laneId: a.laneId, runId: instruction.runId, id: a.id, restore: true });
     const value = composerStore.restore({
       laneId: a.laneId,
       id: a.id,
-      text: instruction.text,
+      text: original.text,
       images: runImages.get(a.id) || [],
     });
     // Durable local receipt precedes shared acknowledgement; retries never duplicate text.
@@ -801,8 +840,21 @@ async function invoke(method, a) {
   if (method === "draft.read") return drafts.read(a.key);
   if (method === "draft.set") return drafts.set(a.key, a.value);
   if (method === "draft.remove") return drafts.remove(a.key);
-  if (method.startsWith("git.") && gitMethods.has(method.slice(4)))
-    return gitService[method.slice(4)](localRoot(a), a);
+  if (method.startsWith("git.") && gitMethods.has(method.slice(4))) {
+    const root=localRoot(a),c=client;
+    if(method==='git.diff')return withReferenceContext(a,r=>diffPreview(r,a,gitService));
+    const result=await gitService[method.slice(4)](root,a);
+    if(c===client&&['git.pull','git.commit','git.switchBranch','git.createBranch'].includes(method))await referenceRefresh.refresh({root,workspaceId:a.workspaceId,sessionId:a.sessionId,reason:'Git 更新',expectedClient:c,isCurrent:()=>canonicalRoot(localRoot(a))===canonicalRoot(root)});
+    return result;
+  }
+  if (method === "references.diff") return withReferenceContext(a,root=>captureDiffReference(root,a,gitService));
+  if (method === "references.open") return withReferenceContext(a,async(root,c)=>{
+    const snapshot=await c.call('state');
+    const session=snapshot.sessions.find(s=>s.id===a.sessionId&&s.workspaceId===a.workspaceId);
+    const comment=session?.comments.find(v=>v.id===a.commentId);
+    if(!comment?.location)throw Error('评论位置已不可访问');
+    return openReference(root,comment.location,gitService);
+  });
   if (method === "references.capture") return captureReference(localRoot(a), a);
   if (method === "references.files") return fileReferences(localRoot(a), a);
   if (method === "references.check") return checkReferences(localRoot(a), a);
@@ -894,6 +946,7 @@ async function invoke(method, a) {
   if (method === "dictation.start")
     return dictation.start("zh-CN", { targetId: String(a.targetId || "") });
   if (method === "dictation.stop") return dictation.stop();
+  if (method === "terminal.provider.open") return providerCLIService.open(win.webContents.id, a);
   if (method === "terminal.open")
     return terminalService.open(win.webContents.id, {
       cwd: localRoot(a),
@@ -908,8 +961,10 @@ async function invoke(method, a) {
       "terminal.resize",
       "terminal.close",
     ].includes(method)
-  )
+  ) {
+    if (method !== "terminal.close") await providerCLIService.authorize(win.webContents.id, a.id);
     return terminalService[method.split(".")[1]](win.webContents.id, a);
+  }
   if (
     [
       "browser.open",
@@ -1197,9 +1252,11 @@ async function invoke(method, a) {
     return snapshots.conflictVersions(localRoot(a), a.path);
   if (method === "sync.resolve") {
     if (syncBusy.has(a.sessionId)) throw Error("代码正在同步，请稍后重试");
-    const result = await withRepository(localRoot(a), () =>
-      snapshots.resolveConflict(localRoot(a), a),
-    );
+    const result = await withRepository(localRoot(a), async () => {
+      const c=client,root=localRoot(a),result=await snapshots.resolveConflict(root,a);
+      if(result.status==='synced')await referenceRefresh.refresh({root,workspaceId:a.workspaceId,sessionId:a.sessionId,reason:'解决同步冲突',expectedClient:c});
+      return result;
+    });
     syncStates.set(a.sessionId, result);
     emit();
     return result;
@@ -1208,8 +1265,11 @@ async function invoke(method, a) {
   if (method === "file.search") return fileSearchService.start(win.webContents.id, a);
   if (method === "file.search.cancel") return fileSearchService.cancel(win.webContents.id, a);
   if (method === "file.read") return local.readBound(canonicalRoot(localRoot(a)), a.path);
-  if (method === "file.save")
-    return local.saveBound(canonicalRoot(localRoot(a)), a.path, a.content, a.hash, a.expectedRoot);
+  if (method === "file.save") {
+    const c=client,root=canonicalRoot(localRoot(a)),result=await local.saveBound(root,a.path,a.content,a.hash,a.expectedRoot);
+    await referenceRefresh.refresh({root,workspaceId:a.workspaceId,sessionId:a.sessionId,reason:'保存文件',paths:[a.path],expectedClient:c,isCurrent:()=>canonicalRoot(localRoot(a))===root});
+    return result;
+  }
   if (method === "git.changes") return local.changes(localRoot(a));
   if (method === "diff.publish") {
     const change = await local.changes(localRoot(a));
@@ -1233,11 +1293,12 @@ async function invoke(method, a) {
     return true;
   }
   if (method === "share.create") {
-    if (remote) throw Error("请由房主生成邀请");
     let server,
       addresses = [],
       port;
-    if (a.internet) {
+    if (remote) {
+      server = client.url;
+    } else if (a.internet) {
       const endpoint = await tunnel.start(hub.port);
       server = endpoint.replace(/^https:/, "wss:");
     } else {
@@ -1250,6 +1311,7 @@ async function invoke(method, a) {
     }
     const invite = await client.call("invite.create", {
       workspaceId: a.workspaceId,
+      ...(a.scope === "session" ? {sessionId:a.sessionId} : {}),
       role: a.role || "editor",
       ...(a.githubLogin ? { githubLogin: a.githubLogin } : {}),
     });
@@ -1266,6 +1328,7 @@ async function invoke(method, a) {
       addresses,
       port,
       expires: invite.expires,
+      id: invite.id, sessionId:invite.sessionId,
       internet: !!a.internet,
     };
   }

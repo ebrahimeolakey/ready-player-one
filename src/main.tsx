@@ -1,3 +1,4 @@
+import { WorkspaceDeletion } from "./WorkspaceDeletion";
 import { KeyboardContext, KeyboardSettings, shortcutsAllowed } from "./KeyboardSettings";
 import { matchesBinding } from "../core/keybindings.mjs";
 import React, { useState, useEffect, useRef } from "react";
@@ -83,6 +84,7 @@ function App() {
     [share, setShare] = useState<any>(null),
     [internet, setInternet] = useState(true),
     [inviteRole, setInviteRole] = useState("editor"),
+    [inviteScope,setInviteScope] = useState("session"),
     [inviteGithub,setInviteGithub]=useState(""),
     [loading, setLoading] = useState(false),
     [sessionMenu, setSessionMenu] = useState(""),
@@ -162,6 +164,8 @@ function App() {
     }
   };
   const beginShare = () => {
+    setInviteScope(session || !(state.me?.roles?.[workspace]==="owner"||state.me?.host) ? "session" : "workspace");
+    setInviteRole("editor");
     setShare(null);
     setModal("share");
   };
@@ -892,6 +896,7 @@ function App() {
                   </button>
                 ))}
               </div>
+              {workspace&&(state.me?.roles?.[workspace]==="owner"||state.me?.host)&&<WorkspaceDeletion key={workspace} workspaceId={workspace} call={call} onDeleted={()=>{setWorkspace("");setSelected("");setModal("");notify("工作区已删除，本地项目已保留");}}/>}
               <div className="menu-actions">
                 {!state.local.remote && (
                   <button className="button full" onClick={addProject}>
@@ -971,11 +976,12 @@ function App() {
           {modal === "share" && (
             <>
               <div className="nav-label">邀请</div>
-              {state.local.remote ? (
-                <p className="small-note">请向房主获取邀请</p>
+              {!["owner","editor"].includes(state.me?.roles?.[workspace] || (state.me?.host ? "owner" : "viewer")) ? (
+                <p className="small-note">请向编辑者获取会话邀请</p>
               ) : (
                 <>
-                  <select
+                  <select className="full" aria-label="邀请范围" value={inviteScope} disabled={loading||!!share} onChange={e=>{setInviteScope(e.target.value);setInviteRole("editor");}}><option value="session" disabled={!session}>当前会话</option>{(state.me?.roles?.[workspace]==="owner"||state.me?.host)&&<option value="workspace">整个工作区</option>}</select>
+                  {!state.local.remote&&<select
                     className="full"
                     aria-label="协作网络"
                     value={internet ? "internet" : "lan"}
@@ -984,12 +990,12 @@ function App() {
                   >
                     <option value="internet">互联网</option>
                     <option value="lan">局域网 / VPN</option>
-                  </select>
+                  </select>}
                   <select className="full" aria-label="邀请权限" value={inviteRole} disabled={loading||!!share} onChange={e=>setInviteRole(e.target.value)}>
-                    {Object.entries(roleNames).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+                    {Object.entries(roleNames).filter(([value])=>inviteScope==="workspace"||value!=="owner").map(([value,label])=><option key={value} value={value}>{label}</option>)}
                   </select>
                   {state.identity?.configured&&<input className="full" aria-label="受邀 GitHub 用户名" placeholder="GitHub 用户名（可选）" value={inviteGithub} disabled={loading||!!share} onChange={e=>setInviteGithub(e.target.value)}/>}
-                  {internet && !state.local.tunnel?.installed ? (
+                  {!state.local.remote && internet && !state.local.tunnel?.installed ? (
                     <button
                       className="button primary full"
                       disabled={state.local.installations?.some(
@@ -1019,13 +1025,14 @@ function App() {
                   ) : (
                     <button
                       className="button primary full"
-                      disabled={loading || !ws}
+                      disabled={loading || !ws || (inviteScope==="session"&&!session)}
                       onClick={async () => {
                         setLoading(true);
                         const result = await call("share.create", {
                           workspaceId: workspace,
                           sessionId: session?.id,
                           internet,
+                          scope: inviteScope,
                           role: inviteRole,
                           githubLogin:inviteGithub.trim()||undefined,
                         });
@@ -1077,25 +1084,25 @@ function App() {
               )}
               <div className="nav-label">有权访问</div>
               {state.members.filter(m=>!m.workspaceId||m.workspaceId===workspace).map((m) => (
-                <div className="member-row" key={m.id}>
+                <div className="member-row" key={m.id+":"+(m.sessionId||"workspace")}>
                   <Avatar name={m.name} small />
                   <div>
                     <strong>{m.name}</strong>
-                    <small>{m.host ? "房主" : roleNames[m.role||"editor"]}</small>
+                    <small>{m.host ? "房主" : roleNames[m.role||"editor"]}{m.sessionId ? " · 会话" : ""}</small>
                   </div>
                   {(state.me?.roles?.[workspace]==="owner"||state.me?.host)&&!m.host&&<>
-                    <select aria-label={m.name+"的权限"} value={m.role||"editor"} onChange={e=>call("member.role",{workspaceId:workspace,memberId:m.id,role:e.target.value})}>{Object.entries(roleNames).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>
-                    <button title={"移除"+m.name} onClick={()=>call("member.remove",{workspaceId:workspace,memberId:m.id})}><X size={14}/></button>
+                    <select aria-label={m.name+"的权限"} value={m.role||"editor"} onChange={e=>call("member.role",{workspaceId:workspace,sessionId:m.sessionId,memberId:m.id,role:e.target.value})}>{Object.entries(roleNames).filter(([value])=>!m.sessionId||value!=="owner").map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>
+                    <button title={"移除"+m.name} onClick={()=>call("member.remove",{workspaceId:workspace,sessionId:m.sessionId,memberId:m.id})}><X size={14}/></button>
                   </>}
                 </div>
               ))}
-              {!state.local.remote && (
+              {(share || state.me?.roles?.[workspace]==="owner" || state.me?.host) && (
                 <button
                   className="text-button danger"
                   onClick={async () => {
-                    await call("invite.revoke", { workspaceId: workspace });
-                    setShare(null);
-                    notify("邀请已撤销");
+                    if (await call("invite.revoke", { workspaceId: workspace, ...(share?.id ? {id:share.id,sessionId:share.sessionId} : {}) })) {
+                      setShare(null); notify("邀请已撤销");
+                    }
                   }}
                 >
                   撤销邀请
@@ -1104,7 +1111,7 @@ function App() {
               <details className="help-details">
                 <summary>共享范围</summary>
                 <p>
-                  受邀成员可访问当前工作区的会话、评论、记忆、审批和已共享变更。互联网邀请经
+                  {inviteScope==="session" ? "仅当前会话、计划、评论、审批和已共享变更；不包含其他会话或共享记忆。" : "当前工作区的会话、评论、记忆、审批和已共享变更。"}互联网邀请经
                   Cloudflare 临时中继。
                 </p>
               </details>

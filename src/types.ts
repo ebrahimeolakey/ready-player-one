@@ -45,14 +45,14 @@ export type Session = {
   owner: string;
   at: string;
   lanes: Lane[];
-  plan: { id: string; text: string; owner: string; done: boolean; status?:string; assigneeId?:string|null; assignee?:string|null; ownerId?:string; fileScopes?:FileScope[]; transferRequest?:{id:string;fromId:string;toId:string;status:string} }[];
+  plan: { id: string; text: string; owner: string; done: boolean; status?:string; assigneeId?:string|null; assignee?:string|null; ownerId?:string; fileScopes?:FileScope[]; history?:{actorId:string;actor:string;action:string;at:string;note?:string;previous?:{assigneeId?:string;status?:string}}[]; transferRequest?:{id:string;fromId:string;toId:string;status:string} }[];
   comments: {
     id: string;
     text: string;
     owner: string;
     at: string;
     anchor: string;
-    status?:string; stale?:boolean; taskId?:string; location?:{path:string;startLine:number;endLine:number;commit:string};
+    status?:string; stale?:boolean; taskId?:string; location?:{path:string;startLine:number;endLine:number;commit:string;hash?:string;blob?:string;side?:string;kind?:string;excerpt?:string}; transcript?:{laneId:string;entryId:string;hash:string;at:string};
   }[];
   diff: string;
   files: { path: string; status: string }[];
@@ -99,8 +99,8 @@ export type State = {
     retired: boolean;
   }[];
   approvals: Approval[];
-  members: { id: string; name: string; host: boolean; workspaceId?:string; role?:string; online?:boolean }[];
-  me?: { id: string; name: string; host: boolean; role?:string; roles?:Record<string,string> };
+  members: { id: string; name: string; host: boolean; workspaceId?:string; sessionId?:string; role?:string; online?:boolean }[];
+  me?: { id: string; name: string; host: boolean; sessionId?:string; role?:string; roles?:Record<string,string> };
   toolApprovals?: {id:string;sessionId:string;laneId:string;owner:string;status:string;action:string;input:any}[];
   locks?: {id:string;workspaceId:string;sessionId:string;laneId:string;owner:string;ownerId:string;path:string;expires:number}[];
   messages?: {id:string;sessionId:string;owner:string;text:string;at:string}[];
@@ -108,6 +108,7 @@ export type State = {
   identity?:{configured:boolean;issuer?:string|null;audience:string};
   shared?: boolean;
   local: {
+    referenceIssues?:{workspaceId:string;sessionId?:string;message:string}[];
     keyboard?:Record<string,string>;
     modelCatalogs?:Record<string,import("./ProviderControls").ProviderModel[]>;
     laneOptions?: Record<string,{model?:string;effort?:string}>;

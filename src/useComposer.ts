@@ -114,7 +114,7 @@ export function useComposer(laneId: string) {
       });
     });
     model.queue = task.catch((e) => {
-      publish(model, { error: e instanceof Error ? e.message : String(e) });
+      publish(model, { error: "草稿未保存：" + (e instanceof Error ? e.message : String(e)) });
     });
     return task;
   }

@@ -1,3 +1,4 @@
+import { validatePrompt, DRAFT_LIMITS } from "../../core/prompt-limits.mjs";
 import { normalizeImages } from "../../core/providers/input.mjs";
 import { randomUUID } from "node:crypto";
 
@@ -43,8 +44,7 @@ export class ComposerStore {
     const old = this.read(laneId);
     if (!Number.isInteger(revision) || revision < 0)
       throw Error("输入框版本无效");
-    if (typeof text !== "string" || text.length > 20000)
-      throw Error("输入不能超过 20000 字符");
+    validatePrompt(text, { allowEmpty: true, limits: DRAFT_LIMITS });
     images = normalizeImages(images);
     const same = value => value.text === text && JSON.stringify(value.images) === JSON.stringify(images);
     if (same(old)) return old;
@@ -67,8 +67,7 @@ export class ComposerStore {
   }
   merge(old, text, images) {
     const merged = text && text !== old.text ? (old.text ? old.text + "\n\n" + text : text) : old.text;
-    if (merged.length > 20000)
-      throw Error("恢复后输入超过 20000 字符，请先处理当前草稿");
+    validatePrompt(merged, { allowEmpty: true, limits: DRAFT_LIMITS });
     const combined = [...old.images];
     for (const image of normalizeImages(images))
       if (!combined.some(value => value.data === image.data && value.mimeType === image.mimeType))

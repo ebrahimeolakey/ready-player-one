@@ -1,3 +1,4 @@
+import { validatePrompt } from "../../core/prompt-limits.mjs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
@@ -9,7 +10,7 @@ import { checkpointSubtaskSource, createSubtask, captureCandidate, reviewCandida
 const exec = promisify(execFile);
 const supported = new Set(["tasks.spawn", "tasks.review", "tasks.check", "tasks.integrate", "tasks.settings.get", "tasks.settings.save", "handoff.prepare", "handoff.receive"]);
 export const handlesTaskCoordination = method => supported.has(method);
-export function createTaskCoordination({ client, runtime, localRoot, config, saveConfig, dataDir, withRepository=async(_root,action)=>action() }) {
+export function createTaskCoordination({ client, runtime, localRoot, config, saveConfig, dataDir, withRepository=async(_root,action)=>action(), onApplied=async()=>{} }) {
   config.lanePaths ??= {};
   async function context(args) {
     const c = client();
@@ -82,14 +83,15 @@ export function createTaskCoordination({ client, runtime, localRoot, config, sav
       const ctx = await context(args), { c, state, session, params, task, handoff } = ctx;
       if (method === "tasks.spawn") {
         const parent = ownedLane(ctx, args.parentLaneId);
-        if (typeof args.title !== "string" || !args.title.trim() || args.title.length > 200 || typeof args.prompt !== "string" || !args.prompt.trim() || args.prompt.length > 20000) throw Error("请填写子任务标题和要求");
+        if (typeof args.title !== "string" || !args.title.trim() || args.title.length > 200) throw Error("请填写子任务标题和要求");
+        validatePrompt(args.prompt);
         if (!Array.isArray(args.checkCommands) || !args.checkCommands.length || args.checkCommands.length > 20 || args.checkCommands.some(v => typeof v !== "string" || !v.trim() || v.length > 10000)) throw Error("请明确输入至少一项必需检查命令");
         // Only the renderer's explicit user form supplies commands; Agent messages never feed this config.
         const requiredChecks = args.checkCommands.map((line, index) => { const [command, shellArgs] = shellCommand(line); return { id: `check-${index + 1}`, command, args: shellArgs }; });
         const root = localRoot({ ...params, laneId: parent.id });
         await assertBoundContext(root, session.id);
         const baseCommit = await checkpointSubtaskSource(root);
-        const created = await c.call("subtask.request", { ...params, parentLaneId: parent.id, ownerId: state.me.id, title: args.title.trim(), prompt: args.prompt.trim(), baseCommit, requiredCheckIds: requiredChecks.map(c => c.id) });
+        const created = await c.call("subtask.request", { ...params, parentLaneId: parent.id, ownerId: state.me.id, title: args.title.trim(), prompt: validatePrompt(args.prompt), baseCommit, requiredCheckIds: requiredChecks.map(c => c.id) });
         try {
           const local = await createSubtask(root, { id: created.id, baseCommit, requiredChecks });
           await bindSessionWorktree(local.worktree, {sessionId:session.id, expectedBranch:local.branch});
@@ -123,6 +125,7 @@ export function createTaskCoordination({ client, runtime, localRoot, config, sav
           if (latest.task.status !== "review" || latest.task.candidate?.commit !== args.candidateCommit) throw Error("候选或协作权限已经改变");
         } });
         if (result.status === "integrated") {
+          await onApplied({root,...params,expectedClient:c,reason:"子任务集成"});
           await c.call("subtask.integrated", { id: task.id, candidateCommit: args.candidateCommit, integrationCommit: result.integrationCommit, checks: result.integrationChecks }).catch(async error => {
             const latest = await c.call("state");
             const accepted = latest.subtasks?.find(t => t.id === task.id);
@@ -166,6 +169,7 @@ export function createTaskCoordination({ client, runtime, localRoot, config, sav
         const sync = await receiveSnapshot(root, { sessionId: session.id, snapshot: prepared.checkpoint.snapshot });
         await c.call("snapshot.status", { ...params, laneId: handoff.targetLaneId, status: sync.status === "conflict" ? "conflict" : ["current", "synced"].includes(sync.status) ? "synced" : "paused", message: sync.status === "conflict" ? (sync.files || []).join("、") : "接管快照" });
         if (!["current", "synced"].includes(sync.status)) return { status: sync.status, files: sync.files, message: sync.status === "conflict" ? "请先在代码同步中解决冲突，再接管" : "快照已更新，请原执行者重新确认" };
+        await onApplied({root,...params,expectedClient:c,reason:"接管快照"});
         return { status: "accepted", ...await c.call("handoff.accept", { id: handoff.id, syncedCommit: prepared.checkpoint.snapshot.commit, mode: args.mode || "read-only" }) };
         });
       }

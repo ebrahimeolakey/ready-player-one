@@ -62,7 +62,7 @@ export class TeamIdentity {
     if(identity&&identity.github.id!==github.id)throw Error("此本机身份已绑定另一个 GitHub 账号");
     if(!identity){identity={peerId};this.hub.db.identities.push(identity);}
     Object.assign(identity,{github,sessionHash:secretHash(token),expires});
-    for(const member of this.hub.db.members)if(member.id===peerId)member.github={id:github.id,login:github.login,verifiedAt:github.verifiedAt};
+    for(const member of [...this.hub.db.members,...(this.hub.db.sessionMembers||[])])if(member.id===peerId)member.github={id:github.id,login:github.login,verifiedAt:github.verifiedAt};
     return {identitySession:token,identityExpires:expires,github:identity.github};
   }
   authenticate(peerId,{identityProof,identitySession},workspaceId,requiredLogin) {

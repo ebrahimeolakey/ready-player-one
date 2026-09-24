@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Brain, FileCode2, Pencil, Plus, RefreshCw } from "lucide-react";
 import type { State } from "./types";
 import { Empty, Modal, type Call } from "./ui";
 type Reference = { path: string; hash?: string; commit: string };
 type Memory = State["memories"][number] & {
+  version?:number;historyCount?:number;
   files?: Reference[];
   stale?: boolean;
   staleFiles?: { path: string }[];
@@ -24,8 +25,11 @@ export function MemoryPanel({
     [busy, setBusy] = useState(false),
     [showRetired, setShowRetired] = useState(false),
     [notice, setNotice] = useState("");
+  const activeWorkspace=useRef(workspaceId);activeWorkspace.current=workspaceId;
+  const [history,setHistory]=useState<{id:string;items:any[];nextBefore:number|null}|null>(null);
   useEffect(() => {
     setEditing(null);
+    setHistory(null);
     setNotice("");
   }, [workspaceId]);
   const role = state.me?.host
@@ -74,7 +78,7 @@ export function MemoryPanel({
         editing === "new" ? "memory.add" : "memory.update",
         {
           workspaceId,
-          ...(editing === "new" ? {} : { id: editing.id }),
+          ...(editing === "new" ? {} : { id: editing.id,expectedVersion:editing.version||0 }),
           title,
           text,
           ...(changed ? { files } : {}),
@@ -119,6 +123,7 @@ export function MemoryPanel({
       const result = await call("memory.update", {
         workspaceId,
         id: memory.id,
+        expectedVersion:memory.version||0,
         files,
       });
       if (result) setNotice("引用已更新");
@@ -166,6 +171,7 @@ export function MemoryPanel({
         </label>
         {notice && <small role="status">{notice}</small>}
       </div>
+      {(state.local.referenceIssues||[]).filter(v=>v.workspaceId===workspaceId).map(v=><p role="status" className="warning" key={v.sessionId||v.workspaceId}>引用检查未完成：{v.message}。可点击“检查过期”重试。</p>)}
       {visible.map((memory) => (
         <article
           className={"memory-card " + (memory.retired ? "retired" : "")}
@@ -209,6 +215,7 @@ export function MemoryPanel({
           )}
           <footer>
             <small>{memory.owner}</small>
+            {!!memory.historyCount&&<button className="text-button" onClick={async()=>{const r=await call('memory.history',{workspaceId,id:memory.id});if(r&&activeWorkspace.current===workspaceId)setHistory({id:memory.id,...r});}}>修改历史</button>}
             <div style={{ display: "flex", gap: 8 }}>
               {!!memory.files?.length && !memory.retired && (
                 <>
@@ -255,6 +262,7 @@ export function MemoryPanel({
         </article>
       ))}
       {!visible.length && <Empty icon={Brain} title="暂无记忆" />}
+      {history&&<Modal title="记忆修改历史" close={()=>setHistory(null)}>{history.items.map(h=><article key={h.version}><strong>版本 {h.version} · {h.title}</strong><small>{h.actor} · {new Date(h.at).toLocaleString()}</small><p style={{whiteSpace:'pre-wrap'}}>{h.text}</p><small>{h.files.map((f:Reference)=>f.path).join('、')}</small></article>)}{history.nextBefore!==null&&<button className="button" onClick={async()=>{const r=await call('memory.history',{workspaceId,id:history.id,beforeVersion:history.nextBefore});if(r&&activeWorkspace.current===workspaceId)setHistory({...history,items:[...history.items,...r.items],nextBefore:r.nextBefore});}}>更早记录</button>}</Modal>}
       {editing && (
         <Modal
           title={editing === "new" ? "新建记忆" : "编辑记忆"}

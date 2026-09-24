@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {createHash} from 'node:crypto';
+import {Hub} from './helpers/secure-hub.mjs';
+const hash=v=>createHash('sha256').update(v).digest('hex');
+test('message comments bind visible transcript hash, reject changed/pruned/foreign entries, persist without message copy',async t=>{
+ const dir=await mkdtemp(join(tmpdir(),'rpo-transcript-comment-'));const hub=new Hub(dir);t.after(async()=>{await hub.close();await rm(dir,{recursive:true,force:true});});
+ const owner={id:'owner',name:'Owner',host:true};const w=hub.act(owner,'workspace.create',{name:'test'});const s=hub.act(owner,'session.create',{workspaceId:w.id,title:'comments'});const other=hub.act(owner,'session.create',{workspaceId:w.id,title:'other'});const l=hub.act(owner,'lane.create',{sessionId:s.id,provider:'codex'});
+ hub.entry(l,'assistant','原始回答');const e=l.entries.at(-1);const params={workspaceId:w.id,sessionId:s.id,text:'请确认',transcript:{laneId:l.id,entryId:e.id,expectedHash:hash(e.text)}};
+ const commenter={id:'commenter',name:'Commenter',workspaceId:w.id};hub.registerMember(commenter,w.id,'commenter');const viewer={id:'viewer',name:'Viewer',workspaceId:w.id};hub.registerMember(viewer,w.id,'viewer');
+ assert.throws(()=>hub.act(viewer,'comment.add',params),/commenter/);
+ const c=hub.act(commenter,'comment.add',params);assert.equal(c.transcript.hash,hash(e.text));assert.equal(c.transcript.entryId,e.id);assert.equal(c.transcript.text,undefined);
+ assert.throws(()=>hub.act(owner,'comment.add',{...params,sessionId:other.id}),/不存在/);
+ assert.throws(()=>hub.act(owner,'comment.add',{...params,location:{path:'a',startLine:1,commit:'a'.repeat(40)}}),/一种/);
+ e.text='已变化';assert.throws(()=>hub.act(owner,'comment.add',params),/已变化/);l.entries=[];assert.throws(()=>hub.act(owner,'comment.add',params),/保留期/);
+ assert.equal(hub.snapshot(viewer).sessions.find(v=>v.id===s.id).comments[0].transcript.entryId,e.id);
+ hub.save();assert.equal(hub.store.readJSON(hub.file,{}).sessions.find(v=>v.id===s.id).comments[0].transcript.entryId,e.id);
+});

@@ -1,15 +1,17 @@
+import { PROMPT_LIMITS, validatePrompt } from "./prompt-limits.mjs";
 // MCP 2025-06-18 stdio transport. No credentials are returned to tools or stdout.
 import { pathToFileURL } from "node:url";
 import { HubClient } from "./client.mjs";
 
 const string = { type: "string" };
+const promptString = { type: "string", maxLength: PROMPT_LIMITS.codePoints, description: "完整原文：最多100,000 Unicode码点/400,000 UTF-8字节。协调检查只分析前8,000码点并返回明确摘要覆盖信息；不会修改实际执行原文。" };
 const ref = { type: "object", properties: { path: string, commit: string, hash: string }, required: ["path", "commit"], additionalProperties: false };
 const scope = {type:"object",properties:{path:string,kind:{enum:["file","directory"]}},required:["path","kind"],additionalProperties:false};
 const scopes = {type:"array",items:scope,maxItems:100};
 const definitions = [
   ["context", "coordination.context", "读取当前会话、计划、成员、共享记忆、文件锁和 Agent 消息。", {}, []],
   ["plan_add", "plan.add", "在当前会话拆分一个可分配的计划步骤。", { text: string, assigneeId: string, fileScopes:scopes }, ["text"]],
-  ["overlap_check", "coordination.check", "检查当前通道的文件/目录、计划和其他活动任务是否相交；结果为确定性建议，不阻止本机写入。", {prompt:string,fileScopes:scopes,planIds:{type:"array",items:string,maxItems:50},branch:string}, []],
+  ["overlap_check", "coordination.check", "检查当前通道的文件/目录、计划和其他活动任务是否相交；结果为确定性建议，不阻止本机写入。", {prompt:promptString,fileScopes:scopes,planIds:{type:"array",items:string,maxItems:50},branch:string}, []],
   ["plan_claim", "plan.claim", "认领尚未由其他成员领取的步骤。", { id: string }, ["id"]],
   ["plan_assign", "plan.assign", "分配当前会话的已有步骤；进行中步骤仍需双方确认转交。", { id: string, assigneeId: string }, ["id", "assigneeId"]],
   ["plan_status", "plan.status", "更新步骤进度。", { id: string, status: { enum: ["todo", "in-progress", "blocked", "done"] } }, ["id", "status"]],
@@ -19,7 +21,7 @@ const definitions = [
   ["memory_list", "memory.list", "读取当前工作区记忆，可包含停用项；不会查询其他工作区。", { includeRetired: { type: "boolean" } }, []],
   ["memory_update", "memory.update", "更新当前工作区的已有记忆；引用应来自实际文件，不自动验证本机内容。", { id: string, title: string, text: string, files: { type: "array", items: ref, maxItems: 100 } }, ["id"]],
   ["memory_retire", "memory.retire", "明确停用或恢复当前工作区记忆，重复相同决定不会反转状态。", { id: string, retired: { type: "boolean" } }, ["id", "retired"]],
-  ["subtask_spawn", "local.subtask.spawn", "从当前执行拆分子任务，在本机创建独立工作树，使用用户预配置检查，等待人工执行审批。requestId 使用 UUID，超时重试保留原值与相同内容。", { requestId: string, title: string, prompt: string }, ["requestId", "title", "prompt"]],
+  ["subtask_spawn", "local.subtask.spawn", "从当前执行拆分子任务，在本机创建独立工作树，使用用户预配置检查，等待人工执行审批。requestId 使用 UUID，超时重试保留原值与相同内容。", { requestId: string, title: string, prompt: promptString }, ["requestId", "title", "prompt"]],
   ["lock_acquire", "lock.acquire", "申请建议性文件锁；冲突时返回持有人，不会强制阻止文件写入。", { path: string, kind:{enum:["file","directory"]}, ttlMs: { type: "integer", minimum: 1000, maximum: 1800000 } }, ["path"]],
   ["lock_renew", "lock.renew", "续期当前成员持有的建议性文件锁。", { id: string, ttlMs: { type: "integer", minimum: 1000, maximum: 1800000 } }, ["id"]],
   ["lock_release", "lock.release", "释放当前成员持有的建议性文件锁。", { id: string }, ["id"]],
@@ -57,6 +59,7 @@ export function createCoordinationMcp({ client, sessionId, laneId, spawnSubtask 
       // Fetch current scope each time; removed sessions/role changes cannot use cached authorization.
       const context = await client.call("coordination.context", { sessionId });
       const method = definitions[index][1];
+      if (args.prompt !== undefined && ["local.subtask.spawn", "coordination.check"].includes(method)) validatePrompt(args.prompt, { allowEmpty: method === "coordination.check" });
       if (method === "local.subtask.spawn") {
         if (!laneId || !spawnSubtask) throw Error("当前运行未配置本机子任务桥");
         const result = await spawnSubtask(args);

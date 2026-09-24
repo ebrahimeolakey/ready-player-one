@@ -1,3 +1,4 @@
+import { providerPrompt } from "./prompt-limits.mjs";
 import { redactText } from "./secure-store.mjs";
 import { validateUsage } from "./providers/usage.mjs";
 import { publicConfiguration } from "./providers/configuration.mjs";
@@ -102,8 +103,8 @@ export class RunCoordinator {
    const data=await c.call('run.claim',{id:approval.id,claimKey:r.claimKey});
    r.phase='claimed';this.save(r);this.prepared.delete(r.runId);
    const lane=data.session.lanes.find(l=>l.id===approval.laneId);
-   const recent=data.session.lanes.flatMap(l=>l.entries.filter(e=>['user','assistant'].includes(e.role)).slice(-12).map(e=>`[${l.owner}] ${e.text}`)).join('\n').slice(-30000);
-   const prompt=`共享任务：${data.session.title}\n计划：${data.session.plan.map(p=>`${p.done?'[x]':'[ ]'} ${p.text}`).join('\n')}\n团队记忆：${data.memories.map(m=>`${m.title}: ${m.text}`).join('\n')}\n协作上下文：\n${recent}\n\n当前用户要求：${approval.prompt}`;
+   // Claim RPC is owner-only and returns the preserved original. Shared state is redacted.
+   const prompt=providerPrompt(data.session,data.memories,data.approval.prompt);
    const options=await this.options(approval);
    if(c!==this.client()||epoch!==this.epoch)throw Error('协作连接已切换，尚未开始本机执行');
    const latest=c.state?.sessions.find(s=>s.id===approval.sessionId)?.lanes.find(l=>l.id===approval.laneId);
@@ -176,7 +177,12 @@ export class RunCoordinator {
     const record=this.records.get(runId);if(!record)continue;
     this.steering.add(instruction.id);
     let status='delivered',message='';
-    try {await this.runtime.steer(runId,instruction.text,this.steeringImages(instruction.id));}catch(e){status='failed';message='指导投递结果未确认，请检查 Agent 记录；未自动重发。'+e.message;}
+    let original;
+    try { original=await c.call('run.steer.read',{sessionId:session.id,laneId:lane.id,runId,id:instruction.id}); }
+    catch(e){ this.steering.delete(instruction.id); if(/断开|未连接|超时/.test(e.message))this.retry(); continue; }
+    const latestLane=c.state?.sessions.find(s=>s.id===session.id)?.lanes.find(l=>l.id===lane.id);
+    if(this.paused||c!==this.client()||!this.runtime.runs.has(runId)||latestLane?.activeRunId!==runId||latestLane?.stopRequested||latestLane?.fencedRunId===runId){this.steering.delete(instruction.id);continue;}
+    try {await this.runtime.steer(runId,original.text,this.steeringImages(instruction.id));}catch(e){status='failed';message='指导投递结果未确认，请检查 Agent 记录；未自动重发。'+e.message;}
     this.enqueue(record,'run.steer.ack',{id:instruction.id,status,message});
    }
    if((!lane.handoffNeeded||lane.handoffNeeded.runId!==lane.activeRunId)&&!['running','awaiting','needs_handoff'].includes(lane.status)&&lane.queue?.some(q=>q.status==='queued'))await c.call('run.queue.next',{sessionId:session.id,laneId:lane.id}).catch(()=>{});

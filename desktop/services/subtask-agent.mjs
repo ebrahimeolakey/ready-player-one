@@ -1,3 +1,4 @@
+import { validatePrompt } from "../../core/prompt-limits.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -17,8 +18,8 @@ export function subtaskConnectionKey(client) {
 export function agentSubtaskArguments(args) {
   if (!args || typeof args !== "object" || Array.isArray(args) || Object.keys(args).some(key => !["requestId", "title", "prompt"].includes(key))) throw Error("子任务只接受 requestId、标题和任务，不接受命令或身份参数");
   if (typeof args.requestId !== "string" || !uuid.test(args.requestId)) throw Error("请提供 UUID requestId，重试时保持相同值");
-  if (typeof args.title !== "string" || !args.title.trim() || args.title.length > 200 || typeof args.prompt !== "string" || !args.prompt.trim() || args.prompt.length > 20000) throw Error("请填写子任务标题和要求");
-  return { requestId: args.requestId.toLowerCase(), title: args.title.trim(), prompt: args.prompt.trim() };
+  if (typeof args.title !== "string" || !args.title.trim() || args.title.length > 200) throw Error("请填写子任务标题和要求");
+  return { requestId: args.requestId.toLowerCase(), title: args.title.trim(), prompt: validatePrompt(args.prompt) };
 }
 function commands(value) {
   if (!Array.isArray(value) || !value.length || value.length > 20 || value.some(line => typeof line !== "string" || !line.trim() || line.length > 10000)) throw Error("请明确输入至少一项必需检查命令");

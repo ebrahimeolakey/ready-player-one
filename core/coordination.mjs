@@ -1,9 +1,10 @@
+import { validatePrompt, summarizePrompt } from "./prompt-limits.mjs";
 import { filePath } from "./coordination-paths.mjs";
 import { fileScopes, branchName, planIds, overlaps, scopeOverlap } from "./overlap.mjs";
 export { filePath } from "./coordination-paths.mjs";
 export { overlaps } from "./overlap.mjs";
 import { redactRecord } from "./secure-store.mjs";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 export const ROLES = ["viewer", "commenter", "editor", "owner"];
 const stamp = () => new Date().toISOString();
@@ -29,17 +30,17 @@ function location(value) {
   const startLine = Number(value.startLine), endLine = Number(value.endLine ?? startLine);
   if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || startLine < 1 || endLine < startLine || endLine > 10000000) throw Error("代码行范围无效");
   if (value.side && !["left", "right"].includes(value.side)) throw Error("diff 方向无效");
-  return { path: filePath(value.path), startLine, endLine, commit: revision(value.commit), ...(value.hash ? { hash: revision(value.hash) } : {}), side: value.side || "right" };
+  return { path: filePath(value.path), startLine, endLine, commit: revision(value.commit), ...(value.hash ? { hash: revision(value.hash) } : {}), side: value.side || "right", ...(value.blob?{blob:revision(value.blob)}:{}), ...(value.kind==='diff'?{kind:'diff'}:{}), ...(typeof value.excerpt==='string'?{excerpt:value.excerpt.slice(0,8000)}:{}) };
 }
 
-const methods = new Set(["member.role", "member.remove", "plan.add", "plan.toggle", "plan.assign", "plan.claim", "plan.status", "plan.transfer", "plan.transfer.accept", "plan.transfer.decline", "comment.add", "comment.resolve", "comment.task", "comment.check", "memory.add", "memory.update", "memory.check", "lock.acquire", "lock.renew", "lock.release", "coordination.context", "coordination.message", "coordination.activity", "coordination.check"]);
-export function handlesCoordination(method) { return method === "memory.list" || methods.has(method); }
+const methods = new Set(["member.role", "member.remove", "plan.add", "plan.toggle", "plan.assign", "plan.claim", "plan.release", "plan.status", "plan.transfer", "plan.transfer.accept", "plan.transfer.decline", "comment.add", "comment.resolve", "comment.task", "comment.check", "memory.add", "memory.update", "memory.check", "lock.acquire", "lock.renew", "lock.release", "coordination.context", "coordination.message", "coordination.activity", "coordination.check"]);
+export function handlesCoordination(method) { return method === "memory.list" || method === "memory.history" || methods.has(method); }
 export function coordination(hub, peer, method, a) {
   const sessionWorkspaceId = a.sessionId ? hub.session(peer, a.sessionId).workspaceId : undefined;
   if (sessionWorkspaceId && a.workspaceId && sessionWorkspaceId !== a.workspaceId) throw Error("工作区与当前会话不匹配");
   const workspaceId = sessionWorkspaceId || a.workspaceId;
   const member = memberId => {
-    const value = hub.db.members.find(m => m.workspaceId === workspaceId && m.id === memberId && !m.removed);
+    const value = hub.membersFor(workspaceId, a.sessionId).find(m => m.id === memberId);
     if (!value || ROLES.indexOf(value.role) < 1) throw Error("负责人必须是此工作区的 Commenter、Editor 或 Owner");
     return value;
   };
@@ -51,14 +52,16 @@ export function coordination(hub, peer, method, a) {
   const record = (p, action) => { p.updatedAt = stamp(); (p.history ??= []).push({ actorId: peer.id, actor: peer.name, action, at: p.updatedAt }); };
   if (method === "member.role" || method === "member.remove") {
     hub.workspace(peer, workspaceId);
-    const m = hub.db.members.find(m => m.workspaceId === workspaceId && m.id === a.memberId && !m.removed);
+    const m = (a.sessionId ? hub.db.sessionMembers : hub.db.members).find(m => m.workspaceId === workspaceId && m.id === a.memberId && (!a.sessionId || m.sessionId === a.sessionId) && !m.removed) || (!a.sessionId ? null : hub.db.members.find(m => m.workspaceId === workspaceId && m.id === a.memberId && !m.removed));
     if (!m) throw Error("成员不存在");
     if (m.host) throw Error("本机房主角色不能修改");
     const next = method === "member.remove" ? null : role(a.role);
     if (m.role === "owner" && next !== "owner" && hub.db.members.filter(v => v.workspaceId === workspaceId && !v.removed && v.role === "owner").length === 1) throw Error("必须保留至少一位 Owner");
+    if (m.sessionId && next === "owner") throw Error("会话成员不能升级为工作区 Owner");
     if (next) m.role = next; else m.removed = true;
-    if (!next || ROLES.indexOf(next) < 2) hub.fenceMember(workspaceId, m.id);
-    if (!next) for (const [ws, p] of hub.peers) if (p.workspaceId === workspaceId && p.id === m.id) ws.close(1008, "已移除此成员");
+    if (!next && !m.sessionId) for (const grant of hub.db.sessionMembers) if (grant.workspaceId === workspaceId && grant.id === m.id) grant.removed = true;
+    if (!next || ROLES.indexOf(next) < 2) hub.fenceMember(workspaceId, m.id, m.sessionId);
+    if (!next) for (const [ws, p] of hub.peers) if (p.workspaceId === workspaceId && p.id === m.id && (!m.sessionId || p.sessionId === m.sessionId)) ws.close(1008, "已移除此成员");
     return m;
   }
   if (method === "plan.add") {
@@ -71,6 +74,17 @@ export function coordination(hub, peer, method, a) {
   if (method.startsWith("plan.")) {
     const { p } = plan();
     const commenter = hub.role(peer, workspaceId) === "commenter";
+    if (method === "plan.release") {
+      if (p.assigneeId !== peer.id) throw Error("只有当前负责人可以归还步骤");
+      const note = str(a.note, 2000);
+      const previous = { assigneeId: p.assigneeId, assignee: p.assignee, status: p.status };
+      p.assigneeId = null; p.assignee = null; p.status = "todo"; p.done = false;
+      if (["awaiting-release", "awaiting-accept"].includes(p.transferRequest?.status)) {
+        p.transferRequest.status = "cancelled"; p.transferRequest.respondedAt = stamp();
+      }
+      record(p, "released"); Object.assign(p.history.at(-1), { note, previous });
+      return p;
+    }
     if (method === "plan.transfer.accept" || method === "plan.transfer.decline") {
       const transfer = p.transferRequest;
       if (!transfer || !["awaiting-release", "awaiting-accept"].includes(transfer.status)) throw Error("没有待处理的转交");
@@ -112,14 +126,27 @@ export function coordination(hub, peer, method, a) {
   }
   if (method === "comment.add") {
     const s = hub.session(peer, a.sessionId), loc = location(a.location);
-    const c = { id: uid(), owner: peer.name, ownerId: peer.id, text: str(a.text, 5000), anchor: String(a.anchor || (loc ? `${loc.path}:${loc.startLine}-${loc.endLine}` : "")).slice(0, 500), ...(loc ? { location: loc } : {}), status: "open", at: stamp() };
+    let transcript;
+    if(a.transcript){
+      if(loc)throw Error('评论只能绑定一种位置');
+      const lane=s.lanes.find(l=>l.id===a.transcript.laneId),entry=lane?.entries.find(e=>e.id===a.transcript.entryId);
+      if(!entry)throw Error('原消息不存在或已过保留期');
+      transcript={laneId:lane.id,entryId:entry.id,hash:createHash('sha256').update(redactRecord(entry.text)).digest('hex'),at:entry.at};
+      if(a.transcript.expectedHash&&a.transcript.expectedHash!==transcript.hash)throw Error('原消息已变化，请重新选择');
+    }
+    const c = { id: uid(), owner: peer.name, ownerId: peer.id, text: str(a.text, 5000), anchor: String(a.anchor || (loc ? `${loc.path}:${loc.startLine}-${loc.endLine}` : "")).slice(0, 500), ...(loc ? { location: loc } : {}), ...(transcript?{transcript,anchor:"消息 · "+transcript.at}:{}), version:0, status: "open", at: stamp() };
     s.comments.push(c); return c;
   }
   if (method === "comment.check") {
     const s = hub.session(peer, a.sessionId), files = references(a.files);
     for (const c of s.comments) if (c.location) {
+      if(a.automatic===true&&a.expectedVersions?.[c.id]!== (c.version||0))continue;
       const file = files.find(f => f.path === c.location.path);
-      if (file) { c.stale = c.location.hash && file.hash ? c.location.hash !== file.hash : file.commit !== c.location.commit; c.checkedAt = stamp(); }
+      if (file) {
+        const stale=c.location.hash&&file.hash?c.location.hash!==file.hash:file.commit!==c.location.commit;
+        if(a.automatic!==true||stale)c.stale=stale;
+        c.checkedAt=stamp();c.checkedBy=peer.id;c.checkReason=String(a.reason||'手动检查').slice(0,200);
+      }
     }
     return s.comments;
   }
@@ -131,7 +158,7 @@ export function coordination(hub, peer, method, a) {
     // Validate all optional execution inputs before creating the plan.
     const assignee = a.assigneeId ? member(a.assigneeId) : null;
     if (a.laneId) hub.lane(peer, { sessionId: s.id, laneId: a.laneId });
-    const prompt = a.prompt ? str(a.prompt, 20000) : `处理评论：${c.text}${c.anchor ? `\n位置：${c.anchor}` : ""}`;
+    const prompt = a.prompt !== undefined ? validatePrompt(a.prompt) : `处理评论：${c.text}${c.anchor ? `\n位置：${c.anchor}` : ""}`;
     const taskText = str(a.text === undefined ? c.text.slice(0, 500) : a.text, 500);
     let approval;
     if (a.laneId) approval = hub.act(peer, "run.request", { sessionId: s.id, laneId: a.laneId, prompt, mode: a.mode || "read-only", files: c.location ? [c.location.path] : [] });
@@ -139,6 +166,14 @@ export function coordination(hub, peer, method, a) {
     if(approval) { approval.planIds = [p.id]; hub.refreshOverlaps(approval); }
     p.commentId = c.id; c.taskId = p.id; c.status = "task"; if (approval) c.approvalId = approval.id;
     return { plan: p, approval, comment: c };
+  }
+  if (method === 'memory.history') {
+    const m=hub.db.memories.find(m=>m.id===a.id);
+    if(!m)throw Error('记忆不存在');hub.workspace(peer,m.workspaceId);
+    if(workspaceId&&workspaceId!==m.workspaceId)throw Error('记忆不属于当前工作区');
+    if(a.beforeVersion!==undefined&&(!Number.isSafeInteger(a.beforeVersion)||a.beforeVersion<0))throw Error('历史版本无效');
+    const all=(hub.db.memoryHistory||[]).filter(h=>h.memoryId===m.id&&(a.beforeVersion===undefined||h.version<a.beforeVersion)).sort((x,y)=>y.version-x.version);
+    const items=all.slice(0,10);return redactRecord({items,nextBefore:all.length>10?items.at(-1).version:null});
   }
   if (method === "memory.list") {
     hub.workspace(peer, workspaceId);
@@ -150,23 +185,32 @@ export function coordination(hub, peer, method, a) {
     if (method === "memory.update" && !m) throw Error("记忆不存在");
     hub.workspace(peer, m?.workspaceId || workspaceId);
     const update = { title: str(a.title ?? m?.title, 120), text: str(a.text ?? m?.text, 6000), files: a.files === undefined ? m?.files || [] : references(a.files), updatedAt: stamp() };
-    if (m) { Object.assign(m, update, ...(a.files !== undefined ? [{ stale: false, staleFiles: [] }] : [])); return m; }
-    m = { id: uid(), workspaceId, ...update, owner: peer.name, ownerId: peer.id, at: stamp(), retired: false, stale: false, staleFiles: [] };
+    if (m) {
+      if(a.expectedVersion!==undefined&&a.expectedVersion!==(m.version||0))throw Error('记忆已由其他成员更新，请重新打开');
+      hub.db.memoryHistory??=[];hub.db.memoryHistory.push({workspaceId:m.workspaceId,memoryId:m.id,version:m.version||0,title:m.title,text:m.text,files:structuredClone(m.files||[]),stale:m.stale,actorId:peer.id,actor:peer.name,at:update.updatedAt});
+      m.historyCount=(m.historyCount||0)+1;
+      m.version=(m.version||0)+1;
+      Object.assign(m, update, ...(a.files !== undefined ? [{ stale: false, staleFiles: [] }] : [])); return m;
+    }
+    m = { id: uid(), workspaceId, ...update, owner: peer.name, ownerId: peer.id, at: stamp(), retired: false, stale: false, staleFiles: [], version:0, historyCount:0 };
     hub.db.memories.unshift(m); return m;
   }
   if (method === "memory.check") {
     hub.workspace(peer, workspaceId);
     const files = references(a.files), changed = [];
     for (const m of hub.db.memories.filter(m => m.workspaceId === workspaceId && !m.retired)) {
+      if(!m.files?.some(f=>files.some(v=>v.path===f.path)))continue;
+      if(a.automatic===true&&a.expectedVersions?.[m.id]!== (m.version||0))continue;
       const stale = new Map((m.staleFiles || []).map(f => [f.path, f]));
       for (const reference of m.files || []) {
         const file = files.find(f => f.path === reference.path);
         if (!file) continue;
         // File content equality avoids invalidating a memory for unrelated commits.
         const equal = reference.hash && file.hash ? reference.hash === file.hash : reference.commit === file.commit;
-        if (equal) stale.delete(reference.path); else stale.set(reference.path, { path: reference.path, previousCommit: reference.commit, currentCommit: file.commit });
+        if (equal) {if(a.automatic!==true)stale.delete(reference.path);}
+        else stale.set(reference.path, { path: reference.path, previousCommit: reference.commit, currentCommit: file.commit, previousHash:reference.hash||null,currentHash:file.hash||null });
       }
-      m.staleFiles = [...stale.values()]; m.stale = m.staleFiles.length > 0; m.checkedAt = stamp(); changed.push(m);
+      m.staleFiles = [...stale.values()]; m.stale = m.staleFiles.length > 0; m.checkedAt = stamp(); m.checkedBy=peer.id; m.checkReason=String(a.reason||"手动检查").slice(0,200); changed.push(m);
     }
     return changed;
   }
@@ -194,7 +238,7 @@ export function coordination(hub, peer, method, a) {
     const {s,l} = hub.lane(peer,a);
     if(s.status !== "active") throw Error("会话已归档");
     const scopes = fileScopes(a.files,a.fileScopes), linked = planIds(s,a.planIds), branch = branchName(a.branch);
-    if(method === "coordination.check") return redactRecord({algorithm:"deterministic-v1",advisory:true,checkedAt:stamp(),details:overlaps(hub,s,l,String(a.prompt || "").slice(0,20000),[],{scopes,planIds:linked,branch})});
+    if(method === "coordination.check") { const original=validatePrompt(a.prompt ?? "",{allowEmpty:true}); return redactRecord({algorithm:"deterministic-v1",advisory:true,checkedAt:stamp(),promptSummary:summarizePrompt(original),details:overlaps(hub,s,l,original,[],{scopes,planIds:linked,branch})}); }
     const ttl = a.ttlMs === undefined ? 120000 : a.ttlMs;
     if(!Number.isInteger(ttl) || ttl < 1000 || ttl > 300000) throw Error("活动信息有效期应在 1 秒至 5 分钟之间");
     l.activity = {fileScopes:scopes,planIds:linked || [],branch:branch || null,at:stamp(),expires:Date.now()+ttl};

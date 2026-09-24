@@ -1,3 +1,4 @@
+import { summarizePrompt } from "./prompt-limits.mjs";
 import { claimKeyHash } from './coordination-runs.mjs';
 import { redactRecord, redactText } from './secure-store.mjs';
 
@@ -36,7 +37,7 @@ export function outcomes(hub, peer, method, a) {
     const outcome = {
       id: a.runId, runId: a.runId, workspaceId: s.workspaceId, sessionId: s.id, laneId: l.id,
       ownerId: peer.id, owner: peer.name, provider: approval.provider,
-      prompt: text(approval.prompt, 20000), dispatchAt, dispatches, observations,
+      prompt: summarizePrompt(redactText(approval.prompt)).display, dispatchAt, dispatches, observations,
       lastOutput: typeof a.lastOutput === 'string' && !a.lastOutput.trim() ? null : a.lastOutput ? text(a.lastOutput, 8000) : null,
       reason: text(a.reason, 2000), at: new Date().toISOString(), status: 'unknown', version: 0, history: [],
     };

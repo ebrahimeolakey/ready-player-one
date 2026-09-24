@@ -52,7 +52,7 @@ export class CoordinationBridge {
       };
       await validate();
       let size = 0; const chunks = [];
-      for await (const chunk of req) { size += chunk.length; if (size > 96 * 1024) { reply(413, { error: "子任务请求过大" }); req.destroy(); return; } chunks.push(chunk); }
+      for await (const chunk of req) { size += chunk.length; if (size > 1024 * 1024) { reply(413, { error: "子任务请求过大" }); req.destroy(); return; } chunks.push(chunk); }
       let args;
       try { args = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { return reply(400, { error: "子任务请求格式无效" }); }
       const result = await this.taskCoordination.spawnFromAgent(lease.binding, args, validate);

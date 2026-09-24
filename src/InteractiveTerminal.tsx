@@ -19,16 +19,22 @@ export function InteractiveTerminal({
   workspaceId,
   sessionId,
   laneId,
+  mode = "shell",
+  onClose,
 }: {
   bridge: TerminalBridge;
   workspaceId: string;
   sessionId: string;
   laneId?:string;
+  mode?: "shell" | "provider";
+  onClose?: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
+  const [cli, setCLI] = useState<{displayCommand:string;resolvedCommand:string;cwd:string;account:string;accountSource:string;configDirectory:string;credentialEnvironment:string[]} | null>(null);
   useEffect(() => {
     if (!container.current) return;
+    setError("");setCLI(null);
     let disposed = false,
       id = "",
       sequence = 0,
@@ -81,7 +87,7 @@ export function InteractiveTerminal({
     });
     observer.observe(container.current);
     void (async () => {
-      const opened = await bridge.invoke("terminal.open", {
+      const opened = await bridge.invoke(mode === "provider" ? "terminal.provider.open" : "terminal.open", {
         workspaceId,
         sessionId,
         laneId,
@@ -93,6 +99,7 @@ export function InteractiveTerminal({
         await bridge.invoke("terminal.close", { id });
         return;
       }
+      if (opened.cli) setCLI(opened.cli);
       const snapshot = await bridge.invoke("terminal.read", { id });
       if (disposed) return;
       terminal.write(snapshot.data || "");
@@ -112,7 +119,7 @@ export function InteractiveTerminal({
       terminal.dispose();
       if (id) void bridge.invoke("terminal.close", { id }).catch(() => {});
     };
-  }, [bridge, workspaceId, sessionId, laneId]);
+  }, [bridge, workspaceId, sessionId, laneId, mode]);
   return (
     <div
       style={{
@@ -120,11 +127,23 @@ export function InteractiveTerminal({
         minHeight: 100,
         position: "relative",
         background: "#111",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
+      {mode === "provider" && <div style={{padding:"6px 10px",fontSize:11,borderBottom:"1px solid #333",flexShrink:0}}>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}><strong>本机 CLI · 独立会话</strong>{cli && <span title={cli.accountSource}>{cli.account}</span>}<span className="grow"/>{onClose && <button onClick={onClose}>关闭 CLI</button>}</div>
+        {cli && <details><summary style={{overflowWrap:"anywhere"}}>{cli.displayCommand}</summary>
+          <div style={{overflowWrap:"anywhere"}}>目录：{cli.cwd}</div><div>{cli.accountSource} · {cli.account}</div>
+          <div style={{overflowWrap:"anywhere"}}>配置：{cli.configDirectory}</div>
+          {cli.resolvedCommand !== cli.displayCommand && <div style={{overflowWrap:"anywhere"}}>可执行文件：{cli.resolvedCommand}</div>}
+          {!!cli.credentialEnvironment.length && <div>环境来源：{cli.credentialEnvironment.join("、")}（实际认证以 CLI 为准）</div>}
+          <div>输入、输出和审批仅在本机 CLI 内处理；不接续共享 Agent 会话。</div>
+        </details>}
+      </div>}
       <div
         ref={container}
-        style={{ height: "100%", padding: "8px 10px", boxSizing: "border-box" }}
+        style={{ flex:1, minHeight:0, padding: "8px 10px", boxSizing: "border-box" }}
       />
       {error && (
         <div

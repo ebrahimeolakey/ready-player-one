@@ -37,7 +37,8 @@ test("role matrix enforces read/comment/edit/owner on server without trusting su
   assert.throws(() => act(peers.viewer, "comment.add", { text: "no" }), /commenter 权限/);
   const c = act(peers.commenter, "comment.add", { text: "comment" });
   assert.equal(act(peers.commenter, "comment.resolve", { id: c.id }).status, "resolved");
-  assert.throws(() => act(peers.editor, "invite.create"), /owner 权限/);
+  assert.throws(() => act(peers.editor, "invite.create", {sessionId:undefined}), /owner 权限/);
+  assert.equal(act(peers.editor,"invite.create").sessionId,s.id);
   const invite = act(peers.owner, "invite.create", { role: "viewer" });
   assert.equal(invite.role, "viewer");
   assert.throws(() => act(peers.owner, "invite.create", { role: "superadmin" }), /未知成员角色/);

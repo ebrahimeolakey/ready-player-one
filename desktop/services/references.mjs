@@ -1,3 +1,5 @@
+import {lstat,realpath} from 'node:fs/promises';
+import {join} from 'node:path';
 import { read, safePath, git } from "../../core/local.mjs";
 import { filePath } from "../../core/coordination.mjs";
 const MISSING = "0".repeat(64);
@@ -9,10 +11,17 @@ async function head(root) {
     return null;
   }
 }
+export async function readReferenceText(root,path){
+  if(filePath(path)!==path)throw Error('文件路径不能被规范化');
+  let current=await realpath(root);
+  for(const component of path.split('/')){current=join(current,component);if((await lstat(current)).isSymbolicLink())throw Error('符号链接不能作为代码引用');}
+  if(!(await lstat(current)).isFile())throw Error('只能引用普通文件');
+  return read(root,path);
+}
 async function reference(root, path, commit) {
-  path = filePath(path);
+  if(filePath(path)!==path)throw Error("文件路径不能被规范化");
   await safePath(root, path);
-  const value = await read(root, path);
+  const value = await readReferenceText(root, path);
   return {
     path,
     hash: value.hash,
@@ -45,6 +54,7 @@ export async function captureReference(
     hash: value.hash,
     commit: value.commit,
     side: "right",
+    excerpt: value.content.split("\n").slice(startLine-1,endLine).join("\n").slice(0,8000),
   };
 }
 export async function fileReferences(root, { paths }) {
