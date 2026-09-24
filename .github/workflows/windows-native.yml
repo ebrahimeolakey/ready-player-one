@@ -1,0 +1,60 @@
+name: Windows native verification
+on:
+  workflow_dispatch:
+  push:
+    branches: ['verify/windows-native-*']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Platform and persistence regression tests
+        run: node --test tests/platform.test.mjs tests/accounts.test.mjs tests/providers-images.test.mjs tests/composer.test.mjs tests/composer-recovery-audit.test.mjs tests/run-coordinator.test.mjs
+      - name: Build renderer
+        run: npm run build
+      - name: Actual Electron desktop and PowerShell PTY
+        shell: pwsh
+        run: |
+          $env:RPO_DATA_DIR = Join-Path $env:RUNNER_TEMP 'RPO 原生测试 data'
+          New-Item -ItemType Directory -Force $env:RPO_DATA_DIR | Out-Null
+          Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath '.\node_modules\electron\dist\electron.exe' -ArgumentList 'scripts/windows-native-smoke.mjs' -Wait -PassThru -RedirectStandardOutput 'electron-smoke.stdout.log' -RedirectStandardError 'electron-smoke.stderr.log'
+          Get-Content electron-smoke.stdout.log
+          Get-Content electron-smoke.stderr.log
+          if ($p.ExitCode -ne 0) { throw "Electron smoke failed: $($p.ExitCode)" }
+          if (!(Select-String -Path electron-smoke.stdout.log -Pattern 'WINDOWS_NATIVE_SMOKE_OK' -Quiet)) { throw 'Missing successful real desktop shutdown marker' }
+      - name: Build unsigned ZIP and NSIS installer
+        run: npm exec electron-builder -- --win zip nsis --x64 --publish never
+      - name: Record build checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem release -File | Where-Object { $_.Extension -in '.zip','.exe' } | Get-FileHash -Algorithm SHA256 | Format-List | Out-File ci-evidence/windows-artifact-sha256.txt
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-evidence
+          path: |
+            ci-evidence/
+            electron-smoke.*.log
+          if-no-files-found: warn
+      - name: Upload isolated test packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-packages
+          path: |
+            release/*.zip
+            release/*.exe
+          if-no-files-found: error
+          retention-days: 7
