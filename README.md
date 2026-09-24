@@ -4,6 +4,17 @@
 
 和同事在同一个任务中使用各自的 Codex / Claude，共享 AI 执行过程、清单和讨论。
 
+## 下载 Windows 版
+
+Windows 移植预发布：**0.3.1-beta.1-windows.1** · Windows 10 / 11 x64 · Apache-2.0
+
+| 安装方式 | 下载 |
+| --- | --- |
+| 安装器 | **[↓ 下载 Windows 安装器](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.3.1-beta.1-windows.1/Ready-Player-One-0.3.1-beta.1-windows.1-windows-x64-setup.exe)** |
+| 免安装 ZIP | **[↓ 下载 Windows ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.3.1-beta.1-windows.1/Ready-Player-One-0.3.1-beta.1-windows.1-windows-x64.zip)** |
+
+完整解压 ZIP 后运行「头号玩家.exe」，或使用安装器。此版未签名，Windows 实机首次登录和跨平台双机验收待完成；新一轮 Amoeba 功能仍在开发。[Windows 安装指南](docs/WINDOWS.md) · [版本与校验](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.3.1-beta.1-windows.1)
+
 ## 下载 Mac 版
 
 当前版本：**0.3.0-beta.1** · 免费下载 · 无需 GitHub 登录
