@@ -172,6 +172,8 @@ for await (const line of createInterface({ input: process.stdin })) {
     promptId = message.id;
     assert.equal(p.sessionId, sessionId);
     assert.equal(p.prompt[0].type, "text");
+    if (mode === "token-limit") { result(promptId, { stopReason: "max_tokens" }); continue; }
+    if (mode === "quota-text") { error(promptId, -32603, "quota exhausted 429"); continue; }
     if (mode === "hang") {
       const child = spawn(
         process.execPath,

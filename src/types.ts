@@ -1,3 +1,4 @@
+export type ProviderFailure = {version:1;source:"codex"|"claude"|"acp"|"openai-compatible";kind:"usage_limit"|"rate_limit"|"authentication"|"billing"|"network"|"server"|"context_limit"|"budget_limit"|"invalid_request"|"tool"|"other";code:string;httpStatus?:number};
 export type UsageSnapshot = {
   version:1; source:'codex'|'claude'|'acp'|'openai-compatible';
   context:{usedTokens:number|null;limitTokens:number|null;basis:'provider-context'|'last-request-input'};
@@ -25,6 +26,8 @@ export type Lane = {
   activeRunId?:string;
   providerSessionId?:string;
   usage?:LaneUsage;
+  failure?:ProviderFailure;
+  handoffNeeded?:{runId:string;reason:ProviderFailure;at:string;lastConfirmedSnapshot:{ref:string;commit:string;at:string}|null};
   activity?:{fileScopes:FileScope[];branch:string|null;planIds:string[];at:string;expires:number};
   changesExpires?:number;
   steering?:{id:string;text:string;status:string;message?:string;runId?:string;restoredAt?:string}[];
@@ -75,7 +78,16 @@ export type Approval = {
   status: string;
   reviewer?: string;
 };
+export type Outcome = {
+  id:string;runId:string;workspaceId:string;sessionId:string;laneId:string;ownerId:string;owner:string;provider:string;
+  prompt:string;dispatchAt:string;at:string;reason:string;lastOutput:string|null;
+  dispatches:{approvalId:string;providerRequestId:string;action:string;input:unknown;at:string;reviewer:string|null;reviewedAt:string|null}[];
+  observations:{itemId:string;phase:string;text:string;at:string}[];
+  status:'unknown'|'succeeded'|'failed';version:number;
+  history:{requestId:string;version:number;status:'unknown'|'succeeded'|'failed';evidence:string;ownerId:string;owner:string;at:string}[];
+};
 export type State = {
+  outcomes?: Outcome[];
   workspaces: { id: string; name: string; branch: string; remote: string }[];
   sessions: Session[];
   memories: {

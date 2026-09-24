@@ -1,3 +1,4 @@
+import { acpFailure } from "./failure.mjs";
 import { acpUsage } from "./usage.mjs";
 import { emitReportedConfiguration } from "./configuration.mjs";
 import { randomUUID } from "node:crypto";
@@ -347,6 +348,7 @@ export class ACPRun {
         this.finish(
           this.interrupted ? "interrupted" : "error",
           this.safe(error.message),
+          acpFailure(error),
         ),
       );
     return this;
@@ -571,7 +573,7 @@ export class ACPRun {
     }
     return this.finish("interrupted", "执行已停止");
   }
-  finish(status, message = "") {
+  finish(status, message = "", failure = null) {
     if (this.ended) return this.completion;
     this.ended = true;
     this.activePrompt = false;
@@ -593,6 +595,7 @@ export class ACPRun {
         status,
         message: this.safe(message),
         sessionId: this.sessionId,
+        ...(status === "error" && failure ? {failure} : {}),
       }),
     );
     return this.completion;

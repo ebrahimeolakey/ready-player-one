@@ -282,3 +282,13 @@ test("cancellation kills a real ignoring descendant after unresponsive agent", a
     (error) => error.code === "ESRCH",
   );
 });
+
+// These peers exercise the real stdio transport, not a logged-in vendor Agent.
+test("ACP auth is structured but generic quota text and max_tokens never imply account quota",async t=>{
+  for(const mode of ["auth","token-limit","quota-text"]){
+    const {runtime,cwd}=await setup(t,mode);let result;const ended=new Promise(resolve=>{result=resolve;});
+    const start=runtime.start({runId:`failure-${mode}`,provider:"acp-fixture",cwd,mode:"workspace-write",prompt:"synthetic",onEnd:result});
+    if(mode==="auth")await assert.rejects(start);else await start;
+    const final=await ended;assert.equal(final.status,"error");assert.equal(final.failure?.kind,mode==="auth"?"authentication":undefined);
+  }
+});

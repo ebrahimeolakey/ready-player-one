@@ -20,3 +20,5 @@ Hub `memory.retire` 保留省略 `retired` 时的旧 UI toggle 行为；**该旧
 验收由 `tests/mcp-memory.test.mjs` 和 `tests/coordination.test.mjs` 覆盖：多工作区宿主的越界 ID/伪造范围、实时降权与移除、显式停用重试/恢复、旧 toggle 兼容、无效引用不写入、进行中分配保留同意流程、列表脱敏，以及真实 stdio 子进程通过 WebSocket Hub 完成新工具调用。该证据不等于真实模型已自主选择这些新工具。
 
 2026-09-24 本批验证：`node --test tests/mcp-memory.test.mjs tests/coordination.test.mjs tests/hub.test.mjs` **46/46 通过**；`node --test tests/overlap.test.mjs tests/task-coordination-service.test.mjs` **13/13 通过**。相关文件 diff 空白检查通过。未执行发布。
+
+后续源码已补 `rpo_subtask_spawn` 的本机桥、用户检查设置和真实工作树创建；它不直接调用 Hub claim。参数、身份绑定、幂等及验收边界见 [MCP-SUBTASKS](MCP-SUBTASKS.md)。

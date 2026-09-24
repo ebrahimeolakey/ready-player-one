@@ -822,21 +822,25 @@ export function Editor({
     setListing([]); setPath(""); setResults([]);
     if (mapped) list("");
   }, [mapped, contextKey, rootRevision]);
+  const searchView = useRef(crypto.randomUUID());
   useEffect(() => {
     let cancelled = false;
-    if (!search || !filter.trim()) {
-      setResults([]);
-      return;
-    }
+    setResults([]);
+    if (!search || hidden || !mapped || !filter.trim()) return;
+    const request = { ...params, viewId: searchView.current, queryId: crypto.randomUUID(), query: filter };
+    let started = false;
     const timer = setTimeout(async () => {
-      const found = await call("file.search", { ...params, query: filter });
-      if (!cancelled && currentView.current === viewIdentity) setResults(found || []);
+      started = true;
+      const response = await call("file.search", request);
+      if (!cancelled && currentView.current === viewIdentity && response?.queryId === request.queryId && !response.cancelled)
+        setResults(response.results || []);
     }, 180);
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      if (started) void window.rpo.invoke("file.search.cancel", request).catch(() => {});
     };
-  }, [search, filter, contextKey, rootRevision]);
+  }, [search, hidden, mapped, filter, params.workspaceId, contextKey, rootRevision]);
   const open = async (p: string, force = false, keepDraft = false) => {
     if (force && draftKey) {
       if (keepDraft) await writeDraft(draftKey, JSON.stringify({content,original,hash,canonicalRoot:fileRoot}));

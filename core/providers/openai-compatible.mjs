@@ -1,3 +1,4 @@
+import { compatibleFailure, readErrorEvidence } from "./failure.mjs";
 import { CompatibleUsage } from "./usage.mjs";
 import { emitReportedConfiguration } from "./configuration.mjs";
 import { randomUUID } from "node:crypto";
@@ -83,6 +84,7 @@ class CompatibleRun {
       this.finish(
         this.controller.signal.aborted ? "interrupted" : "error",
         error.message,
+        error.failure,
       ),
     );
     return this;
@@ -125,13 +127,14 @@ class CompatibleRun {
         },
       );
       // Never echo response bodies: upstream errors may contain credentials or requests.
-      if (!response.ok) throw new Error(`Provider HTTP ${response.status}`);
+      if (!response.ok) throw Object.assign(new Error(`Provider HTTP ${response.status}`), {failure:compatibleFailure(response.status, await readErrorEvidence(response))});
       if (!response.body) throw new Error("Provider response has no stream");
       const itemId = randomUUID();
       let text = "";
       const calls = new Map();
       let usage;
       for await (const event of readSse(response.body)) {
+        if (event.error) throw Object.assign(new Error("Provider stream returned an error"), {failure:compatibleFailure(undefined,event.error)});
         if (event.model) emitReportedConfiguration(this, event.model);
         if (event.usage) usage = event.usage;
         const delta = event.choices?.[0]?.delta || {};
@@ -281,7 +284,7 @@ class CompatibleRun {
   close() {
     return this.finish("interrupted", "执行已停止");
   }
-  finish(status, message = "") {
+  finish(status, message = "", failure = null) {
     if (this.ended) return this.completion;
     this.ended = true;
     this.controller.abort();
@@ -293,6 +296,7 @@ class CompatibleRun {
       message,
       sessionId: this.sessionId,
       history: this.messages,
+      ...(status === "error" && failure ? {failure} : {}),
     });
     if(this.activeTool)this.completion=Promise.resolve(this.activeTool).catch(()=>{}).then(finished);
     else {finished();this.completion=Promise.resolve();}

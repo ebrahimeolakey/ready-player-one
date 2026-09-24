@@ -1,3 +1,4 @@
+import { codexFailure, claudeFailure, acpFailure, validateFailure } from "./failure.mjs";
 import { randomUUID } from "node:crypto";
 import { JsonLineProcess, Requests } from "./transport.mjs";
 import { codexInput, claudeInput } from "./input.mjs";
@@ -71,7 +72,7 @@ class BaseRun {
     );
     this.emit({ type: "approvalResolved", approvalId: String(approvalId) });
   }
-  finish(status, message = "") {
+  finish(status, message = "", failure = null) {
     if (this.ended) return this.completion;
     this.ended = true;
     this.approvals.clear();
@@ -82,6 +83,7 @@ class BaseRun {
         status,
         message,
         sessionId: this.sessionId,
+        ...(status === "error" && failure ? { failure: validateFailure(failure, this.options.provider) } : {}),
       });
     const closing = this.transport.close();
     if (closing?.then) this.completion = closing.then(finished);
@@ -292,6 +294,7 @@ export class CodexRun extends BaseRun {
             ? "interrupted"
             : "error",
         p.turn.error?.message || "",
+        codexFailure(p.turn.error),
       );
   }
   async steer(text, images = []) {
@@ -504,6 +507,7 @@ export class ClaudeRun extends BaseRun {
       }
     }
     if (message.type === "assistant") {
+      if (!message.parent_tool_use_id) this.assistantError = message.error;
       const itemId = message.message?.id;
       const blocks = message.message?.content || [];
       const text = blocks
@@ -565,6 +569,7 @@ export class ClaudeRun extends BaseRun {
                 message.result ||
                 "Claude 执行失败"
             : "",
+          claudeFailure(message, this.assistantError),
         );
     }
   }
@@ -638,7 +643,7 @@ export class ProviderRuntime {
     try {
       await run.initialize();
     } catch (error) {
-      await run.finish("error", error.message);
+      await run.finish("error", error.message, options.provider === "codex" ? codexFailure(error) : options.provider?.startsWith("acp-") ? acpFailure(error) : error.failure);
       throw error;
     }
     return run;

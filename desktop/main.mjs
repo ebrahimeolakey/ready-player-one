@@ -32,6 +32,7 @@ import { spawn } from "node:child_process";
 import { Hub } from "../core/hub.mjs";
 import { HubClient } from "../core/client.mjs";
 import * as local from "../core/local.mjs";
+import { FileSearchService } from "./services/file-search.mjs";
 import * as snapshots from "../core/snapshots.mjs";
 import { ProviderRuntime } from "../core/providers/runtime.mjs";
 import { listProviderModels } from "../core/providers/catalog.mjs";
@@ -50,6 +51,7 @@ import {
   createTaskCoordination,
   handlesTaskCoordination,
 } from "./services/task-coordination.mjs";
+import { CoordinationBridge } from "./services/coordination-bridge.mjs";
 import {
   createTeamIdentity,
   handlesTeamIdentity,
@@ -344,6 +346,15 @@ const localRoot = (a) => {
   if (!p) throw Error("请先为此工作区关联本机项目目录");
   return p;
 };
+const fileSearchService = new FileSearchService({
+  resolveRoot: (a) => {
+    const session = client?.state?.sessions.find(s => s.id === a.sessionId && s.workspaceId === a.workspaceId);
+    if (!session) throw Error("搜索会话不存在或无权访问");
+    if (a.laneId && !session.lanes.some(l => l.id === a.laneId && l.ownerId === client.state.me.id))
+      throw Error("只能搜索本机 Agent 的工作目录");
+    return localRoot(a);
+  },
+});
 const coordinator = new RunCoordinator({
   runtime,
   client: () => client,
@@ -400,6 +411,7 @@ const coordinator = new RunCoordinator({
       sessionId: a.sessionId, laneId: a.laneId,
       model: model || null, effort: selectedOptions.effort || null,
     });
+    Object.assign(env, await coordinationBridge.issue({workspaceId:a.workspaceId,sessionId:a.sessionId,laneId:a.laneId,runId:a.id}));
     return {
       ...selectedOptions,
       model,
@@ -413,6 +425,7 @@ const coordinator = new RunCoordinator({
   steeringImages: (id) => runImages.get(id) || [],
   onChange: emit,
   onFinish: (result) => {
+    coordinationBridge.revokeRun(result.runId);
     if (win && !win.isFocused() && Notification.isSupported())
       new Notification({
         title: "头号玩家",
@@ -447,6 +460,7 @@ const taskCoordination = createTaskCoordination({
   dataDir: dir,
   withRepository,
 });
+const coordinationBridge = new CoordinationBridge({client:()=>client,runtime,taskCoordination});
 const teamIdentity = createTeamIdentity({
   client: () => client,
   endpoint: () => client?.url,
@@ -465,6 +479,7 @@ const connectionSecret = (url) =>
         .digest("hex")
     : config.secret;
 async function connect(url, token) {
+  coordinationBridge.revokeAll();
   await coordinator.close();
   client?.close();
   client = new HubClient();
@@ -667,6 +682,7 @@ const hubMethods = new Set([
   "run.queue",
   "run.queue.cancel",
   "tool.decide",
+  "outcome.resolve",
   "plan.transfer.accept",
   "plan.transfer.decline",
   "member.role",
@@ -1189,7 +1205,8 @@ async function invoke(method, a) {
     return result;
   }
   if (method === "files") return local.files(localRoot(a), a.path);
-  if (method === "file.search") return local.searchFiles(localRoot(a), a.query);
+  if (method === "file.search") return fileSearchService.start(win.webContents.id, a);
+  if (method === "file.search.cancel") return fileSearchService.cancel(win.webContents.id, a);
   if (method === "file.read") return local.readBound(canonicalRoot(localRoot(a)), a.path);
   if (method === "file.save")
     return local.saveBound(canonicalRoot(localRoot(a)), a.path, a.content, a.hash, a.expectedRoot);
@@ -1511,6 +1528,7 @@ app.on("before-quit", async (event) => {
   if (shutting) return;
   event.preventDefault();
   shutting = true;
+  fileSearchService.closeAll();
   languageService.dispose();
   dictation.close();
   terminalService.closeAll();
@@ -1520,7 +1538,7 @@ app.on("before-quit", async (event) => {
   tunnel.stop();
   for (const p of terminals) stopTerminal(p);
   try {
-    await Promise.all([coordinator.close(), debuggerService.closeAll()]);
+    await Promise.all([coordinationBridge.close(), coordinator.close(), debuggerService.closeAll()]);
     client?.close();
     await hub?.close();
   } catch (error) {

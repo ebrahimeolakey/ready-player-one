@@ -111,3 +111,16 @@ test('a committed usage update with lost acknowledgement retries the same sequen
  assert.equal(hub.db.sessions[0].lanes[0].usage.cumulative.totalTokens,70);
  const r=coordinator.records.get(request.id);runtime.options.onEvent({type:'usage',usageSnapshot:codexUsage({last:{totalTokens:8}})});assert.equal(r.pending.length,0);
 });
+
+test('quota failure survives offline durable relay and does not auto-submit queued work',async t=>{
+ const {hub,client,url,auth,runtime,coordinator,s,lane,request}=await setup(t);
+ await client.call('run.queue',{sessionId:s.id,laneId:lane.id,prompt:'queued synthetic',mode:'read-only'});
+ await until(()=>coordinator.records.get(request.id).pending.length===0);
+ client.closed=true;client.ws.close();await until(()=>client.ws.readyState===3);
+ const failure={version:1,source:'codex',kind:'usage_limit',code:'usageLimitExceeded'};
+ runtime.runs.delete(request.id);runtime.options.onEnd({runId:request.id,status:'error',message:'limit',failure});
+ assert.deepEqual(coordinator.records.get(request.id).pending.find(e=>e.method==='run.finish').args.failure,failure);
+ await client.connect(url,auth);const stored=()=>hub.db.sessions.find(v=>v.id===s.id).lanes.find(v=>v.id===lane.id);
+ await until(()=>stored().status==='needs_handoff');await until(()=>coordinator.records.get(request.id).delivered);
+ await coordinator.process();await pause();assert.equal(stored().queue[0].status,'queued');assert.equal(runtime.starts,1);assert.deepEqual(stored().failure,failure);
+});

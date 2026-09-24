@@ -134,7 +134,7 @@ export class Requests {
       entry.reject(
         error instanceof Error
           ? error
-          : new Error(error.message || String(error)),
+          : Object.assign(new Error(error.message || String(error)), {code:error.code, data:error.data}),
       );
     else entry.resolve(result);
     return true;

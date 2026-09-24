@@ -32,6 +32,7 @@ import { DebuggerPanel } from "./DebuggerPanel";
 import { GitPanel } from "./GitPanel";
 import { TaskCoordination } from "./TaskCoordination";
 import { LaneModel } from "./LaneModel";
+import { OutcomePanel } from "./OutcomePanel";
 import { ToolApprovals } from "./ToolApprovals";
 import { CollaborationPanel, roleNames } from "./CollaborationPanel";
 import { Avatar, Mark, Empty, statusNames, time, type Call } from "./ui";
@@ -460,6 +461,7 @@ export function Studio({
                     {rail === "session" ? (
                       <>
                         <ToolApprovals state={state} session={s} call={call} />
+                        <OutcomePanel state={state} session={s} call={call} />
                         {pending.map((a) => (
                           <article className="approval-card" key={a.id}>
                             <strong>

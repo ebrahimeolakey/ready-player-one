@@ -1,3 +1,5 @@
+import { validateFailure, isHandoffFailure } from "./providers/failure.mjs";
+import { handlesOutcomes, outcomes } from "./outcomes.mjs";
 import { validateUsage } from "./providers/usage.mjs";
 import { publicConfiguration } from "./providers/configuration.mjs";
 import { fileScopes, branchName, planIds } from "./overlap.mjs";
@@ -65,6 +67,7 @@ export class Hub extends EventEmitter {
     this.db.members ??= [];
     this.db.locks ??= [];
     this.db.messages ??= [];
+    this.db.outcomes ??= [];
     this.db.toolApprovals ??= [];
     this.db.handoffs ??= [];
     this.db.subtasks ??= [];
@@ -132,6 +135,7 @@ export class Hub extends EventEmitter {
       sessions: this.db.sessions.filter((s) => ids.has(s.workspaceId)),
       memories: this.db.memories.filter((m) => ids.has(m.workspaceId)),
       approvals: this.db.approvals.filter((a) => ids.has(a.workspaceId)),
+      outcomes: this.db.outcomes.filter(o => ids.has(o.workspaceId)),
       toolApprovals: this.db.toolApprovals.filter((a) => ids.has(a.workspaceId)),
       handoffs: this.db.handoffs.filter(h => ids.has(h.workspaceId)),
       subtasks: this.db.subtasks.filter(t => ids.has(t.workspaceId)),
@@ -329,6 +333,7 @@ export class Hub extends EventEmitter {
     let workspaceId = a.workspaceId;
     if (a.sessionId) workspaceId = this.session(peer, a.sessionId).workspaceId;
     if (["approval.decide", "run.claim"].includes(method)) workspaceId = this.db.approvals.find(v => v.id === a.id)?.workspaceId;
+    if (method === "outcome.resolve") workspaceId = this.db.outcomes.find(v => v.id === a.id)?.workspaceId;
     if (method.startsWith("handoff.") && a.id) workspaceId = this.db.handoffs.find(v => v.id === a.id)?.workspaceId;
     if (method.startsWith("subtask.") && a.id) workspaceId = this.db.subtasks.find(v => v.id === a.id)?.workspaceId;
     if (["tool.decide", "tool.claim"].includes(method)) workspaceId = this.db.toolApprovals.find(v => v.id === a.id)?.workspaceId;
@@ -378,6 +383,7 @@ export class Hub extends EventEmitter {
   }
   act(peer, method, a) {
     this.authorize(peer, method, a);
+    if (handlesOutcomes(method)) return outcomes(this, peer, method, a);
     if (handlesCoordination(method)) return coordination(this, peer, method, a);
     if (handlesRunCoordination(method)) return runCoordination(this, peer, method, a);
     if (handlesHandoffs(method)) return handoffs(this, peer, method, a);
@@ -580,6 +586,8 @@ export class Hub extends EventEmitter {
       l.acceptedEventIds = [];
       delete l.usage;
       delete l.runConfiguration;
+      delete l.failure;
+      delete l.handoffNeeded;
       this.entry(l, "user", ap.prompt);
       return {
         approval: ap,
@@ -669,9 +677,18 @@ export class Hub extends EventEmitter {
       if (a.runId !== l.activeRunId) throw Error("执行标识不匹配");
       if (l.finishedRunId === a.runId) return true;
       if (l.fencedRunId === a.runId) throw Error("执行已撤销");
+      const failure = a.failure === undefined ? null : validateFailure(a.failure, l.provider);
+      if (failure && a.status !== "error") throw Error("只有失败执行可上报错误证据");
       l.status = ["done", "error", "interrupted"].includes(a.status)
         ? a.status
         : "error";
+      delete l.failure;
+      delete l.handoffNeeded;
+      if (failure) l.failure = failure;
+      if (isHandoffFailure(failure)) {
+        l.status = "needs_handoff";
+        l.handoffNeeded = { runId:a.runId, reason:failure, at:now(), lastConfirmedSnapshot:l.snapshot ? {ref:l.snapshot.ref,commit:l.snapshot.commit,at:l.snapshot.at} : null };
+      }
       for (const key of this.rawEntries.keys()) if (key.startsWith(`${l.id}:${a.runId}:`)) this.rawEntries.delete(key);
       for (const instruction of l.steering || []) if (instruction.runId === a.runId && instruction.status === "pending") Object.assign(instruction, { status: "failed", message: "执行已结束", acknowledgedAt: now() });
       l.finishedRunId = a.runId;

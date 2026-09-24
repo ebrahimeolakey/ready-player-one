@@ -9,7 +9,7 @@ type ChildTask = { id:string;sessionId:string;parentLaneId:string;laneId?:string
 type ExtendedState = State & { handoffs?:Handoff[];subtasks?:ChildTask[] };
 type CheckResult = { id:string;passed:boolean;exitCode:number;output:string;commit:string };
 type Review = { id:string;candidateCommit?:string;diff?:string;status?:string;checks?:CheckResult[];integrationChecks?:CheckResult[];integrationCommit?:string;message?:string;details?:string;files?:string[] };
-const labels:Record<string,string> = {requested:"待接收",running:"执行中",review:"待审阅",candidate:"待检查",checked:"检查通过",failed:"检查失败",integrated:"已集成",cancelled:"已取消",ready:"可接管",accepted:"已接管",rejected:"已拒绝",conflict:"有冲突",stale:"版本已更新"};
+const labels:Record<string,string> = {requested:"待接收",prepared:"工作树已就绪",running:"执行中",review:"待审阅",candidate:"待检查",checked:"检查通过",failed:"检查失败",integrated:"已集成",cancelled:"已取消",ready:"可接管",accepted:"已接管",rejected:"已拒绝",conflict:"有冲突",stale:"版本已更新"};
 export function TaskCoordination({state,session,call}:{state:State;session:Session;call:Call}) {
   const shared = state as ExtendedState, me = state.me?.id;
   const role = state.me?.roles?.[session.workspaceId] || (state.me?.host ? "owner" : "viewer");
@@ -17,12 +17,14 @@ export function TaskCoordination({state,session,call}:{state:State;session:Sessi
   const own = session.lanes.filter(l => l.ownerId === me);
   const others = session.lanes.filter(l => l.ownerId !== me);
   const handoffs = (shared.handoffs || []).filter(h => h.sessionId === session.id && ["requested","ready"].includes(h.status));
+  const limited = session.lanes.filter(l => l.status === "needs_handoff" && l.handoffNeeded?.runId === l.activeRunId);
   const tasks = (shared.subtasks || []).filter(t => t.sessionId === session.id);
   const [showSpawn,setShowSpawn] = useState(false), [showHandoff,setShowHandoff] = useState(false);
   const [parent,setParent] = useState(""), [source,setSource] = useState(""), [target,setTarget] = useState("");
   const [title,setTitle] = useState(""), [prompt,setPrompt] = useState(""), [checks,setChecks] = useState("");
   const [busy,setBusy] = useState(""), [message,setMessage] = useState(""), [review,setReview] = useState<Review|null>(null);
   const [offlineConsent,setOfflineConsent] = useState<Record<string,boolean>>({});
+  const [showAgentChecks,setShowAgentChecks] = useState(false), [agentChecks,setAgentChecks] = useState(""), [agentEnabled,setAgentEnabled] = useState(false);
   const params = {sessionId:session.id,workspaceId:session.workspaceId};
   async function run(key:string,method:string,args:Record<string,unknown>) {
     setBusy(key); setMessage("");
@@ -35,12 +37,19 @@ export function TaskCoordination({state,session,call}:{state:State;session:Sessi
     if (result) setMessage(result.status === "accepted" ? "已创建接力任务，等待执行审批。" : result.message || labels[result.status] || "请检查同步结果");
   }
   return <>
-    <details className="rail-section" open={handoffs.length > 0 || undefined}>
+    <details className="rail-section" open={handoffs.length > 0 || limited.length > 0 || undefined}>
       <summary><ArrowRightLeft size={12}/> 接力与子任务 <span>{tasks.filter(t=>!["integrated","cancelled"].includes(t.status)).length || ""}</span></summary>
       {canEdit && <div className="comment-actions">
         <button disabled={!own.length || !!busy} onClick={()=>{setParent(own[0]?.id || "");setShowSpawn(true);}}><Plus size={12}/> 拆分子任务</button>
-        <button disabled={!own.some(l=>!["running","awaiting"].includes(l.status)) || !others.length || !!busy} onClick={()=>{setSource(others[0]?.id || "");setTarget(own.find(l=>!["running","awaiting"].includes(l.status))?.id || "");setShowHandoff(true);}}>请求接力</button>
+        <button disabled={!!busy} onClick={async()=>{const settings=await run("settings","tasks.settings.get",{});if(settings){setAgentChecks(settings.checkCommands.join("\n"));setAgentEnabled(settings.enabled);setShowAgentChecks(true);}}}>Agent 子任务检查</button>
+        <button disabled={!own.some(l=>!["running","awaiting","needs_handoff"].includes(l.status)) || !others.length || !!busy} onClick={()=>{setSource(others[0]?.id || "");setTarget(own.find(l=>!["running","awaiting","needs_handoff"].includes(l.status))?.id || "");setShowHandoff(true);}}>请求接力</button>
       </div>}
+      {limited.map(l => <article className="approval-card" key={`limit-${l.id}`}>
+        <strong>{l.owner} · 待接管</strong>
+        <small>{l.handoffNeeded?.reason.kind === "usage_limit" ? "Provider 用量已达上限" : "Provider 限流"} · 队列已暂停</small>
+        <small>{l.handoffNeeded?.lastConfirmedSnapshot ? `最近确认快照 ${l.handoffNeeded.lastConfirmedSnapshot.commit.slice(0,8)}` : "尚无确认快照，需原执行者同步后接管"}</small>
+        {canEdit && l.ownerId !== me && <button disabled={!!busy || !own.some(v=>!["running","awaiting","needs_handoff"].includes(v.status)) || handoffs.some(h=>h.laneId===l.id)} onClick={()=>{setSource(l.id);setTarget(own.find(v=>!["running","awaiting","needs_handoff"].includes(v.status))?.id || "");setShowHandoff(true);}}>请求接力</button>}
+      </article>)}
       {handoffs.map(h => {
         const from = session.lanes.find(l=>l.id===h.laneId) as (Session["lanes"][number] & {offlineSince?:string}) | undefined;
         const online = state.members.some(m=>m.id===h.fromId && m.online!==false && (!m.workspaceId || m.workspaceId===session.workspaceId));
@@ -64,7 +73,7 @@ export function TaskCoordination({state,session,call}:{state:State;session:Sessi
         const parentLane = session.lanes.find(l=>l.id===task.parentLaneId), child = session.lanes.find(l=>l.id===task.laneId);
         const done = child && !["running","awaiting"].includes(child.status);
         return <article className="approval-card" key={task.id}>
-          <strong><GitBranch size={12}/> {task.title}</strong><small>{task.owner} · {labels[task.status] || task.status}</small>
+          <strong><GitBranch size={12}/> {task.title}</strong><small>{task.owner} · {task.status==="running" && child?.status==="awaiting" ? "待审批" : labels[task.status] || task.status}</small>
           {task.integrationCommit && <small>{task.integrationCommit.slice(0,8)}</small>}
           {canEdit && <div className="comment-actions">
             {task.ownerId===me && done && task.status!=="cancelled" && <button disabled={!!busy} onClick={async()=>{const result=await run(task.id,"tasks.review",{id:task.id});if(result)setReview({...result,id:task.id});}}>审阅成果</button>}
@@ -75,6 +84,15 @@ export function TaskCoordination({state,session,call}:{state:State;session:Sessi
       {busy && <small role="status">正在处理…</small>}
       {message && <p role="status" className="small-note">{message}</p>}
     </details>
+    {showAgentChecks && <Modal title="Agent 子任务检查" close={()=>!busy&&setShowAgentChecks(false)}>
+      {message && <p role="alert" className="small-note">{message}</p>}
+      <form onSubmit={async e=>{e.preventDefault();const result=await run("settings","tasks.settings.save",{enabled:agentEnabled,checkCommands:agentChecks.split("\n").map(v=>v.trim()).filter(Boolean)});if(result){setShowAgentChecks(false);setMessage(result.enabled?"已允许 Agent 拆分；执行仍需审批。":"已关闭 Agent 拆分。");}}}>
+        <label><input type="checkbox" checked={agentEnabled} onChange={e=>setAgentEnabled(e.target.checked)}/> 允许 Agent 拆分子任务</label>
+        <label>必需检查<textarea rows={4} aria-label="Agent 子任务必需检查" value={agentChecks} onChange={e=>setAgentChecks(e.target.value)} placeholder="每行一条，例如 npm test"/></label>
+        <p className="small-note">只用于本机当前项目。Agent 可创建独立工作树，检查命令由你指定；执行和集成仍需确认。</p>
+        <button className="button primary" disabled={!!busy || (agentEnabled&&!agentChecks.trim())}>保存</button>
+      </form>
+    </Modal>}
     {showSpawn && <Modal title="拆分子任务" close={()=>!busy&&setShowSpawn(false)}>
       {message && <p role="alert" className="small-note">{message}</p>}
       <form onSubmit={async e=>{e.preventDefault();const result=await run("spawn","tasks.spawn",{parentLaneId:parent,title,prompt,checkCommands:checks.split("\n").map(v=>v.trim()).filter(Boolean)});if(result){setShowSpawn(false);setTitle("");setPrompt("");setChecks("");setMessage("子任务已创建，等待执行审批。");}}}>
@@ -90,7 +108,7 @@ export function TaskCoordination({state,session,call}:{state:State;session:Sessi
       {message && <p role="alert" className="small-note">{message}</p>}
       <form onSubmit={async e=>{e.preventDefault();if(await run("handoff","handoff.request",{laneId:source,targetLaneId:target})){setShowHandoff(false);setMessage("已请求接力，等待原执行者安全停止。");}}}>
         <label>接手通道<select aria-label="接手通道" value={source} onChange={e=>setSource(e.target.value)}>{others.map(l=><option key={l.id} value={l.id}>{l.owner} · {l.provider}</option>)}</select></label>
-        <label>我的通道<select aria-label="我的接收通道" value={target} onChange={e=>setTarget(e.target.value)}>{own.filter(l=>!["running","awaiting"].includes(l.status)).map(l=><option key={l.id} value={l.id}>{l.provider}</option>)}</select></label>
+        <label>我的通道<select aria-label="我的接收通道" value={target} onChange={e=>setTarget(e.target.value)}>{own.filter(l=>!["running","awaiting","needs_handoff"].includes(l.status)).map(l=><option key={l.id} value={l.id}>{l.provider}</option>)}</select></label>
         <p className="small-note">同步确认快照后，用你的账号和新会话继续。</p>
         <button className="button primary" disabled={!!busy || !source || !target}><ArrowRightLeft size={14}/> 请求接力</button>
       </form>

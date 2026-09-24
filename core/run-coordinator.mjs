@@ -1,3 +1,4 @@
+import { redactText } from "./secure-store.mjs";
 import { validateUsage } from "./providers/usage.mjs";
 import { publicConfiguration } from "./providers/configuration.mjs";
 import {randomUUID, createHash} from 'node:crypto';
@@ -10,14 +11,14 @@ export class RunCoordinator {
   this.records=new Map();this.claimed=new Set();this.prepared=new Map();this.flushing=new Set();this.decisions=new Set();this.deciding=new Set();this.steering=new Set();this.epoch=0;this.paused=false;
   mkdirSync(dir,{recursive:true,mode:0o700});
   for(const name of readdirSync(dir).filter(v=>/^[a-f0-9-]+\.json$/.test(v))) {
-   try {const r=JSON.parse(readFileSync(join(dir,name),'utf8'));if(r.runId&&r.pending)this.records.set(r.runId,r);}catch{}
+   try {const r=JSON.parse(readFileSync(join(dir,name),'utf8'));if(r.runId&&r.pending){delete r.outcomeSending;this.records.set(r.runId,r);}}catch{}
   }
  }
  attachStore(store) {
   if(this.runtime.runs.size)throw Error('不能在执行中切换持久化存储');
   this.store=store;this.records.clear();
   const names=[...new Set(readdirSync(this.dir).map(v=>v.match(/^([a-f0-9-]+\.json)(?:\.enc(?:\.[a-f0-9-]+\.pending)?)?$/)?.[1]).filter(Boolean))];
-  for(const name of names){const r=store.readJSON(name);if(!r.runId||!Array.isArray(r.pending))throw Error('本机执行记录损坏');this.records.set(r.runId,r);}
+  for(const name of names){const r=store.readJSON(name);if(!r.runId||!Array.isArray(r.pending))throw Error('本机执行记录损坏');delete r.outcomeSending;this.records.set(r.runId,r);}
  }
  hubId(c) {return typeof c.state?.identity?.audience==='string'&&c.state.identity.audience ? c.state.identity.audience : undefined;}
  scope(c) {return createHash('sha256').update((this.hubId(c) ? 'hub:'+this.hubId(c) : c.url)+'\n'+c.auth.secret).digest('hex');}
@@ -41,6 +42,34 @@ export class RunCoordinator {
  save(r) {if(this.store){this.store.writeJSON(r.runId+'.json',r);this.onChange();return;}const path=join(this.dir,r.runId+'.json');writeFileSync(path+'.tmp',JSON.stringify(r),{mode:0o600});renameSync(path+'.tmp',path);this.onChange();}
  enqueue(r,method,args) {
   r.pending.push({method,args:{sessionId:r.sessionId,laneId:r.laneId,runId:r.runId,...args}});this.save(r);void this.flush(r);
+ }
+ reportOutcome(r, reason) {
+  if (!r.dispatchAt || r.outcome) return;
+  r.outcome = {sessionId:r.sessionId,laneId:r.laneId,runId:r.runId,claimKey:r.claimKey,
+   dispatchAt:r.dispatchAt,dispatches:structuredClone(r.dispatches||[]),observations:structuredClone(r.observations||[]),
+   lastOutput:r.lastOutput?.trim()?r.lastOutput:null,reason:redactText(String(reason)).slice(0,2000).trim()||'执行结果未确认'};
+  this.save(r);void this.flushOutcome(r);
+ }
+ async flushOutcome(r) {
+  const c=this.client();
+  if(!r.outcome||r.outcomeDelivered||r.outcomeBlocked||r.outcomeSending||!c||c.ws?.readyState!==1||r.scope!==this.scope(c))return;
+  r.outcomeSending=true;
+  try {await c.call('outcome.report',r.outcome);r.outcomeDelivered=true;}
+  catch(e){if(c.ws?.readyState===1&&!/断开|未连接|超时/.test(e.message))r.outcomeBlocked=e.message;else this.retry();}
+  finally{delete r.outcomeSending;this.save(r);}
+ }
+ observe(r,e) {
+  // Only complete logical messages enter this shared evidence summary.
+  // Streaming deltas may interleave tool items or split credentials; the normal
+  // transcript pipeline retains them, but they cannot safely be summarized here.
+  if(e.type==='message'&&e.text)r.lastOutput=redactText(e.text).replace(/\b(?:sk-|gh[pousr]_|github_pat_|AKIA|ASIA|eyJ)[A-Za-z0-9_.-]*/g,'[凭据已隐藏]').slice(0,8000);
+  if(e.type==='tool') {
+   r.observations??=[];
+   r.observations.push({itemId:String(e.itemId||'unidentified').slice(0,500),phase:String(e.phase||'observed').slice(0,100),text:redactText(JSON.stringify(e.item||{})).slice(0,8000),at:new Date().toISOString()});
+   r.observations=r.observations.slice(-50);
+  }
+  // Transcript events are durable in enqueue. Preserve these bounded summaries
+  // in that same write, avoiding an additional disk write per streamed token.
  }
  async flush(r) {
   const c=this.client();if(!c||c.ws?.readyState!==1||this.flushing.has(r.runId)||r.blocked||r.scope!==this.scope(c)||!r.pending.length)return;
@@ -79,10 +108,11 @@ export class RunCoordinator {
    if(c!==this.client()||epoch!==this.epoch)throw Error('协作连接已切换，尚未开始本机执行');
    const latest=c.state?.sessions.find(s=>s.id===approval.sessionId)?.lanes.find(l=>l.id===approval.laneId);
    if(latest?.stopRequested||latest?.fencedRunId===r.runId)throw Error('执行已撤销');
-   r.phase='starting';this.save(r);
+   r.phase='starting';r.dispatchAt=new Date().toISOString();this.save(r);
    this.enqueue(r,'run.configuration',{phase:'requested',...publicConfiguration(options)});
    await this.runtime.start({runId:r.runId,provider:approval.provider,cwd:this.root(approval),prompt,mode:approval.mode,sessionId:lane.providerSessionId,...options,
     onEvent:e=>{
+     this.observe(r,e);
      if(e.type==='configuration'&&!r.ended){
       let configuration;try{configuration=publicConfiguration(e);}catch{return;}
       const key=JSON.stringify(configuration);
@@ -99,7 +129,7 @@ export class RunCoordinator {
      if(e.type==='error')this.enqueue(r,'run.entry',{eventId:randomUUID(),role:'system',text:e.text||'执行错误'});
      if(e.type==='approval')this.enqueue(r,'tool.request',{providerRequestId:e.approvalId,action:e.request.tool||e.request.kind||'工具操作',input:e.request});
     },
-    onEnd:result=>{r.ended=true;this.enqueue(r,'run.finish',{status:result.status,message:result.message||'执行结束'});this.onFinish({...result,sessionId:r.sessionId});},
+    onEnd:result=>{r.ended=true;if(result.status!=='done')this.reportOutcome?.(r,result.message||'执行中断');this.enqueue(r,'run.finish',{status:result.status,message:result.message||'执行结束',...(result.failure?{failure:result.failure}:{})});this.onFinish({...result,sessionId:r.sessionId});},
    });
   } catch(e) {
    if(r?.phase==='prepared'){
@@ -116,6 +146,7 @@ export class RunCoordinator {
    // A prepared claim may have reached the Hub just before the application died.
    // The persisted nonce can settle that claim, but never launches the provider.
    if(r.phase==='prepared')await c.call('run.claim',{id:r.runId,claimKey:r.claimKey});
+   this.reportOutcome(r,'应用重启，未取得本次执行的完整结果。启动与许可记录只证明投递尝试，不证明外部操作成功。');
    r.ended=true;this.enqueue(r,'run.finish',{status:'interrupted',message:'应用重启，执行结果可能不完整；请检查记录后继续，不会自动重跑。'});
   }catch(e){
    if(c.ws?.readyState!==1||/断开|未连接|超时/.test(e.message))this.retry();
@@ -126,6 +157,10 @@ export class RunCoordinator {
   if(this.paused)return;
   const c=this.client();if(!c?.state||c.ws?.readyState!==1)return;
   const state=c.state;
+  for(const r of this.records.values())if(r.scope===this.scope(c)){
+   if(r.phase==='starting'&&!r.ended&&!this.runtime.runs.has(r.runId)&&!this.claimed.has(r.runId))this.reportOutcome(r,'本机执行已停止，结果尚未确认。');
+   void this.flushOutcome(r);
+  }
   for(const r of this.records.values())if(r.scope===this.scope(c)&&!r.blocked){
    // If the application restarted, do not repeat an unknown external action.
    if(!r.ended&&!this.runtime.runs.has(r.runId)&&!this.claimed.has(r.runId)) {
@@ -144,7 +179,7 @@ export class RunCoordinator {
     try {await this.runtime.steer(runId,instruction.text,this.steeringImages(instruction.id));}catch(e){status='failed';message='指导投递结果未确认，请检查 Agent 记录；未自动重发。'+e.message;}
     this.enqueue(record,'run.steer.ack',{id:instruction.id,status,message});
    }
-   if(!['running','awaiting'].includes(lane.status)&&lane.queue?.some(q=>q.status==='queued'))await c.call('run.queue.next',{sessionId:session.id,laneId:lane.id}).catch(()=>{});
+   if((!lane.handoffNeeded||lane.handoffNeeded.runId!==lane.activeRunId)&&!['running','awaiting','needs_handoff'].includes(lane.status)&&lane.queue?.some(q=>q.status==='queued'))await c.call('run.queue.next',{sessionId:session.id,laneId:lane.id}).catch(()=>{});
   }
   for(const a of state.toolApprovals||[])if(a.ownerId===state.me.id&&['approved','rejected','consumed'].includes(a.status)&&!this.decisions.has(a.id)&&!this.deciding.has(a.id)&&this.runtime.runs.has(a.runId)) {
    this.deciding.add(a.id);
@@ -155,13 +190,19 @@ export class RunCoordinator {
     const claimKey=createHash('sha256').update(r.claimKey+'\n'+a.id).digest('hex');
     const decision=await c.call('tool.claim',{id:a.id,claimKey});
     if(c!==this.client()||!this.runtime.runs.has(a.runId))continue;
-    await this.runtime.respondApproval(a.runId,a.providerRequestId,{allow:decision.allowed,answers:decision.answers,content:decision.content});
-    this.decisions.add(a.id);
+    // Persist before dispatch: a crash or a lost provider acknowledgement must
+    // never cause the same permission to be sent a second time.
+    if(r.dispatchedApprovals?.includes(a.id)){this.decisions.add(a.id);continue;}
+    r.dispatchedApprovals??=[];r.dispatchedApprovals.push(a.id);
+    if(decision.allowed){r.dispatches??=[];r.dispatches.push({approvalId:a.id,at:new Date().toISOString()});r.dispatches=r.dispatches.slice(-100);}
+    this.save(r);this.decisions.add(a.id);
+    try{await this.runtime.respondApproval(a.runId,a.providerRequestId,{allow:decision.allowed,answers:decision.answers,content:decision.content});}
+    catch(error){this.reportOutcome(r,'工具许可投递结果未确认：'+error.message);throw error;}
    }catch(error){if(/断开|未连接|超时/.test(error.message)&&c===this.client()&&c.ws?.readyState===1)this.retry();}finally{this.deciding.delete(a.id);}
   }
   for(const a of state.approvals)if(a.ownerId===state.me.id&&a.status==='approved')void this.start(a);
  }
- get issues(){return [...this.records.values()].filter(r=>r.blocked).map(r=>({runId:r.runId,sessionId:r.sessionId,message:r.blocked}));}
+ get issues(){return [...this.records.values()].filter(r=>r.blocked||r.outcomeBlocked).map(r=>({runId:r.runId,sessionId:r.sessionId,message:r.blocked||r.outcomeBlocked}));}
  resume(){this.paused=false;return this.process();}
  close(){this.paused=true;this.epoch++;this.prepared.clear();clearTimeout(this.retryTimer);this.retryTimer=null;return this.runtime.close();}
 }

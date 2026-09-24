@@ -1,11 +1,13 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { randomUUID } from "node:crypto";
+import { createAgentSubtasks } from "./subtask-agent.mjs";
 import { shellCommand, platformEnv } from "../../core/platform.mjs";
 import { worktree } from "../../core/local.mjs";
 import { publishSnapshot, receiveSnapshot, bindSessionWorktree, assertSessionWorktree } from "../../core/snapshots.mjs";
 import { checkpointSubtaskSource, createSubtask, captureCandidate, reviewCandidate, checkCandidate, integrateCandidate, subtaskState } from "../../core/subtasks.mjs";
 const exec = promisify(execFile);
-const supported = new Set(["tasks.spawn", "tasks.review", "tasks.check", "tasks.integrate", "handoff.prepare", "handoff.receive"]);
+const supported = new Set(["tasks.spawn", "tasks.review", "tasks.check", "tasks.integrate", "tasks.settings.get", "tasks.settings.save", "handoff.prepare", "handoff.receive"]);
 export const handlesTaskCoordination = method => supported.has(method);
 export function createTaskCoordination({ client, runtime, localRoot, config, saveConfig, dataDir, withRepository=async(_root,action)=>action() }) {
   config.lanePaths ??= {};
@@ -71,9 +73,12 @@ export function createTaskCoordination({ client, runtime, localRoot, config, sav
     return { root, result };
     });
   }
+  const agentSubtasks = createAgentSubtasks({client,runtime,localRoot,config,saveConfig,assertBoundContext});
   return {
+    spawnFromAgent: (binding, args, validateLease) => agentSubtasks.spawn(binding, args, validateLease),
     async invoke(method, args = {}) {
       if (!supported.has(method)) throw Error("不支持的任务协调操作");
+      if (method.startsWith("tasks.settings.")) return agentSubtasks.settings(method, args);
       const ctx = await context(args), { c, state, session, params, task, handoff } = ctx;
       if (method === "tasks.spawn") {
         const parent = ownedLane(ctx, args.parentLaneId);
@@ -88,9 +93,11 @@ export function createTaskCoordination({ client, runtime, localRoot, config, sav
         try {
           const local = await createSubtask(root, { id: created.id, baseCommit, requiredChecks });
           await bindSessionWorktree(local.worktree, {sessionId:session.id, expectedBranch:local.branch});
-          const claimed = await c.call("subtask.claim", { id: created.id, baseCommit, worktreeReady: true, provider: args.provider || parent.provider });
+          const claimKey = randomUUID();
+          const claimed = await c.call("subtask.claim", { id: created.id, baseCommit, worktreeReady: true, provider: args.provider || parent.provider, deferRun:true, claimKey });
           config.lanePaths[claimed.lane.id] = local.worktree; saveConfig();
-          return { ...claimed, worktree: local.worktree, baseCommit };
+          const started = await c.call("subtask.start", {id:created.id,claimKey});
+          return { ...started, worktree: local.worktree, baseCommit };
         } catch (error) { await c.call("subtask.cancel", { id: created.id }).catch(() => {}); throw error; }
       }
       if (method === "tasks.review") return (await candidate(ctx)).result;

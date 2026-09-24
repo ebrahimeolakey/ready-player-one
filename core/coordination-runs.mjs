@@ -85,7 +85,7 @@ export function runCoordination(hub, peer, method, a) {
   }
   if (method === "run.queue.next") {
     const { l } = hub.lane(peer, a);
-    if (["running", "awaiting"].includes(l.status)) throw Error("当前任务尚未结束");
+    if (["running", "awaiting", "needs_handoff"].includes(l.status) || (l.handoffNeeded && l.handoffNeeded.runId === l.activeRunId)) throw Error("当前任务尚未结束或需要接管");
     const q = l.queue?.find(q => q.status === "queued");
     if (!q) return null;
     const approval = hub.act(peer, "run.request", { sessionId: a.sessionId, laneId: a.laneId, prompt: q.prompt, mode: q.mode, files: q.files, fileScopes:q.fileScopes, planIds:q.planIds, branch:q.branch });

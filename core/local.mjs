@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import {
   realpath,
   readdir,
+  opendir,
   readFile,
   writeFile,
   stat,
@@ -79,31 +80,59 @@ export async function files(root, path = "") {
     )
     .slice(0, 500);
 }
-// Bounded project filename search using the same path and symlink boundaries as the tree.
-export async function searchFiles(root, query) {
+// Incremental filename search: cancellation is checked around each filesystem wait and batch.
+export async function searchFiles(root, query, { signal, onVisit } = {}) {
+  signal?.throwIfAborted();
   if (typeof query !== "string" || !query.trim() || query.length > 200)
     return [];
-  const q = query.trim().toLowerCase(),
-    queue = [""],
-    found = [];
-  let visited = 0;
-  while (queue.length && visited < 20000 && found.length < 100) {
-    const path = queue.shift();
-    let entries;
+  const q = query.trim().toLowerCase(), queue = [""], found = [];
+  const ignored = new Set([".git", "node_modules", ".DS_Store", "dist", "release"]);
+  // Validate the root once even if every descendant is unreadable.
+  const base = await safePath(root, "");
+  signal?.throwIfAborted();
+  let visited = 0, cursor = 0;
+  while (cursor < queue.length && visited < 20000 && found.length < 100) {
+    signal?.throwIfAborted();
+    const path = queue[cursor++];
+    let dir;
     try {
-      entries = await files(root, path);
-    } catch {
-      continue;
+      const canonical = await safePath(base, path);
+      signal?.throwIfAborted();
+      dir = await opendir(canonical, { bufferSize: 64 });
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (["ENOENT", "ENOTDIR", "EACCES", "EPERM"].includes(error.code)) continue;
+      throw error;
     }
-    for (const f of entries) {
-      visited++;
-      if (f.directory) {
-        if (f.path.split("/").length < 20) queue.push(f.path);
-      } else if (f.path.toLowerCase().includes(q)) found.push(f);
-      if (found.length >= 100) break;
+    try {
+      signal?.throwIfAborted();
+      for await (const entry of dir) {
+        signal?.throwIfAborted();
+        visited++;
+        onVisit?.(visited);
+        signal?.throwIfAborted();
+        if (!ignored.has(entry.name) && !entry.isSymbolicLink()) {
+          const child = path ? `${path}/${entry.name}` : entry.name;
+          if (entry.isDirectory()) {
+            if (child.split("/").length < 20) queue.push(child);
+          } else if (entry.isFile() && child.toLowerCase().includes(q)) {
+            found.push({ name: entry.name, path: child, directory: false });
+          }
+        }
+        if (visited >= 20000 || found.length >= 100) break;
+        // Buffered opendir reads can otherwise starve timers for thousands of entries.
+        if (visited % 64 === 0) {
+          await new Promise(resolve => setImmediate(resolve));
+          signal?.throwIfAborted();
+        }
+      }
+    } finally {
+      // for-await closes on break/throw; this also covers abort before iteration starts.
+      try { await dir.close(); } catch (error) { if (error.code !== "ERR_DIR_CLOSED") throw error; }
     }
   }
-  return found;
+  signal?.throwIfAborted();
+  return found.sort((a, b) => a.path.localeCompare(b.path));
 }
 export const hash = (content) =>
   createHash("sha256").update(content).digest("hex");

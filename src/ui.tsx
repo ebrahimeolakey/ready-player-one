@@ -11,6 +11,7 @@ export const statusNames: Record<string, string> = {
   done: "已完成",
   error: "失败",
   interrupted: "已中断",
+  needs_handoff: "待接管",
 };
 export const time = (s: string) =>
   new Date(s).toLocaleTimeString("zh-CN", {

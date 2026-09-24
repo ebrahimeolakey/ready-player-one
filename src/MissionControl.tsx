@@ -8,7 +8,9 @@ export function MissionControl({state,sessions,onOpen}:{state:State;sessions:Ses
   const handoffs=((state as any).handoffs||[]).filter((h:any)=>h.sessionId===s.id&&['requested','ready'].includes(h.status)).length;
   const blocked=s.plan.filter(p=>p.status==='blocked').length;
   const runs=(state.local.runIssues||[]).filter(r=>r.sessionId===s.id).length;
-  const labels=[approvals?`${approvals} 项审批`:'',conflict?'代码冲突':'',handoffs?`${handoffs} 项接管`:'',blocked?`${blocked} 项受阻`:'',runs?'执行需检查':''].filter(Boolean);
+  const limited=s.lanes.filter(l=>l.status==='needs_handoff').length;
+  const unknown=(state.outcomes||[]).filter(o=>o.sessionId===s.id&&o.status==='unknown').length;
+  const labels=[unknown?`${unknown} 项结果待确认`:'',limited?`${limited} 项限额待接管`:'',approvals?`${approvals} 项审批`:'',conflict?'代码冲突':'',handoffs?`${handoffs} 项接管`:'',blocked?`${blocked} 项受阻`:'',runs?'执行需检查':''].filter(Boolean);
   return {session:s,labels};
  }).filter(a=>a.labels.length);
  const running=active.flatMap(s=>s.lanes).filter(l=>l.status==='running');

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { claimKeyHash } from "./coordination-runs.mjs";
 const at = () => new Date().toISOString();
 const hash = value => {
   if (typeof value !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value)) throw Error("需要完整 commit 标识");
@@ -74,22 +75,58 @@ export function handoffs(hub, peer, method, a) {
     if (!member) throw Error("子任务执行者需要 Editor 权限");
     const requiredCheckIds = a.requiredCheckIds;
     if (!Array.isArray(requiredCheckIds) || !requiredCheckIds.length || requiredCheckIds.length > 20 || requiredCheckIds.some(id => typeof id !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(id))) throw Error("必须指定本机明确配置的检查 ID");
-    const task = { id: randomUUID(), workspaceId: s.workspaceId, sessionId: s.id, parentLaneId: l.id, requestedBy: peer.id, ownerId: executorId, owner: member.name, title: text(a.title, 200), prompt: text(a.prompt), baseCommit: hash(a.baseCommit), requiredCheckIds: [...new Set(requiredCheckIds)], status: "requested", at: at() };
+    const input = {ownerId:executorId,title:text(a.title,200),prompt:text(a.prompt),baseCommit:hash(a.baseCommit),requiredCheckIds:[...new Set(requiredCheckIds)]};
+    if (a.requestId !== undefined || a.sourceRunId !== undefined) {
+      if (typeof a.requestId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(a.requestId)) throw Error("子任务 requestId 必须是 UUID");
+      const source = hub.db.approvals.find(v=>v.id===a.sourceRunId);
+      if (executorId!==peer.id || l.activeRunId!==a.sourceRunId || l.status!=="running" || l.stopRequested || l.fencedRunId===a.sourceRunId || source?.status!=="claimed" || source.mode!=="workspace-write") throw Error("父执行已结束或不允许拆分子任务");
+      const existing = hub.db.subtasks.find(v=>v.requestedBy===peer.id && v.parentLaneId===l.id && v.sourceRunId===a.sourceRunId && v.requestId===a.requestId.toLowerCase());
+      if (existing) {
+        if (Object.keys(input).some(key=>JSON.stringify(existing[key])!==JSON.stringify(input[key]))) throw Error("相同 requestId 不能用于不同子任务");
+        return existing;
+      }
+    }
+    const task = { id: randomUUID(), workspaceId: s.workspaceId, sessionId: s.id, parentLaneId: l.id, requestedBy: peer.id, ...input, owner: member.name, ...(a.requestId ? {requestId:a.requestId.toLowerCase(),sourceRunId:a.sourceRunId}:{}), status: "requested", at: at() };
     hub.db.subtasks.push(task); return task;
   }
   if (method.startsWith("subtask.")) {
     const task = hub.db.subtasks.find(v => v.id === a.id);
     if (!task) throw Error("子任务不存在");
     const s = hub.session(peer, task.sessionId), parent = s.lanes.find(l => l.id === task.parentLaneId);
+    const sourceActive = () => {
+      if (s.status!=="active") throw Error("会话已归档");
+      if (task.sourceRunId && (parent.activeRunId!==task.sourceRunId || parent.status!=="running" || parent.stopRequested || parent.fencedRunId===task.sourceRunId)) throw Error("父执行已结束或被替代");
+    };
+    const result = () => ({task,lane:s.lanes.find(l=>l.id===task.laneId),approval:hub.db.approvals.find(v=>v.id===task.approvalId)});
     if (method === "subtask.claim") {
-      if (task.ownerId !== peer.id || task.status !== "requested") throw Error("子任务已领取或不属于当前执行者");
+      sourceActive();
+      if (task.ownerId !== peer.id) throw Error("子任务已领取或不属于当前执行者");
       if (hash(a.baseCommit) !== task.baseCommit || a.worktreeReady !== true) throw Error("请先从指定快照创建独立工作树");
       const provider = a.provider || parent.provider;
+      const key = claimKeyHash(a.claimKey);
+      if(a.deferRun!==undefined && typeof a.deferRun!=="boolean")throw Error("deferRun 必须为布尔值");
+      if (a.deferRun && !key) throw Error("准备子任务需要持久领取标识");
+      if (task.status !== "requested") {
+        if (key && key===task.claimKeyHash && ["prepared","running"].includes(task.status) && s.lanes.find(l=>l.id===task.laneId)?.provider===provider && task.deferredRun===(a.deferRun===true)) return result();
+        throw Error("子任务已领取或不属于当前执行者");
+      }
       const l = hub.act(peer, "lane.create", { sessionId: s.id, provider, providerLabel: a.providerLabel || (provider === parent.provider ? parent.providerLabel : undefined) });
       Object.assign(l, { subtaskId: task.id, parentLaneId: parent.id, baseCommit: task.baseCommit });
+      Object.assign(task,{laneId:l.id,claimKeyHash:key,deferredRun:a.deferRun===true,claimedAt:at()});
+      if(a.deferRun===true){task.status="prepared";return result();}
       const approval = hub.act(peer, "run.request", { sessionId: s.id, laneId: l.id, prompt: task.prompt, mode: "workspace-write" });
       Object.assign(task, { status: "running", laneId: l.id, approvalId: approval.id, claimedAt: at() });
       return { task, lane: l, approval };
+    }
+    if(method==="subtask.start") {
+      sourceActive();
+      const key=claimKeyHash(a.claimKey);
+      if(task.ownerId!==peer.id || !task.deferredRun || !key || key!==task.claimKeyHash)throw Error("子任务启动标识无效");
+      if(task.status==="running" && task.approvalId)return result();
+      if(task.status!=="prepared")throw Error("子任务尚未准备或已结束");
+      const approval=hub.act(peer,"run.request",{sessionId:s.id,laneId:task.laneId,prompt:task.prompt,mode:"workspace-write"});
+      Object.assign(task,{status:"running",approvalId:approval.id,startedAt:at()});
+      return result();
     }
     if (method === "subtask.candidate") {
       if (task.ownerId !== peer.id || !["running", "review"].includes(task.status)) throw Error("不能发布此子任务候选");
@@ -106,7 +143,7 @@ export function handoffs(hub, peer, method, a) {
       return task;
     }
     if (method === "subtask.cancel") {
-      if (![task.ownerId, parent.ownerId].includes(peer.id) || !["requested", "running", "review"].includes(task.status)) throw Error("不能取消此子任务");
+      if (![task.ownerId, parent.ownerId].includes(peer.id) || !["requested", "prepared", "running", "review"].includes(task.status)) throw Error("不能取消此子任务");
       const lane = s.lanes.find(l => l.id === task.laneId); if (lane) fence(hub, lane);
       task.status = "cancelled"; return task;
     }
