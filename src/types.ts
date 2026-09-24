@@ -109,6 +109,8 @@ export type State = {
   shared?: boolean;
   local: {
     referenceIssues?:{workspaceId:string;sessionId?:string;message:string}[];
+    notificationError?:string|null;
+    generalSettings?:import("../core/general-settings.mjs").GeneralSettingsValue;
     editorSettings?:import("../core/editor-settings.mjs").EditorSettingsValue;
     keyboard?:Record<string,string>;
     modelCatalogs?:Record<string,import("./ProviderControls").ProviderModel[]>;

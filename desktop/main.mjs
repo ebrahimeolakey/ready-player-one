@@ -1,3 +1,5 @@
+import { DesktopNotifications } from "./services/desktop-notifications.mjs";
+import { resolveGeneralSettings, validateGeneralSettings } from "../core/general-settings.mjs";
 import { createWorkspaceLifecycle } from "./services/workspace-lifecycle.mjs";
 import { resolveEditorSettings, validateEditorSettings, prepareEditorSave } from "../core/editor-settings.mjs";
 import { defaultBindings, validateBindings } from "../core/keybindings.mjs";
@@ -13,6 +15,7 @@ import {
   shell,
   Menu,
   Notification,
+  Tray,
   session as electronSession,
   webContents,
   safeStorage,
@@ -133,7 +136,20 @@ let win,
   shutting = false;
 const syncStates = new Map();
 const syncBusy = new Set();
-const notifiedApprovals = new Set();
+let notificationError = null;
+const desktopNotifications = new DesktopNotifications({
+  Notification, Tray, Menu, nativeImage, active: false,
+  beep: () => shell.beep(),
+  showWindow: () => { if (win && !win.isDestroyed()) { win.show(); win.focus(); } },
+  quit: () => app.quit(),
+  isFocused: () => !win || win.isDestroyed() || win.isFocused(),
+  onError: error => { notificationError = error.message; emit(); },
+});
+const activateDesktopNotifications = () => {
+  desktopNotifications.setPreferences(resolveGeneralSettings(config.generalSettings));
+  desktopNotifications.setActive(true);
+  desktopNotifications.observeSnapshot(client?.state, { connection: client });
+};
 config.syncSessions ??= {};
 config.lanePaths ??= {};
 let customProviders = [];
@@ -314,6 +330,8 @@ const state = () => ({
     members: [],
   }),
   local: {
+    generalSettings: resolveGeneralSettings(config.generalSettings),
+    notificationError,
     editorSettings: resolveEditorSettings(config.editorSettings),
     keyboard: { ...defaultBindings(process.platform), ...config.keyboard },
     runIssues: coordinator?.issues || [],
@@ -475,14 +493,9 @@ const coordinator = new RunCoordinator({
   onChange: emit,
   onFinish: (result) => {
     coordinationBridge.revokeRun(result.runId);
-    if (win && !win.isFocused() && Notification.isSupported())
-      new Notification({
-        title: "头号玩家",
-        body:
-          result.status === "done"
-            ? "Agent 已完成任务"
-            : "Agent 需要你查看执行结果",
-      }).show();
+    if (client && coordinator.records.get(result.runId)?.scope === coordinator.scope(client)) {
+      desktopNotifications.finish(result, { connection: client });
+    }
     const lane = client?.state?.sessions
       .find((s) => s.id === result.sessionId)
       ?.lanes.find((l) => l.activeRunId === result.runId);
@@ -530,6 +543,7 @@ const connectionSecret = (url) =>
         .digest("hex")
     : config.secret;
 async function connect(url, token) {
+  desktopNotifications.resetConnection();
   providerCLIService.closeAll();
   coordinationBridge.revokeAll();
   await coordinator.close();
@@ -539,18 +553,7 @@ async function connect(url, token) {
   next.on("state", () => {
     if (client !== next) return;
     online = true;
-    for (const a of [
-      ...(next.state.approvals || []),
-      ...(next.state.toolApprovals || []),
-    ])
-      if (a.status === "pending" && !notifiedApprovals.has(a.id)) {
-        notifiedApprovals.add(a.id);
-        if (win && !win.isFocused() && Notification.isSupported())
-          new Notification({
-            title: "头号玩家",
-            body: "有一项操作等待审批",
-          }).show();
-      }
+    desktopNotifications.observeSnapshot(next.state, { connection: next });
     emit();
     processRuns().catch(console.error);
   });
@@ -1335,6 +1338,16 @@ async function invoke(method, a) {
     await refreshAccounts();
     return providerList;
   }
+  if (method === "settings.general.get") return resolveGeneralSettings(config.generalSettings);
+  if (method === "settings.general.save") {
+    const previous = config.generalSettings;
+    config.generalSettings = validateGeneralSettings(a.settings);
+    try { saveConfig(); } catch (error) { config.generalSettings = previous; throw error; }
+    notificationError = null;
+    desktopNotifications.setPreferences(config.generalSettings);
+    emit();
+    return config.generalSettings;
+  }
   if (method === "settings.editor.get") return resolveEditorSettings(config.editorSettings);
   if (method === "settings.editor.save") {
     const previous=config.editorSettings;
@@ -1645,16 +1658,19 @@ app
             return await win.webContents.executeJavaScript(`document.documentElement.dataset.rpoUpdateBootstrap === ${JSON.stringify(updateBootstrapMarker)} && document.querySelector('[data-update-verification]') !== null`) === true;
           },
         }).then(async () => {
+          activateDesktopNotifications();
           await workspaceLifecycle.recover();
           await coordinator.resume();
         }).catch(error => {
+          desktopNotifications.setActive(false);
           updateVerification = {status:"error",message:error.message}; emit();
         });
       }
+      if (!updateHealthTicket) activateDesktopNotifications();
       refreshAccounts().catch(console.error);
       refreshCustomProviders().catch(console.error);
       refreshACP().catch(console.error);
-      if (app.isPackaged) updater.check().catch(console.error);
+      if (app.isPackaged && resolveGeneralSettings(config.generalSettings).autoCheckUpdates) updater.check().catch(console.error);
       win.on("closed", () => {
         win = null;
         app.quit();
@@ -1674,6 +1690,7 @@ app.on("before-quit", async (event) => {
   if (shutting) return;
   event.preventDefault();
   shutting = true;
+  desktopNotifications.dispose();
   fileSearchService.closeAll();
   languageService.dispose();
   dictation.close();

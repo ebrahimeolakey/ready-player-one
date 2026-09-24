@@ -1,3 +1,4 @@
+import { useGeneralSettings } from "./GeneralSettings";
 import { promptProblem, promptStats, PROMPT_LIMITS, SUMMARY_LIMIT } from "../core/prompt-limits.mjs";
 import { useKeyboard, shortcutsAllowed } from "./KeyboardSettings";
 import { ContextUsage } from "./ContextUsage";
@@ -83,6 +84,16 @@ export function AgentLane({
   onBrowse?: (url: string) => void;
   focusEntry?:{entryId:string;hash:string;key:string};
 }) {
+  const { conversationDensity } = useGeneralSettings();
+  const [detailOpen, setDetailOpen] = useState<Record<string, boolean>>({});
+  useEffect(() => { setDetailOpen({}); }, [conversationDensity, l.id]);
+  const detailsProps = (id: string, defaultOpen = conversationDensity === "detailed") => {
+    const open = detailOpen[id] ?? defaultOpen;
+    return { open, onToggle: (event: React.SyntheticEvent<HTMLDetailsElement>) => {
+      const next = event.currentTarget.open;
+      if (next !== open) setDetailOpen(current => ({ ...current, [id]: next }));
+    } };
+  };
   const [commentEntry,setCommentEntry]=useState<{id:string;text:string}|null>(null),[entryComment,setEntryComment]=useState(''),[entryCommentBusy,setEntryCommentBusy]=useState(false),[entryNotice,setEntryNotice]=useState('');
   const [focusedId,setFocusedId]=useState('');
   const canComment=(state.me?.roles?.[s.workspaceId]||(state.me?.host?'owner':'viewer'))!=='viewer';
@@ -203,7 +214,7 @@ export function AgentLane({
   const bottom = useRef<HTMLDivElement>(null),
     scroll = useRef<HTMLDivElement>(null),
     [follow, setFollow] = useState(true);
-  useEffect(()=>{let active=true;setFocusedId('');setEntryNotice('');if(focusEntry){setFollow(false);const entry=l.entries.find(e=>e.id===focusEntry.entryId);if(!entry)setEntryNotice('原消息已不可用');else void hashText(entry.text).then(hash=>{if(!active)return;if(hash!==focusEntry.hash){setEntryNotice('原消息内容已变化，无法定位原始片段');return;}setFocusedId(entry.id);requestAnimationFrame(()=>scroll.current?.querySelector(`[data-entry-id="${CSS.escape(entry.id)}"]`)?.scrollIntoView({block:'center'}));});}return()=>{active=false;};},[focusEntry?.key,l.id,l.entries.find(e=>e.id===focusEntry?.entryId)?.text]);
+  useEffect(()=>{let active=true;setFocusedId('');setEntryNotice('');if(focusEntry){setFollow(false);const entry=l.entries.find(e=>e.id===focusEntry.entryId);if(!entry)setEntryNotice('原消息已不可用');else void hashText(entry.text).then(hash=>{if(!active)return;if(hash!==focusEntry.hash){setEntryNotice('原消息内容已变化，无法定位原始片段');return;}setFocusedId(entry.id);setDetailOpen(current=>({...current,[entry.id]:true}));requestAnimationFrame(()=>scroll.current?.querySelector(`[data-entry-id="${CSS.escape(entry.id)}"]`)?.scrollIntoView({block:'center'}));});}return()=>{active=false;};},[focusEntry?.key,l.id,l.entries.find(e=>e.id===focusEntry?.entryId)?.text]);
   const mine = l.ownerId === state.me?.id,
     busy = ["running", "awaiting"].includes(l.status);
   useEffect(() => {
@@ -336,7 +347,7 @@ export function AgentLane({
     }
   };
   return (
-    <section className={"agent-lane " + (mine ? "mine" : "")}>
+    <section className={"agent-lane density-" + conversationDensity + " " + (mine ? "mine" : "")}>
       <header className="lane-header">
         <div className={"provider-icon small " + l.provider}>
           {l.provider === "codex" ? <Code2 size={16} /> : <span>✳</span>}
@@ -369,7 +380,7 @@ export function AgentLane({
         {l.entries.map((e) => (
           <article className={"entry " + e.role+(focusedId===e.id?" reference-selected":"")} key={e.id} data-entry-id={e.id}>
             {e.role === "system" && e.text.length > 200 ? (
-              <details className="diagnostic-log">
+              <details className="diagnostic-log" {...detailsProps(e.id, false)}>
                 <summary>运行日志</summary>
                 <pre>{e.text}</pre>
               </details>
@@ -404,7 +415,7 @@ export function AgentLane({
                   </span>
                 </div>
                 {e.role === "tool" ? (
-                  <details>
+                  <details {...detailsProps(e.id)}>
                     <summary>
                       <TerminalSquare size={13} />
                       {toolSummary(e.text)}
@@ -414,9 +425,7 @@ export function AgentLane({
                 ) : e.role === "reasoning" ? (
                   <details
                     className="reasoning-entry"
-                    open={
-                      l.status === "running" && e.id === l.entries.at(-1)?.id
-                    }
+                    {...detailsProps(e.id)}
                   >
                     <summary>
                       <Brain size={12} />
@@ -755,11 +764,13 @@ export function Editor({
   hidden = false,
   search = false,
   rootRevision = "",
+  onDocumentChange,
 }: {
   welcome?: React.ReactNode;
   hidden?: boolean;
   search?: boolean;
   rootRevision?: string;
+  onDocumentChange?: (opened: boolean) => void;
   params: { workspaceId: string; sessionId: string; laneId?: string };
   mapped: boolean;
   call: Call;
@@ -793,6 +804,9 @@ export function Editor({
     [comment, setComment] = useState(""),
     [commentBusy, setCommentBusy] = useState(false),
     [anchorStatus, setAnchorStatus] = useState("");
+  const documentCallback = useRef(onDocumentChange);
+  documentCallback.current = onDocumentChange;
+  useEffect(() => { documentCallback.current?.(!!file); }, [file]);
   const rootChanged = Boolean(file && openedRevision !== rootRevision);
   const currentView = useRef("");
   const currentContent = useRef(content);

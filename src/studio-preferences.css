@@ -1,0 +1,10 @@
+/* Preferences change allocation and visibility, never the mounted terminal/editor. */
+.studio.layout-agent { grid-template-rows: minmax(0, 1fr) minmax(140px, var(--dock-height, 62%)); }
+.studio.layout-editor { grid-template-rows: minmax(0, 1fr) minmax(140px, var(--dock-height, 28%)); }
+.studio.empty-editor-hidden { grid-template-rows: 0 minmax(0, 1fr); }
+.studio.empty-editor-hidden .editor-pane { display: none; }
+.studio.empty-editor-hidden .dock-resizer { display: none; }
+.studio.layout-agent.dock-hidden, .studio.layout-editor.dock-hidden { grid-template-rows: minmax(0, 1fr) 0; }
+.agent-lane.density-compact .entry { margin-top: 7px; margin-bottom: 7px; }
+.agent-lane.density-compact .entry.tool, .agent-lane.density-compact .entry.reasoning { padding-top: 7px; padding-bottom: 7px; }
+.agent-lane.density-compact .entry.tool .entry-heading, .agent-lane.density-compact .entry.reasoning .entry-heading { margin-bottom: 4px; }

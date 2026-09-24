@@ -1,3 +1,5 @@
+import { useGeneralSettings } from "./GeneralSettings";
+import "./studio-preferences.css";
 import { useKeyboard, shortcutsAllowed } from "./KeyboardSettings";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -59,6 +61,9 @@ export function Studio({
   onRepos: () => void;
 }) {
   const keyboard = useKeyboard();
+  const general = useGeneralSettings();
+  const [editorDocument, setEditorDocument] = useState("");
+  const [revealEmptyEditor, setRevealEmptyEditor] = useState(false);
   const [referenceComment,setReferenceComment]=useState<string|null>(null);
   const [focusEntry,setFocusEntry]=useState<{entryId:string;laneId:string;hash:string;key:string}|undefined>();
   useEffect(()=>{setReferenceComment(null);setFocusEntry(undefined);},[s.id]);
@@ -73,7 +78,7 @@ export function Studio({
     [plan, setPlan] = useState(""),
     [comment, setComment] = useState(""),
     [liveDiff, setLiveDiff] = useState(false),
-    [height, setHeight] = useState(340),
+    [height, setHeight] = useState<number | null>(null),
     [commentOpen, setCommentOpen] = useState(true);
 
   const [browserRequest, setBrowserRequest] = useState<
@@ -86,6 +91,8 @@ export function Studio({
     setTool(compact ? "none" : "files");
     setShowRail(!compact);
   }, [compact]);
+  useEffect(() => { setHeight(null); }, [general.layout]);
+  useEffect(() => { setRevealEmptyEditor(false); }, [general.autoHideEmptyEditor, s.id]);
   const own = s.lanes.filter((l) => l.ownerId === state.me?.id),
     lane = s.lanes.find((l) => l.id === laneId) || own[0] || s.lanes[0],
     mapped = !!state.local.paths[s.workspaceId],
@@ -97,6 +104,8 @@ export function Studio({
     pending = state.approvals.filter(
       (a) => a.sessionId === s.id && a.status === "pending",
     );
+  const editorKey = params.laneId || s.id;
+  const emptyEditorHidden = general.autoHideEmptyEditor && !revealEmptyEditor && editorDocument !== editorKey && showDock && !["diff", "browser", "debug"].includes(tool);
   useEffect(() => {
     if (dock === "terminal")
       setTerminalOpened((keys) =>
@@ -175,11 +184,11 @@ export function Studio({
       <div
         ref={root}
         className={
-          "studio " +
+          "studio layout-" + general.layout + (emptyEditorHidden ? " empty-editor-hidden " : " ") +
           (!showDock ? "dock-hidden " : "") +
           (tool === "none" ? "files-hidden" : "")
         }
-        style={{ "--dock-height": `${height}px` } as React.CSSProperties}
+        style={{ "--dock-height": height === null ? undefined : `${height}px` } as React.CSSProperties}
       >
         <nav className="activity-rail">
           {[
@@ -210,7 +219,8 @@ export function Studio({
         </nav>
         {mapped ? (
           <Editor
-            key={params.laneId || s.id}
+            key={editorKey}
+            onDocumentChange={(opened) => setEditorDocument(opened ? editorKey : "")}
             rootRevision={(params.laneId && state.local.lanePaths?.[params.laneId]) || state.local.sessionPaths[s.id] || state.local.paths[s.workspaceId] || ""}
             params={params}
             mapped
@@ -312,23 +322,22 @@ export function Studio({
             )}
           </section>
         )}
-        {showDock && (
-          <section className="agent-dock">
+        <section className="agent-dock" style={{ display: showDock ? undefined : "none" }} aria-hidden={!showDock}>
             <div
               className="dock-resizer"
               role="separator"
               aria-label="调整 Agent 面板高度"
               onPointerDown={(e) => {
                 const y = e.clientY,
-                  start = height;
+                  start = e.currentTarget.parentElement!.getBoundingClientRect().height;
                 e.currentTarget.setPointerCapture(e.pointerId);
                 const handle = e.currentTarget;
                 handle.onpointermove = (ev) =>
                   setHeight(
                     Math.max(
-                      260,
+                      140,
                       Math.min(
-                        window.innerHeight - 230,
+                        Math.max(140, (root.current?.clientHeight || window.innerHeight) - 100),
                         start + y - ev.clientY,
                       ),
                     ),
@@ -371,6 +380,7 @@ export function Studio({
                 </button>
               )}
               <div className="grow" />
+              {emptyEditorHidden && <button title="显示编辑器" aria-label="显示编辑器" onClick={() => { setRevealEmptyEditor(true); setTool("files"); }}><FileCode2 size={15}/></button>}
               <button
                 className="icon-button"
                 title="成员面板"
@@ -688,7 +698,6 @@ export function Studio({
               )}
             </div>
           </section>
-        )}
         {referenceComment&&<ReferenceViewer commentId={referenceComment} context={{workspaceId:s.workspaceId,sessionId:s.id,rootRevision:state.local.sessionPaths[s.id]||state.local.paths[s.workspaceId]}} call={window.rpo.invoke} close={()=>setReferenceComment(null)}/>}
         {!showDock && (
           <button

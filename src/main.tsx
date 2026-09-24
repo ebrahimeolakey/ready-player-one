@@ -1,3 +1,4 @@
+import { GeneralSettings, GeneralSettingsContext } from "./GeneralSettings";
 import { EditorSettings, EditorSettingsContext } from "./EditorSettings";
 import { resolveEditorSettings } from "../core/editor-settings.mjs";
 import { WorkspaceDeletion } from "./WorkspaceDeletion";
@@ -208,6 +209,7 @@ function App() {
     <p>{updateHealth?.message || "正在检查本机数据和界面，请稍候。"}</p>
   </div>;
   return (
+    <GeneralSettingsContext.Provider value={state.local.generalSettings}>
     <EditorSettingsContext.Provider value={resolveEditorSettings(state.local.editorSettings)}>
     <KeyboardContext.Provider value={{os:state.local.os,bindings:state.local.keyboard}}>
     <div className={"app-shell " + (!sidebar ? "sidebar-collapsed" : "")}>
@@ -501,6 +503,7 @@ function App() {
                       <span className="grow">语言</span>
                       <span>简体中文</span>
                     </div>
+                    <GeneralSettings settings={state.local.generalSettings} call={api.invoke} error={state.local.notificationError} />
                     <UpdatePanel call={window.rpo.invoke} state={state.local.update} />
                     <div className="setting-card">
                       <span className="grow">头号玩家</span>
@@ -1173,6 +1176,7 @@ function App() {
     </div>
     </KeyboardContext.Provider>
     </EditorSettingsContext.Provider>
+    </GeneralSettingsContext.Provider>
   );
 }
 createRoot(document.getElementById("root")!).render(<App />);

@@ -14,11 +14,11 @@
 - **外部配置延后**：用户接受先发未签名测试版；证书、OAuth 应用和固定 HTTPS 回调以后补。
 - **范围例外**：房主在线、无常驻协调服务；后续本机接力/可选云执行已有设计，尚未部署，不阻塞当前本地版本验收。
 
-本批隔离发行源码完整回归 **319/319 通过**，TypeScript/Vite 构建通过；平台及桌面证据见 [实施记录](IMPLEMENTATION-TRACKER.md)。自动化不等同全部硬件和用户流程验收。早期 [VALIDATION](VALIDATION.md) 的 22 项和 [UI-REFERENCE](UI-REFERENCE.md) 的 v0.3 观察属于历史记录，不能覆盖后续实现，也不能当成当前全部 UI 的验收。
+本批隔离发行源码完整回归 **361/361 通过**，TypeScript/Vite 构建通过；平台及桌面证据见 [实施记录](IMPLEMENTATION-TRACKER.md)。自动化不等同全部硬件和用户流程验收。早期 [VALIDATION](VALIDATION.md) 的 22 项和 [UI-REFERENCE](UI-REFERENCE.md) 的 v0.3 观察属于历史记录，不能覆盖后续实现，也不能当成当前全部 UI 的验收。
 
 ## 0.1.38 基线：当前实现与真实剩余项
 
-| 项目 | 0.4.3 实际状态及本地证据 | 还缺什么 / 还需验收 | 判断 |
+| 项目 | 0.4.5 实际状态及本地证据 | 还缺什么 / 还需验收 | 判断 |
 | --- | --- | --- | --- |
 | 多人 Agent Session Share | `core/hub.mjs`、`core/client.mjs`、多通道 UI；真实双客户端转录、计划、审批同步；公网 WSS 验证见 [互联网记录](INTERNET-VERIFICATION.md) | 现有公网测试是同机独立进程，不是两台实体 Mac 不同网络；20 个活动 Agent 的压力/重连未验收 | 已实现，待验收 |
 | 账号、模型和运行 | Codex app-server、Claude 双向 stream-json、原生 resume/steer、模型目录和 lane 配置持久化；真实两种 CLI 已调用，见 [运行时](PROVIDER-RUNTIME.md) | 新电脑首次登录及完整工具种类；Windows 真实 CLI；非本人 Provider session 不迁移，接管在新账号开新原生会话 | 已实现，待验收 |

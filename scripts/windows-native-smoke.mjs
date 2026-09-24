@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { join, resolve, isAbsolute, basename } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, safeStorage } from 'electron';
 import { TerminalService } from '../desktop/services/terminal.mjs';
 import { ProviderCLIService } from '../desktop/services/provider-cli.mjs';
+import { DEFAULT_GENERAL_SETTINGS } from '../core/general-settings.mjs';
+import { SecureStore } from '../core/secure-store.mjs';
+import { loadDesktopDataKey } from '../desktop/services/data-key.mjs';
 
 assert.equal(process.platform, 'win32', 'This smoke test must run on native Windows');
 assert.ok(process.env.RPO_DATA_DIR, 'An isolated data directory is required');
@@ -58,6 +61,40 @@ try {
   evidence.renderer = renderer;
   evidence.checks.push('actual desktop entry, local Hub, encrypted settings and React render');
   writeFileSync(join(artifacts, 'windows-desktop.png'), (await win.webContents.capturePage()).toPNG());
+
+  evidence.stage = 'general-preferences'; writeEvidence();
+  const invoke = (method, args = {}) => win.webContents.executeJavaScript(`window.rpo.invoke(${JSON.stringify(method)},${JSON.stringify(args)})`);
+  const initialPreferences = await invoke('settings.general.get');
+  const preferences = {...DEFAULT_GENERAL_SETTINGS,layout:'editor',conversationDensity:'compact',autoHideEmptyEditor:false,
+    autoCheckUpdates:false,notificationsEnabled:false,completionSound:false,trayIcon:false};
+  assert.deepEqual(await invoke('settings.general.save',{settings:preferences}),preferences);
+  assert.deepEqual((await invoke('bootstrap')).local.generalSettings,preferences,'Actual main bootstrap must publish the saved preferences');
+  const dataKey = loadDesktopDataKey({safeStorage,keyFile:join(process.env.RPO_DATA_DIR,'data-key.json'),dataDir:process.env.RPO_DATA_DIR});
+  const settingsReader = new SecureStore({dir:process.env.RPO_DATA_DIR,key:dataKey});
+  dataKey.fill(0);
+  try {
+    assert.deepEqual(settingsReader.readJSON('client.json').generalSettings,preferences,'A newly opened encrypted store must read the exact persisted preferences');
+  } finally { settingsReader.key.fill(0); }
+  const encryptedPreferences = readFileSync(join(process.env.RPO_DATA_DIR,'client.json.enc'));
+  await assert.rejects(invoke('settings.general.save',{settings:{...preferences,trayIcon:'true'}}),/通用设置值无效/);
+  assert.deepEqual(await invoke('settings.general.get'),preferences);
+  assert.deepEqual(readFileSync(join(process.env.RPO_DATA_DIR,'client.json.enc')),encryptedPreferences,'Rejected preferences must leave encrypted disk data unchanged');
+  // Only idle synthetic records: no vendor command, model request, terminal or OS notification.
+  const fixtureWorkspace = await invoke('workspace.create',{name:'Windows 偏好 fixture'});
+  const fixtureSession = await invoke('session.create',{workspaceId:fixtureWorkspace.id,title:'Windows 布局 fixture'});
+  await invoke('lane.create',{workspaceId:fixtureWorkspace.id,sessionId:fixtureSession.id,provider:'codex'});
+  await waitFor(()=>win.webContents.executeJavaScript(`!![...document.querySelectorAll('.mini-session')].find(button=>button.textContent===${JSON.stringify(fixtureSession.title)})`));
+  await win.webContents.executeJavaScript(`[...document.querySelectorAll('.mini-session')].find(button=>button.textContent===${JSON.stringify(fixtureSession.title)}).click()`);
+  await waitFor(()=>win.webContents.executeJavaScript(`!!document.querySelector('.studio.layout-editor:not(.empty-editor-hidden)') && !!document.querySelector('.agent-lane.density-compact')`));
+  const editorLayout = await win.webContents.executeJavaScript(`({editor:document.querySelector('.editor-pane').getBoundingClientRect().height,dock:document.querySelector('.agent-dock').getBoundingClientRect().height})`);
+  assert.ok(editorLayout.editor>editorLayout.dock,'Actual renderer CSS must allocate more height to the editor');
+  await invoke('settings.general.save',{settings:{...preferences,layout:'agent',conversationDensity:'detailed',autoHideEmptyEditor:true}});
+  await waitFor(()=>win.webContents.executeJavaScript(`!!document.querySelector('.studio.layout-agent.empty-editor-hidden') && !!document.querySelector('.agent-lane.density-detailed') && document.querySelector('.editor-pane').getBoundingClientRect().height===0`));
+  evidence.generalPreferences = {saved:preferences,encryptedStoreReopened:true,rejectedWriteUnchanged:true,editorLayout,liveLayoutAndDensity:true,emptyEditorHidden:true,osNotificationsTriggered:false};
+  writeFileSync(join(artifacts,'windows-general-preferences.png'),(await win.webContents.capturePage()).toPNG());
+  // Restore initial settings while keeping OS side effects disabled for this isolated probe.
+  await invoke('settings.general.save',{settings:{...initialPreferences,notificationsEnabled:false,completionSound:false,trayIcon:false}});
+  evidence.checks.push('General preferences: actual main/preload get/save/bootstrap, safeStorage encrypted persistence, invalid-write rollback and live React layout/density/empty-editor CSS');
 
   evidence.stage = 'powershell-pty'; writeEvidence();
   terminal = new TerminalService();
