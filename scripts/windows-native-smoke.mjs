@@ -1,7 +1,8 @@
 // Run with Electron (not ELECTRON_RUN_AS_NODE) on an isolated Windows runner.
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, isAbsolute, basename } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { app, BrowserWindow, dialog } from 'electron';
 import { TerminalService } from '../desktop/services/terminal.mjs';
 import { ProviderCLIService } from '../desktop/services/provider-cli.mjs';
@@ -18,6 +19,7 @@ function fail(error) {
   evidence.error = error.stack || String(error);
   evidence.ptyOutput = output;
   evidence.providerCLIOutput = providerOutput;
+  evidence.providerCLIProcesses = [...(providerTerminal?.terminals.values() || [])].map(record=>({pid:record.process.pid,exited:record.exited,exitCode:record.exitCode}));
   writeEvidence(); console.error(error);
   terminal?.closeAll(); providerTerminal?.closeAll();
   if (providerFixtureDir) try { rmSync(providerFixtureDir, {recursive:true,force:true,maxRetries:2,retryDelay:50}); } catch {}
@@ -98,8 +100,25 @@ try {
   mkdirSync(cliCwd);
   const cliFixture = join(providerFixtureDir, '独立 CLI fixture.mjs');
   const reportPath = join(cliCwd, 'started.json'), inputPath = join(cliCwd, 'input.bin');
-  // This known Electron executable runs only this synthetic Node peer. No vendor
-  // CLI, account probe, prompt, server, token or paid model is used by this check.
+  // Electron's GUI executable is not a reliable console target under ConPTY even
+  // with ELECTRON_RUN_AS_NODE. Use the real setup-node console binary, located
+  // by executing a fixed metadata probe without a shell or interpolated command.
+  const cliEnv = {...process.env}; delete cliEnv.ELECTRON_RUN_AS_NODE;
+  const nodeProbe = JSON.parse(execFileSync('node.exe', ['-p', 'JSON.stringify({executable:process.execPath,version:process.version,electron:!!process.versions.electron})'], {
+    env:cliEnv,encoding:'utf8',timeout:10000,windowsHide:true,
+  }));
+  assert.equal(nodeProbe.electron,false,'The CLI fixture must use real Node, not Electron GUI');
+  assert.ok(isAbsolute(nodeProbe.executable));
+  assert.equal(basename(nodeProbe.executable).toLowerCase(),'node.exe');
+  const cliNode=realpathSync(nodeProbe.executable),pe=readFileSync(cliNode);
+  assert.equal(pe.toString('ascii',0,2),'MZ');
+  const peOffset=pe.readUInt32LE(0x3c);
+  assert.equal(pe.readUInt32LE(peOffset),0x4550,'The Node fixture launcher must be a PE executable');
+  const subsystem=pe.readUInt16LE(peOffset+24+68);
+  assert.equal(subsystem,3,'The Node fixture launcher must use the Windows console subsystem');
+  evidence.providerCLIRuntime={command:cliNode,version:nodeProbe.version,peSubsystem:subsystem};writeEvidence();
+  // Only this synthetic Node peer runs here: no vendor CLI, account probe,
+  // prompt, server, token or paid model is used by this check.
   writeFileSync(cliFixture, `
 import {writeFileSync,appendFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -128,8 +147,8 @@ process.stdin.on('data',data=>{
   const providerCLI = new ProviderCLIService({
     terminals:providerTerminal,state:()=>cliState,root:()=>cliCwd,
     accounts:()=>[{id:'codex',authenticated:false,label:'Synthetic fixture — no vendor account'}],
-    env:()=>({...process.env,ELECTRON_RUN_AS_NODE:'1'}),
-    resolveCommand:async()=>{cliLaunches++;return {command:process.execPath,args:[cliFixture,...cliArgs],resolvedCommand:process.execPath,launcher:'synthetic-electron-node'};}
+    env:()=>({...cliEnv}),
+    resolveCommand:async()=>{cliLaunches++;return {command:cliNode,args:[cliFixture,...cliArgs],resolvedCommand:cliNode,launcher:'synthetic-console-node'};}
   });
   const cliOwner = 402;
   const [cliOpened,cliDuplicate] = await Promise.all([providerCLI.open(cliOwner,cliContext),providerCLI.open(cliOwner,cliContext)]);
@@ -138,16 +157,18 @@ process.stdin.on('data',data=>{
   const cliId=cliOpened.id;
   let report;
   await waitFor(()=>{
+    const current=providerTerminal.read(cliOwner,{id:cliId});
+    if(current.exited)throw Error(`Provider CLI fixture exited before readiness: ${current.exitCode}; output: ${clean(current.data)}`);
     try { report=JSON.parse(readFileSync(reportPath,'utf8'));return clean(providerOutput).includes('RPO_CLI_READY'); } catch { return false; }
   });
   assert.equal(report.stdinTTY,true);assert.equal(report.stdoutTTY,true);
   assert.deepEqual(report.argv,cliArgs,'Windows quoting must preserve the exact Unicode/space/quote/metacharacter argv');
   assert.equal(realpathSync(report.cwd),realpathSync(cliCwd));
   assert.equal(cliOpened.contextId,cliContext.laneId);
-  assert.equal(cliOpened.cli.command,process.execPath);
+  assert.equal(cliOpened.cli.command,cliNode);
   await assert.rejects(providerCLI.open(cliOwner,{...cliContext,laneId:'not-owned'}),/本人/);
   assert.throws(()=>providerTerminal.input(cliOwner+1,{id:cliId,data:'RPO_EXIT'}),/无权/);
-  evidence.checks.push('A8 Provider CLI: real Windows ConPTY, known Electron Node fixture, exact Unicode/space/quote argv and canonical cwd, owner/lane fencing');
+  evidence.checks.push('A8 Provider CLI: real Windows ConPTY, verified console node.exe fixture, exact Unicode/space/quote argv and canonical cwd, owner/lane fencing');
 
   providerTerminal.input(cliOwner,{id:cliId,data:'\x1b[Z'});
   await waitFor(()=>readFileSync(inputPath).length>=3);
