@@ -43,3 +43,18 @@ test('provider continues offline and replays output without duplicate execution 
  assert.equal(runtime.options.runId,request.id);await until(()=>coordinator.records.get(request.id).pending.length===0);
  runtime.runs.delete(request.id);runtime.options.onEnd({status:'done'});await until(()=>hub.db.sessions[0].lanes[0].status==='done');
 });
+
+test('tool lifecycle replaces one record while reasoning remains separate',async t=>{
+ const {hub,runtime,request}=await setup(t);
+ runtime.options.onEvent({type:'tool',itemId:'call-1',phase:'started',item:{name:'read_file',path:'note.txt'}});
+ runtime.options.onEvent({type:'delta',role:'reasoning',itemId:'reason-1',text:'Checking scope'});
+ runtime.options.onEvent({type:'tool',itemId:'call-1',phase:'completed',item:{name:'read_file',path:'note.txt',output:'done'}});
+ runtime.runs.delete(request.id);runtime.options.onEnd({status:'done'});
+ await until(()=>hub.db.sessions[0].lanes[0].status==='done');
+ const entries=hub.db.sessions[0].lanes[0].entries;
+ const tools=entries.filter(e=>e.role==='tool');assert.equal(tools.length,1);
+ assert.equal(JSON.parse(tools[0].text).phase,'completed');
+ assert.equal(JSON.parse(tools[0].text).output,'done');
+ assert.equal(entries.filter(e=>e.role==='reasoning').length,1);
+ assert.equal(entries.find(e=>e.role==='reasoning').text,'Checking scope');
+});

@@ -286,3 +286,19 @@ test(
     assert.equal(await readFile(target, "utf8"), "preserve me");
   },
 );
+
+test('Mac restart keeps the isolated data directory and starts the selected bundle as a new instance', { skip: process.platform === 'win32' }, async () => {
+  const { mkdir, rm } = await import('node:fs/promises');
+  const dir = await mkdtemp(join(tmpdir(), 'rpo-relaunch-env-'));
+  const target = join(dir, 'current.app'), next = join(dir, 'next.app'), backup = join(dir, 'backup.app');
+  const script = join(dir, 'apply.sh'), launcher = join(dir, 'open-fixture'), output = join(dir, 'args');
+  const dataDir = join(dir, 'data $(must-not-execute) 中文');
+  try {
+    await mkdir(target); await mkdir(next);
+    await writeFile(launcher, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RPO_TEST_LAUNCH_ARGS"\n', { mode: 0o700 });
+    await writeFile(script, INSTALL_SCRIPT.replaceAll('/usr/bin/open', '"' + launcher + '"'));
+    await promisify(execFile)('/bin/sh', [script, '2147483647', target, next, backup, 'darwin'], { env: { ...process.env, RPO_DATA_DIR: dataDir, RPO_IDENTITY_ISSUER: 'https://identity.example.test/团队', RPO_IDENTITY_PUBLIC_KEY_FILE: join(dir, '公钥 config $(no-eval).pem'), RPO_TEST_LAUNCH_ARGS: output } });
+    assert.deepEqual((await readFile(output, 'utf8')).trimEnd().split('\n'), ['-n', '--env', 'RPO_DATA_DIR=' + dataDir, '--env', 'RPO_IDENTITY_ISSUER=https://identity.example.test/团队', '--env', 'RPO_IDENTITY_PUBLIC_KEY_FILE=' + join(dir, '公钥 config $(no-eval).pem'), target]);
+    assert.deepEqual(await readdir(backup), []);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

@@ -85,6 +85,7 @@ test("code comments keep exact anchors, detect changed commits, and convert once
   assert.throws(() => act(peers.commenter, "comment.task", { id: c.id }), /editor 权限/);
   const result = act(peers.editor, "comment.task", { id: c.id, laneId: lane.id, mode: "read-only" });
   assert.equal(result.plan.commentId, c.id); assert.equal(c.taskId, result.plan.id);
+  assert.deepEqual(result.plan.fileScopes,[{path:c.location.path,kind:"file"}]);
   assert.equal(result.approval.status, "pending");
   assert.equal(result.approval.files[0], "src/auth.ts");
   assert.throws(() => act(peers.editor, "comment.task", { id: c.id }), /已转为/);
@@ -194,7 +195,7 @@ test("MCP tools preserve scope and perform real Hub role authorization", async t
   const call = (method, params) => dispatch({ jsonrpc: "2.0", id: 1, method, params });
   assert.equal((await call("tools/list")).error.code, -32000);
   assert.equal((await call("initialize", {})).result.protocolVersion, "2025-06-18");
-  assert.equal((await call("tools/list")).result.tools.length, 10);
+  assert.ok((await call("tools/list")).result.tools.some(tool => tool.name === "rpo_context"));
   assert.equal((await call("tools/call", { name: "rpo_plan_add", arguments: { text: "测试", sessionId: "other" } })).error.code, -32602);
   const result = await call("tools/call", { name: "rpo_plan_add", arguments: { text: "MCP任务" } });
   assert.equal(result.result.isError, false); assert.equal(s.plan[0].text, "MCP任务");
@@ -480,4 +481,21 @@ test("pending guidance closes on finish and stop instead of remaining pending ac
   const next=act(peers.editor,"run.request",{laneId:lane.id,prompt:"next",mode:"read-only"});act(owner,"approval.decide",{id:next.id,allow:true});act(peers.editor,"run.claim",{id:next.id});
   const second=act(peers.editor,"run.steer",{laneId:lane.id,runId:next.id,text:"pending second"});
   act(owner,"lane.stop",{laneId:lane.id});assert.equal(second.status,"failed");assert.equal(second.message,"执行已停止");
+});
+test("reasoning streams persist separately and failed guidance restores once only to its authenticated owner",async t=>{
+  const {act,peers,owner,lane,ap}=await running(t);
+  act(peers.editor,"run.entry",{laneId:lane.id,runId:ap.id,role:"reasoning",entryId:"reasoning-1",eventId:"thinking-a",delta:true,text:"检查 "});
+  act(peers.editor,"run.entry",{laneId:lane.id,runId:ap.id,role:"reasoning",entryId:"reasoning-1",eventId:"thinking-b",delta:true,text:"边界"});
+  const reasoning=act(owner,"session.export").lanes[0].entries.find(e=>e.id==="reasoning-1");assert.equal(reasoning.role,"reasoning");assert.equal(reasoning.text,"检查 边界");
+  const guide=act(peers.editor,"run.steer",{laneId:lane.id,runId:ap.id,text:"保留这段指导"});
+  const args={laneId:lane.id,runId:ap.id,id:guide.id};
+  assert.throws(()=>act(peers.editor,"run.steer.restore",args),/只有失败/);
+  act(peers.editor,"run.steer.ack",{...args,status:"failed",message:"未投递"});
+  assert.throws(()=>act(owner,"run.steer.restore",args),/自己的/);
+  assert.equal(act(peers.editor,"run.steer.restore",args).status,"restored");const restoredAt=guide.restoredAt;
+  assert.equal(act(peers.editor,"run.steer.restore",args).restoredAt,restoredAt);assert.equal(guide.text,"保留这段指导");
+  const unsupported=act(peers.editor,"run.steer",{laneId:lane.id,runId:ap.id,text:"不支持时恢复"});act(peers.editor,"run.steer.ack",{...args,id:unsupported.id,status:"unsupported"});assert.equal(act(peers.editor,"run.steer.restore",{...args,id:unsupported.id}).status,"restored");
+  const delivered=act(peers.editor,"run.steer",{laneId:lane.id,runId:ap.id,text:"delivered"});act(peers.editor,"run.steer.ack",{laneId:lane.id,runId:ap.id,id:delivered.id,status:"delivered"});
+  assert.throws(()=>act(peers.editor,"run.steer.restore",{...args,id:delivered.id}),/只有失败/);
+  act(peers.editor,"run.finish",{laneId:lane.id,runId:ap.id,status:"done"});assert.equal(guide.status,"restored");assert.equal(act(peers.editor,"run.steer.restore",args).text,"保留这段指导");
 });

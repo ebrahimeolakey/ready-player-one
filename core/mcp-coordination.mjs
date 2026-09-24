@@ -4,19 +4,22 @@ import { HubClient } from "./client.mjs";
 
 const string = { type: "string" };
 const ref = { type: "object", properties: { path: string, commit: string, hash: string }, required: ["path", "commit"], additionalProperties: false };
+const scope = {type:"object",properties:{path:string,kind:{enum:["file","directory"]}},required:["path","kind"],additionalProperties:false};
+const scopes = {type:"array",items:scope,maxItems:100};
 const definitions = [
   ["context", "coordination.context", "读取当前会话、计划、成员、共享记忆、文件锁和 Agent 消息。", {}, []],
-  ["plan_add", "plan.add", "在当前会话拆分一个可分配的计划步骤。", { text: string, assigneeId: string }, ["text"]],
+  ["plan_add", "plan.add", "在当前会话拆分一个可分配的计划步骤。", { text: string, assigneeId: string, fileScopes:scopes }, ["text"]],
+  ["overlap_check", "coordination.check", "检查当前通道的文件/目录、计划和其他活动任务是否相交；结果为确定性建议，不阻止本机写入。", {prompt:string,fileScopes:scopes,planIds:{type:"array",items:string,maxItems:50},branch:string}, []],
   ["plan_claim", "plan.claim", "认领尚未由其他成员领取的步骤。", { id: string }, ["id"]],
   ["plan_status", "plan.status", "更新步骤进度。", { id: string, status: { enum: ["todo", "in-progress", "blocked", "done"] } }, ["id", "status"]],
   ["plan_transfer", "plan.transfer", "将自己负责的步骤转交给工作区成员。", { id: string, assigneeId: string }, ["id", "assigneeId"]],
   ["message", "coordination.message", "给当前会话或指定 Agent 通道发送协调消息。", { text: string, laneId: string }, ["text"]],
   ["memory_add", "memory.add", "写入共享记忆，可绑定文件、commit 及文件内容哈希。", { title: string, text: string, files: { type: "array", items: ref, maxItems: 100 } }, ["title", "text"]],
-  ["lock_acquire", "lock.acquire", "申请建议性文件锁；冲突时返回持有人，不会强制阻止文件写入。", { path: string, ttlMs: { type: "integer", minimum: 1000, maximum: 1800000 } }, ["path"]],
+  ["lock_acquire", "lock.acquire", "申请建议性文件锁；冲突时返回持有人，不会强制阻止文件写入。", { path: string, kind:{enum:["file","directory"]}, ttlMs: { type: "integer", minimum: 1000, maximum: 1800000 } }, ["path"]],
   ["lock_renew", "lock.renew", "续期当前成员持有的建议性文件锁。", { id: string, ttlMs: { type: "integer", minimum: 1000, maximum: 1800000 } }, ["id"]],
   ["lock_release", "lock.release", "释放当前成员持有的建议性文件锁。", { id: string }, ["id"]],
 ];
-export const coordinationTools = definitions.map(([name, , description, properties, required]) => ({ name: `rpo_${name}`, description, inputSchema: { type: "object", properties, required, additionalProperties: false }, annotations: { readOnlyHint: name === "context", destructiveHint: false, idempotentHint: name === "context", openWorldHint: false } }));
+export const coordinationTools = definitions.map(([name, , description, properties, required]) => ({ name: `rpo_${name}`, description, inputSchema: { type: "object", properties, required, additionalProperties: false }, annotations: { readOnlyHint: ["context","overlap_check"].includes(name), destructiveHint: false, idempotentHint: ["context","overlap_check"].includes(name), openWorldHint: false } }));
 
 function valid(value, schema) {
   if (schema.enum && !schema.enum.includes(value)) return false;
@@ -48,9 +51,9 @@ export function createCoordinationMcp({ client, sessionId, laneId }) {
       // Fetch current scope each time; removed sessions/role changes cannot use cached authorization.
       const context = await client.call("coordination.context", { sessionId });
       const method = definitions[index][1];
-      if (method.startsWith("lock.") && !laneId) throw Error("当前 MCP 未绑定 Agent 通道");
+      if ((method.startsWith("lock.") || method === "coordination.check") && !laneId) throw Error("当前 MCP 未绑定 Agent 通道");
       if (["lock.renew", "lock.release"].includes(method) && !context.locks.some(l => l.id === args.id && l.laneId === laneId)) throw Error("只能操作当前 Agent 通道的文件锁");
-      const result = method === "coordination.context" ? context : await client.call(method, { ...args, sessionId, workspaceId: context.session.workspaceId, ...(method.startsWith("lock.") ? { laneId } : {}) });
+      const result = method === "coordination.context" ? context : await client.call(method, { ...args, sessionId, workspaceId: context.session.workspaceId, ...((method.startsWith("lock.") || method === "coordination.check") ? { laneId } : {}) });
       return { ...response, result: { content: [{ type: "text", text: JSON.stringify(result) }], isError: false } };
     } catch (error) {
       return { ...response, result: { content: [{ type: "text", text: error.message }], isError: true } };

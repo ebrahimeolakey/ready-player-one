@@ -73,10 +73,19 @@ class BaseRun {
     this.ended = true;
     this.approvals.clear();
     this.requests?.close();
-    const finished = () => (this.options.onEnd || noOp)({runId:this.options.runId,status,message,sessionId:this.sessionId});
-    const closing=this.transport.close();
-    if(closing?.then)this.completion=closing.then(finished);
-    else {finished();this.completion=Promise.resolve();}
+    const finished = () =>
+      (this.options.onEnd || noOp)({
+        runId: this.options.runId,
+        status,
+        message,
+        sessionId: this.sessionId,
+      });
+    const closing = this.transport.close();
+    if (closing?.then) this.completion = closing.then(finished);
+    else {
+      finished();
+      this.completion = Promise.resolve();
+    }
     return this.completion;
   }
   close() {
@@ -205,6 +214,17 @@ export class CodexRun extends BaseRun {
         text: p.delta,
       });
     }
+    if (
+      ["item/reasoning/summaryTextDelta", "item/reasoning/textDelta"].includes(
+        message.method,
+      )
+    ) {
+      const part = message.method.includes("summary") ? "summary" : "content";
+      const index = part === "summary" ? p.summaryIndex : p.contentIndex;
+      const itemId = `${p.itemId}:${part}:${index ?? 0}`;
+      this.streamedItems.add(itemId);
+      this.emit({ type: "delta", role: "reasoning", itemId, text: p.delta });
+    }
     if (message.method === "item/commandExecution/outputDelta")
       this.emit({
         type: "delta",
@@ -225,7 +245,21 @@ export class CodexRun extends BaseRun {
           text: item.text,
           streamed: this.streamedItems.has(item.id),
         });
-      else if (item && !["userMessage", "agentMessage"].includes(item.type))
+      else if (item?.type === "reasoning") {
+        if (message.method === "item/completed")
+          for (const part of ["summary", "content"])
+            for (const [index, text] of (item[part] || []).entries()) {
+              const itemId = `${item.id}:${part}:${index}`;
+              if (typeof text === "string" && text)
+                this.emit({
+                  type: "message",
+                  role: "reasoning",
+                  itemId,
+                  text,
+                  streamed: this.streamedItems.has(itemId),
+                });
+            }
+      } else if (item && !["userMessage", "agentMessage"].includes(item.type))
         this.emit({
           type: "tool",
           phase: message.method.endsWith("started") ? "started" : "completed",
@@ -441,13 +475,46 @@ export class ClaudeRun extends BaseRun {
           text: event.delta.text,
         });
       }
+      if (
+        event.type === "content_block_delta" &&
+        event.delta?.type === "thinking_delta"
+      ) {
+        const itemId = `${this.messageId}:thinking:${event.index ?? 0}`;
+        this.streamedMessages.add(itemId);
+        this.emit({
+          type: "delta",
+          role: "reasoning",
+          itemId,
+          text: event.delta.thinking,
+        });
+      }
     }
     if (message.type === "assistant") {
       const itemId = message.message?.id;
-      const blocks=message.message?.content || [];
-      const text=blocks.filter(block=>block.type==="text").map(block=>block.text).join("");
-      if(text)this.emit({type:"message",role:"assistant",itemId,text,streamed:this.streamedMessages.has(itemId)});
-      for (const block of blocks) {
+      const blocks = message.message?.content || [];
+      const text = blocks
+        .filter((block) => block.type === "text")
+        .map((block) => block.text)
+        .join("");
+      if (text)
+        this.emit({
+          type: "message",
+          role: "assistant",
+          itemId,
+          text,
+          streamed: this.streamedMessages.has(itemId),
+        });
+      for (const [index, block] of blocks.entries()) {
+        if (block.type === "thinking" && block.thinking) {
+          const reasoningId = `${itemId}:thinking:${index}`;
+          this.emit({
+            type: "message",
+            role: "reasoning",
+            itemId: reasoningId,
+            text: block.thinking,
+            streamed: this.streamedMessages.has(reasoningId),
+          });
+        }
         if (block.type === "tool_use")
           this.emit({
             type: "tool",
@@ -581,6 +648,6 @@ export class ProviderRuntime {
     return this.runs.get(runId)?.interrupt();
   }
   close() {
-    return Promise.all([...this.runs.values()].map(run=>run.close()));
+    return Promise.all([...this.runs.values()].map((run) => run.close()));
   }
 }

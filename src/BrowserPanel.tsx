@@ -23,8 +23,14 @@ export type BrowserBridge = {
   invoke: (method: string, args?: Record<string, unknown>) => Promise<any>;
   subscribeBrowser: (callback: (event: BrowserEvent) => void) => () => void;
 };
-export function BrowserPanel({ bridge }: { bridge: BrowserBridge }) {
-  const viewport=useRef<HTMLDivElement>(null);
+export function BrowserPanel({
+  bridge,
+  request,
+}: {
+  bridge: BrowserBridge;
+  request?: { url: string; key: string };
+}) {
+  const viewport = useRef<HTMLDivElement>(null);
   const [id, setId] = useState(""),
     [url, setUrl] = useState("http://localhost:3000"),
     [state, setState] = useState<BrowserEvent | null>(null),
@@ -38,6 +44,29 @@ export function BrowserPanel({ bridge }: { bridge: BrowserBridge }) {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
+  useEffect(() => {
+    if (!request) return;
+    let active = true;
+    setUrl(request.url);
+    void bridge
+      .invoke(id ? "browser.navigate" : "browser.open", {
+        id,
+        url: request.url,
+      })
+      .then((result) => {
+        if (active && result?.id) setId(result.id);
+        else if (!active && result?.id && result.id !== id)
+          void bridge
+            .invoke("browser.close", { id: result.id })
+            .catch(() => {});
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [request?.key, bridge]);
   useEffect(
     () =>
       bridge.subscribeBrowser((event) => {
@@ -59,17 +88,43 @@ export function BrowserPanel({ bridge }: { bridge: BrowserBridge }) {
     },
     [bridge, id],
   );
-  useEffect(()=>{
-    if(!id||!viewport.current)return;
-    const area=viewport.current;
-    const update=()=>{const r=area.getBoundingClientRect();void bridge.invoke("browser.bounds",{id,bounds:{x:r.x,y:r.y,width:r.width,height:r.height},visible:!document.querySelector('[role="dialog"]')}).catch(()=>{});};
-    const resize=new ResizeObserver(update);resize.observe(area);
-    const changes=new MutationObserver(update);changes.observe(document.body,{childList:true,subtree:true});
-    window.addEventListener("resize",update);document.addEventListener("scroll",update,true);update();
-    return()=>{resize.disconnect();changes.disconnect();window.removeEventListener("resize",update);document.removeEventListener("scroll",update,true);};
-  },[id,bridge]);
+  useEffect(() => {
+    if (!id || !viewport.current) return;
+    const area = viewport.current;
+    const update = () => {
+      const r = area.getBoundingClientRect();
+      void bridge
+        .invoke("browser.bounds", {
+          id,
+          bounds: { x: r.x, y: r.y, width: r.width, height: r.height },
+          visible: !document.querySelector('[role="dialog"]'),
+        })
+        .catch(() => {});
+    };
+    const resize = new ResizeObserver(update);
+    resize.observe(area);
+    const changes = new MutationObserver(update);
+    changes.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", update);
+    document.addEventListener("scroll", update, true);
+    update();
+    return () => {
+      resize.disconnect();
+      changes.disconnect();
+      window.removeEventListener("resize", update);
+      document.removeEventListener("scroll", update, true);
+    };
+  }, [id, bridge]);
   return (
-    <section style={{ padding: 12, height:"100%",display:"flex",flexDirection:"column",minHeight:180 }}>
+    <section
+      style={{
+        padding: 12,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 180,
+      }}
+    >
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -160,7 +215,7 @@ export function BrowserPanel({ bridge }: { bridge: BrowserBridge }) {
         </div>
       )}
       {error && <p role="alert">{error}</p>}
-      <div ref={viewport} style={{flex:1,minHeight:100,marginTop:8}}/>
+      <div ref={viewport} style={{ flex: 1, minHeight: 100, marginTop: 8 }} />
     </section>
   );
 }

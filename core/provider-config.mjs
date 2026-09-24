@@ -34,6 +34,7 @@ const publicConfig = (config) => ({
   baseUrl: config.baseUrl,
   model: config.model,
   models: config.models,
+  efforts: config.efforts || [],
   updatedAt: config.updatedAt,
   hasKey: Boolean(config.encryptedKey),
 });
@@ -115,6 +116,25 @@ export class ProviderConfigStore {
         .filter(Boolean);
       if (models.length > 100 || models.some((value) => value.length > 200))
         throw new Error("模型列表过长");
+      const efforts = input.efforts ?? old?.efforts ?? [];
+      if (
+        !Array.isArray(efforts) ||
+        efforts.length > 8 ||
+        efforts.some(
+          (v) =>
+            ![
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max",
+              "ultra",
+            ].includes(v),
+        )
+      )
+        throw Error("推理强度列表无效");
       let encryptedKey = old?.encryptedKey || null;
       if (input.removeKey) encryptedKey = null;
       if (input.apiKey) {
@@ -132,6 +152,7 @@ export class ProviderConfigStore {
         baseUrl,
         model,
         models: [...new Set(models)],
+        efforts: [...new Set(efforts)],
         encryptedKey,
         updatedAt: new Date().toISOString(),
       };

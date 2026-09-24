@@ -1,3 +1,6 @@
+export type FileScope = { path: string; kind: "file" | "directory" | "unknown" };
+export type OverlapEvidence = { type: "path" | "plan-path" | "plan-step" | "task-keywords" | "lock"; current?: FileScope & {source:string;planId?:string}; other?: FileScope & {source:string;planId?:string}; planIds?:string[]; terms?:string[]; text?:string };
+export type OverlapDetail = { sessionId:string; sessionTitle:string; laneId:string; ownerId:string; owner:string; files:string[]; kind:"overlapping"|"adjacent"|"lock"; confidence:"high"|"advisory"; currentBranch:string|null; otherBranch:string|null; branchRelation:"same"|"different"|"unknown"; planIds:string[]; evidence:OverlapEvidence[]; algorithm:"deterministic-v1"; advisory:true; reason:string; lockId?:string; expires?:number };
 export type Entry = { id: string; role: string; text: string; at: string };
 export type Lane = {
   id: string;
@@ -11,7 +14,9 @@ export type Lane = {
   snapshot?: {ref:string; commit:string; at:string};
   activeRunId?:string;
   providerSessionId?:string;
-  steering?:{id:string;text:string;status:string;message?:string}[];
+  activity?:{fileScopes:FileScope[];branch:string|null;planIds:string[];at:string;expires:number};
+  changesExpires?:number;
+  steering?:{id:string;text:string;status:string;message?:string;runId?:string;restoredAt?:string}[];
   queue?:{id:string;prompt:string;status:string}[];
   diff?: string;
   changedFiles?: { path: string; status: string }[];
@@ -26,7 +31,7 @@ export type Session = {
   owner: string;
   at: string;
   lanes: Lane[];
-  plan: { id: string; text: string; owner: string; done: boolean; status?:string; assigneeId?:string|null; assignee?:string|null; ownerId?:string; transferRequest?:{id:string;fromId:string;toId:string;status:string} }[];
+  plan: { id: string; text: string; owner: string; done: boolean; status?:string; assigneeId?:string|null; assignee?:string|null; ownerId?:string; fileScopes?:FileScope[]; transferRequest?:{id:string;fromId:string;toId:string;status:string} }[];
   comments: {
     id: string;
     text: string;
@@ -51,6 +56,11 @@ export type Approval = {
   mode: string;
   files: string[];
   overlaps: string[];
+  fileScopes?:FileScope[];
+  planIds?:string[];
+  branch?:string;
+  overlapDetails?:OverlapDetail[];
+  overlapCheckedAt?:string;
   status: string;
   reviewer?: string;
 };

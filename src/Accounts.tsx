@@ -9,6 +9,7 @@ import {
   Globe,
 } from "lucide-react";
 import {TeamIdentity} from "./TeamIdentity";
+import {ACPSetup} from "./ACPSetup";
 import {ProviderSetup} from "./ProviderSetup";
 import type { State } from "./types";
 import { Modal, type Call } from "./ui";
@@ -202,7 +203,7 @@ export function Accounts({
           </details>
         </>
       )}
-      {section === "providers" && <ProviderSetup call={call} />}
+      {section === "providers" && <><ProviderSetup call={call} /><ACPSetup call={window.rpo.invoke} /></>}
       {section === "github" && <TeamIdentity call={window.rpo.invoke}/>}
       {selected && (
         <Modal title={"登录 " + names[selected]} close={() => setSelected("")}>

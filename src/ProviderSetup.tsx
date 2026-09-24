@@ -9,6 +9,7 @@ export interface CustomProvider {
   baseUrl: string;
   model: string;
   models: string[];
+  efforts?: string[];
   hasKey: boolean;
   updatedAt: string;
 }
@@ -181,6 +182,40 @@ export function ProviderSetup({
                 }
               />
             </label>
+            <details>
+              <summary>推理强度</summary>
+              <small>仅勾选此 API 和模型支持的强度。</small>
+              <div className="provider-effort-options">
+                {[
+                  ["none", "无"],
+                  ["minimal", "最低"],
+                  ["low", "低"],
+                  ["medium", "中"],
+                  ["high", "高"],
+                  ["xhigh", "很高"],
+                  ["max", "最高"],
+                  ["ultra", "极高"],
+                ].map(([value, label]) => (
+                  <label key={value}>
+                    <input
+                      type="checkbox"
+                      checked={editing.efforts?.includes(value) || false}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          efforts: e.target.checked
+                            ? [...(editing.efforts || []), value]
+                            : (editing.efforts || []).filter(
+                                (v) => v !== value,
+                              ),
+                        })
+                      }
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </details>
             <label>
               API Key
               <input

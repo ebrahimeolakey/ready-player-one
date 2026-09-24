@@ -83,7 +83,7 @@ export class RunCoordinator {
      if(e.type==='session')this.enqueue(r,'run.session',{providerSessionId:e.sessionId});
      if(e.type==='delta'&&e.text)this.enqueue(r,'run.entry',{eventId:randomUUID(),entryId:`${r.runId}:${e.itemId||'output'}`,delta:true,role:e.role||'assistant',text:e.text});
      if(e.type==='message'&&e.text)this.enqueue(r,'run.entry',{eventId:randomUUID(),entryId:`${r.runId}:${e.itemId||randomUUID()}`,delta:false,role:e.role||'assistant',text:e.text});
-     if(e.type==='tool')this.enqueue(r,'run.entry',{eventId:randomUUID(),role:'tool',text:JSON.stringify(e.item).slice(0,24000)});
+     if(e.type==='tool')this.enqueue(r,'run.entry',{eventId:randomUUID(),entryId:`${r.runId}:${e.itemId||randomUUID()}:tool`,delta:false,role:'tool',text:JSON.stringify({...e.item,phase:e.phase}).slice(0,24000)});
      if(e.type==='error')this.enqueue(r,'run.entry',{eventId:randomUUID(),role:'system',text:e.text||'执行错误'});
      if(e.type==='approval')this.enqueue(r,'tool.request',{providerRequestId:e.approvalId,action:e.request.tool||e.request.kind||'工具操作',input:e.request});
     },

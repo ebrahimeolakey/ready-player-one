@@ -1,3 +1,4 @@
+import { fileScopes, branchName, planIds } from "./overlap.mjs";
 import { WebSocketServer } from "ws";
 import { EventEmitter } from "node:events";
 import {
@@ -111,6 +112,13 @@ export class Hub extends EventEmitter {
     for (const s of this.db.sessions) for (const l of s.lanes) if (!active.includes(l)) l.entries = retainedTranscriptEntries(l.entries, result.cutoff);
     this.db.storage.lastCleanupAt = new Date(clock).toISOString();
     return result;
+  }
+  refreshOverlaps(approval) {
+    const session = this.db.sessions.find(s => s.id === approval.sessionId), lane = session?.lanes.find(l => l.id === approval.laneId);
+    if(!session || !lane) return;
+    approval.overlapDetails = overlaps(this,session,lane,approval.prompt,approval.files,{scopes:approval.fileScopes,planIds:approval.planIds,branch:approval.branch});
+    approval.overlaps = [...new Set(approval.overlapDetails.map(d => `${d.sessionTitle || "文件锁"} / ${d.owner}`))];
+    approval.overlapCheckedAt = now();
   }
   save() { this.store.writeJSON(this.file, this.db); }
   snapshot(peer) {
@@ -464,9 +472,9 @@ export class Hub extends EventEmitter {
     if (method === "lane.create") {
       const s = this.session(peer, a.sessionId);
       if (s.status !== "active") throw Error("请先恢复会话");
-      if (!["codex", "claude"].includes(a.provider) && !/^custom-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(a.provider || "")) throw Error("未知智能体");
+      if (!["codex", "claude"].includes(a.provider) && !/^(?:custom|acp)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(a.provider || "")) throw Error("未知智能体");
       if (Object.keys(a).some(k => /^(apiKey|api_key|key|secret|token|encryptedKey|baseUrl|headers|authorization|runtimeConfig)$/i.test(k))) throw Error("协作通道只允许 Provider 标识与短名称，不接收密钥或连接配置");
-      const providerLabel = text(a.providerLabel || (a.provider === "codex" ? "Codex" : a.provider === "claude" ? "Claude Code" : "自定义 Provider"), 80);
+      const providerLabel = text(a.providerLabel || (a.provider === "codex" ? "Codex" : a.provider === "claude" ? "Claude Code" : String(a.provider).startsWith("acp-") ? "ACP Provider" : "自定义 Provider"), 80);
       if (transcriptText(providerLabel) !== providerLabel || /[\r\n]/.test(providerLabel)) throw Error("Provider 名称不能包含凭据或换行");
       const l = {
         id: id(),
@@ -496,8 +504,9 @@ export class Hub extends EventEmitter {
         throw Error("未知权限模式");
       const prompt = text(a.prompt, 20000);
       if (!Array.isArray(a.files || [])) throw Error("文件列表无效");
-      const files = (a.files || []).slice(0, 30).map(filePath);
-      const overlapDetails = overlaps(this, s, l, prompt, files);
+      const scopes = fileScopes(a.files, a.fileScopes, 100);
+      const files = scopes.map(v => v.path), linkedPlans = planIds(s,a.planIds), branch = branchName(a.branch);
+      const overlapDetails = overlaps(this, s, l, prompt, files, {scopes,planIds:linkedPlans,branch});
       const overlapNames = [...new Set(overlapDetails.map(d => `${this.db.sessions.find(v => v.id === d.sessionId)?.title || "文件锁"} / ${d.owner}`))];
       const approval = {
         id: id(),
@@ -510,8 +519,12 @@ export class Hub extends EventEmitter {
         prompt,
         mode: a.mode,
         files,
+        fileScopes: scopes,
+        planIds: linkedPlans,
+        branch,
         overlaps: overlapNames,
         overlapDetails,
+        overlapCheckedAt: now(),
         status: "pending",
         at: now(),
       };
@@ -525,6 +538,7 @@ export class Hub extends EventEmitter {
       if (!ap) throw Error("审批不存在");
       this.workspace(peer, ap.workspaceId);
       if (ap.status !== "pending") throw Error("此请求已经处理");
+      if(a.allow === true) this.refreshOverlaps(ap);
       ap.status = a.allow === true ? "approved" : "rejected";
       ap.reviewer = peer.name;
       ap.reviewedAt = now();
@@ -543,6 +557,7 @@ export class Hub extends EventEmitter {
       const result = () => ({ approval: ap, session: s, memories: this.db.memories.filter(m => m.workspaceId === s.workspaceId && !m.retired) });
       if (ap.status === "claimed" && keyHash && ap.claimKeyHash === keyHash && l.activeRunId === ap.id && ["running", "interrupted"].includes(l.status) && !l.stopRequested && l.fencedRunId !== ap.id) return result();
       if (ap.status !== "approved") throw Error("任务已经领取或未获批准");
+      this.refreshOverlaps(ap);
       ap.claimKeyHash = keyHash;
       ap.status = "claimed";
       l.status = "running";
@@ -563,7 +578,7 @@ export class Hub extends EventEmitter {
       const { l } = this.lane(peer, a);
       if (l.status !== "running" || l.activeRunId !== a.runId || l.stopRequested || l.fencedRunId === a.runId)
         throw Error("执行已结束");
-      if (!["assistant", "tool", "system"].includes(a.role)) throw Error("无效消息");
+      if (!["assistant", "tool", "system", "reasoning"].includes(a.role)) throw Error("无效消息");
       const eventId = a.eventId === undefined ? undefined : text(a.eventId, 200);
       l.acceptedEventIds ??= [];
       if (eventId && l.acceptedEventIds.includes(eventId)) return { accepted: true, duplicate: true };
@@ -630,8 +645,11 @@ export class Hub extends EventEmitter {
     if (method === "diff.publish") {
       const { s, l } = this.lane(peer, a);
       const diff = String(a.diff || "").slice(0, 150000);
+      if(!Array.isArray(a.files || []) || (a.files || []).length > 300) throw Error("变更文件列表无效或过长");
+      const changedFiles = (a.files || []).map(f => ({path:filePath(f.path),status:String(f.status || "").slice(0,20)}));
       l.diff = diff;
-      l.changedFiles = (a.files || []).slice(0, 300);
+      l.changedFiles = changedFiles;
+      l.changesExpires = Date.now()+120000;
       s.diff = diff;
       s.files = l.changedFiles;
       return true;

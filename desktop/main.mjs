@@ -1,3 +1,5 @@
+import { ACPConfigStore } from "../core/acp-config.mjs";
+import { registerACP, probeACP } from "../core/providers/acp.mjs";
 import {
   app,
   BrowserWindow,
@@ -53,6 +55,7 @@ import {
 } from "./services/team-identity.mjs";
 import { createIdentityVerifier } from "../core/team-identity.mjs";
 import { DebuggerService, handlesDebugger } from "./services/debugger.mjs";
+import { ComposerStore } from "./services/composer.mjs";
 import { LanguageService } from "./services/language.mjs";
 import { DraftStore } from "./services/drafts.mjs";
 import { GitService } from "./services/git.mjs";
@@ -63,7 +66,7 @@ import {
 } from "./services/references.mjs";
 import { UpdateService } from "./services/updater.mjs";
 import { TerminalService } from "./services/terminal.mjs";
-import { BrowserService } from "./services/browser.mjs";
+import { BrowserService, browserURL } from "./services/browser.mjs";
 import { shellCommand, binaryName, stopProcess } from "../core/platform.mjs";
 import {
   AccountManager,
@@ -99,6 +102,7 @@ try {
     sessionPaths: {},
   };
 }
+let composerStore;
 let settingsStore, drafts, pendingTeamConnection;
 const saveConfig = () => {
   if (!settingsStore) throw Error("本机加密存储尚未就绪");
@@ -117,6 +121,7 @@ const notifiedApprovals = new Set();
 config.syncSessions ??= {};
 config.lanePaths ??= {};
 let customProviders = [];
+let acpProviders = [];
 let updater;
 const runImages = new Map();
 const saveRunImages = () =>
@@ -127,8 +132,24 @@ const providerStore = new ProviderConfigStore({
   decrypt: (value) => safeStorage.decryptString(value),
   isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
 });
+const acpStore = new ACPConfigStore({
+  path: join(dir, "acp-providers.json"),
+  encrypt: (value) => safeStorage.encryptString(value),
+  decrypt: (value) => safeStorage.decryptString(value),
+  isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+});
+async function refreshACP() {
+  acpProviders = await acpStore.list();
+  emit();
+}
 const allProviders = () => [
   ...providerList,
+  ...acpProviders.map((p) => ({
+    id: p.id,
+    name: p.name,
+    available: true,
+    version: "ACP",
+  })),
   ...customProviders.map((p) => ({
     id: p.id,
     name: p.name,
@@ -360,6 +381,10 @@ const coordinator = new RunCoordinator({
       });
       custom = { env: { RPO_SELECTED_PROVIDER_KEY: settings.apiKey } };
     }
+    if (a.provider.startsWith("acp-")) {
+      const settings = await acpStore.getRuntimeConfig(a.provider);
+      registerACP(runtime, a.provider, settings);
+    }
     if (debuggerService.isBusy(localRoot(a))) throw Error("请先停止项目调试");
     if (repoLocks.has(canonicalRoot(localRoot(a))))
       throw Error("项目正在执行 Git 操作，请稍后重试");
@@ -390,7 +415,11 @@ const coordinator = new RunCoordinator({
     for (const q of lane?.queue || [])
       if (q.approvalId === result.runId) runImages.delete(q.id);
     for (const q of lane?.steering || [])
-      if (q.runId === result.runId) runImages.delete(q.id);
+      if (
+        q.runId === result.runId &&
+        ["delivered", "restored"].includes(q.status)
+      )
+        runImages.delete(q.id);
     saveRunImages();
     if (config.syncSessions[result.sessionId])
       syncSession(result.sessionId).catch(() => {});
@@ -547,6 +576,55 @@ const syncTimer = setInterval(() => {
     if (enabled) syncSession(id).catch(() => {});
 }, 5000);
 syncTimer.unref();
+const editorActivity = new Map();
+async function currentBranch(args) {
+  try {
+    const root = localRoot(args);
+    return (
+      (await local.git(root, ["branch", "--show-current"])).trim() ||
+      "detached/" +
+        (await local.git(root, ["rev-parse", "--short", "HEAD"])).trim()
+    );
+  } catch {
+    return undefined;
+  }
+}
+async function publishEditorActivity(args) {
+  const session = client.state.sessions.find(
+      (s) => s.id === args.sessionId && s.workspaceId === args.workspaceId,
+    ),
+    lane = session?.lanes.find(
+      (l) => l.id === args.laneId && l.ownerId === client.state.me.id,
+    );
+  if (!lane) throw Error("只能更新自己的文件活动");
+  if (typeof args.viewId !== "string" || !/^[\w-]{1,80}$/.test(args.viewId))
+    throw Error("编辑器标识无效");
+  const prefix = client.state.identity.audience + ":" + lane.id + ":",
+    key = prefix + args.viewId;
+  const now = Date.now();
+  for (const [key, value] of editorActivity)
+    if (value.expires < now) editorActivity.delete(key);
+  const paths = Array.isArray(args.paths) ? args.paths : [];
+  if (paths.length > 20) throw Error("打开文件过多");
+  for (const path of paths) await local.safePath(localRoot(args), path);
+  if (paths.length) editorActivity.set(key, { paths, expires: now + 120000 });
+  else editorActivity.delete(key);
+  const all = [
+    ...new Set(
+      [...editorActivity]
+        .filter(([key]) => key.startsWith(prefix))
+        .flatMap(([, v]) => v.paths),
+    ),
+  ];
+  return client.call("coordination.activity", {
+    workspaceId: session.workspaceId,
+    sessionId: session.id,
+    laneId: lane.id,
+    branch: await currentBranch(args),
+    fileScopes: all.map((path) => ({ path, kind: "file" })),
+    ttlMs: 120000,
+  });
+}
 const hubMethods = new Set([
   "storage.retention",
   "handoff.request",
@@ -592,6 +670,10 @@ const hubMethods = new Set([
 ]);
 async function invoke(method, a) {
   if (method === "bootstrap") return state();
+  if (method === "link.open") {
+    await shell.openExternal(browserURL(a.url));
+    return true;
+  }
   if (handlesDebugger(method))
     return debuggerService.invoke(win.webContents.id, method, a);
   if (
@@ -627,6 +709,61 @@ async function invoke(method, a) {
     }
     return result;
   }
+  if (method === "editor.activity") return publishEditorActivity(a);
+  if (method === "coordination.check")
+    return client.call(method, { ...a, branch: await currentBranch(a) });
+  if (method === "composer.conflict.restore")
+    return composerStore.restoreConflict(a);
+  if (method === "composer.read") return composerStore.read(a.laneId);
+  if (method === "composer.save") return composerStore.save(a);
+  if (method === "composer.restore") {
+    const lane = client.state.sessions
+      .find((s) => s.id === a.sessionId)
+      ?.lanes.find(
+        (l) => l.id === a.laneId && l.ownerId === client.state.me.id,
+      );
+    const instruction = lane?.steering?.find((q) => q.id === a.id);
+    if (
+      !instruction ||
+      !["failed", "unsupported", "restored"].includes(instruction.status)
+    )
+      throw Error("这条指导还不能恢复");
+    const value = composerStore.restore({
+      laneId: a.laneId,
+      id: a.id,
+      text: instruction.text,
+      images: runImages.get(a.id) || [],
+    });
+    // Durable local receipt precedes shared acknowledgement; retries never duplicate text.
+    try {
+      await client.call("run.steer.restore", {
+        sessionId: a.sessionId,
+        laneId: a.laneId,
+        runId: instruction.runId,
+        id: a.id,
+      });
+    } catch (error) {
+      return {
+        ...value,
+        warning: "草稿已恢复；共享确认待重试：" + error.message,
+      };
+    }
+    runImages.delete(a.id);
+    saveRunImages();
+    return value;
+  }
+  if (method === "providers.images.validate") {
+    const images = normalizeImages(a.images);
+    for (const image of images) {
+      const decoded = nativeImage.createFromBuffer(
+          Buffer.from(image.data, "base64"),
+        ),
+        size = decoded.getSize();
+      if (decoded.isEmpty() || size.width * size.height > 40000000)
+        throw Error("图片无效或尺寸过大");
+    }
+    return images;
+  }
   if (method === "draft.read") return drafts.read(a.key);
   if (method === "draft.set") return drafts.set(a.key, a.value);
   if (method === "draft.remove") return drafts.remove(a.key);
@@ -658,6 +795,32 @@ async function invoke(method, a) {
   if (handlesTaskCoordination(method)) {
     const result = await taskCoordination.invoke(method, a);
     emit();
+    return result;
+  }
+  if (method === "providers.acp.list") return acpStore.list();
+  if (method === "providers.acp.save") {
+    const p = await acpStore.save(a);
+    await refreshACP();
+    return p;
+  }
+  if (method === "providers.acp.remove") {
+    if ([...runtime.runs.values()].some((r) => r.options.provider === a.id))
+      throw Error("请先停止此 Provider 的执行");
+    const result = await acpStore.remove(a.id);
+    await refreshACP();
+    return result;
+  }
+  if (method === "providers.acp.probe") {
+    const p = await acpStore.getRuntimeConfig(a.id);
+    const result = await probeACP(p, {
+      cwd: a.workspaceId ? localRoot(a) : homedir(),
+      env: local.localEnv(),
+    });
+    if (result.connected && !result.requiresAuth) {
+      config.modelCatalogs[a.id] = result.models;
+      saveConfig();
+      emit();
+    }
     return result;
   }
   if (method === "providers.custom.list") return providerStore.list();
@@ -725,10 +888,28 @@ async function invoke(method, a) {
   )
     return browserService[method.split(".")[1]](win.webContents.id, a);
   if (method === "provider.models") {
+    if (a.provider?.startsWith("acp-")) {
+      const result = await invoke("providers.acp.probe", {
+        ...a,
+        id: a.provider,
+      });
+      if (result.requiresAuth) throw Error("请先在此 CLI 完成登录");
+      return result.models;
+    }
+
     if (a.provider?.startsWith("custom-")) {
       const p = customProviders.find((p) => p.id === a.provider);
       if (!p) throw Error("Provider 不存在");
-      return p.models.map((id) => ({ id, label: id, default: id === p.model }));
+      const models = p.models.map((id) => ({
+        id,
+        label: id,
+        default: id === p.model,
+        efforts: p.efforts || [],
+      }));
+      config.modelCatalogs[a.provider] = models;
+      saveConfig();
+      emit();
+      return models;
     }
     try {
       const models = await listProviderModels(a.provider, {
@@ -755,6 +936,14 @@ async function invoke(method, a) {
       typeof a.model === "string" ? a.model.trim().slice(0, 150) : undefined;
     const effort =
       typeof a.effort === "string" ? a.effort.slice(0, 30) : undefined;
+    if (
+      lane.provider.startsWith("custom-") &&
+      effort &&
+      !customProviders
+        .find((p) => p.id === lane.provider)
+        ?.efforts?.includes(effort)
+    )
+      throw Error("此 API 尚未配置该推理强度");
     config.laneOptions[lane.id] = { model, effort };
     saveConfig();
     emit();
@@ -844,6 +1033,7 @@ async function invoke(method, a) {
   if (hubMethods.has(method)) {
     if (method === "run.request") {
       localRoot(a);
+      a = { ...a, branch: await currentBranch(a) };
       if (
         !allProviders().find(
           (p) =>
@@ -865,8 +1055,8 @@ async function invoke(method, a) {
         try {
           return await client.call(method, args);
         } catch (error) {
-          runImages.delete(args.eventId);
-          saveRunImages();
+          // The Hub may have accepted the instruction before its reply was lost.
+          // Retain attachments until reconciliation or explicit draft recovery.
           throw error;
         }
       }
@@ -1130,6 +1320,7 @@ app
         Object.assign(config, settingsStore.readJSON("client.json"));
       saveConfig();
       drafts = new DraftStore(settingsStore);
+      composerStore = new ComposerStore(settingsStore, drafts);
       coordinator.attachStore(
         new SecureStore({ dir: join(dir, "outbox"), key: dataKey }),
       );
@@ -1254,6 +1445,7 @@ app
       await win.loadFile(entry);
       refreshAccounts().catch(console.error);
       refreshCustomProviders().catch(console.error);
+      refreshACP().catch(console.error);
       if (app.isPackaged) updater.check().catch(console.error);
       win.on("closed", () => {
         win = null;

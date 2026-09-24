@@ -1,6 +1,6 @@
+import { fileScopes, branchName, planIds } from "./overlap.mjs";
 import { redactRecord } from "./secure-store.mjs";
 import { randomUUID, createHash } from "node:crypto";
-import { filePath } from "./coordination.mjs";
 export function claimKeyHash(key) {
   if (key === undefined) return undefined;
   if (typeof key !== "string" || !/^(?:[a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.test(key)) throw Error("领取标识无效");
@@ -11,7 +11,7 @@ const value = (v, max = 2000) => {
   if (typeof v !== "string" || !v.trim() || v.length > max) throw Error("内容为空或超过长度限制");
   return v.trim();
 };
-const methods = new Set(["run.session", "run.reconcile", "run.steer", "run.steer.ack", "run.queue", "run.queue.cancel", "run.queue.next", "tool.request", "tool.decide", "tool.claim"]);
+const methods = new Set(["run.session", "run.reconcile", "run.steer", "run.steer.ack", "run.steer.restore", "run.queue", "run.queue.cancel", "run.queue.next", "tool.request", "tool.decide", "tool.claim"]);
 export const handlesRunCoordination = method => methods.has(method);
 function current(hub, peer, a) {
   const { s, l } = hub.lane(peer, a);
@@ -44,6 +44,14 @@ export function runCoordination(hub, peer, method, a) {
     const instruction = { id: eventId, text: value(a.text, 20000), runId: a.runId, ownerId: peer.id, at: stamp(), status: "pending" };
     l.steering.push(instruction); return instruction;
   }
+  if (method === "run.steer.restore") {
+    const {l} = hub.lane(peer,a);
+    const instruction = l.steering?.find(v => v.id === a.id && v.runId === a.runId && v.ownerId === peer.id);
+    if(!instruction) throw Error("指导不存在");
+    if(instruction.status === "restored") return instruction;
+    if(!["failed","unsupported"].includes(instruction.status)) throw Error("只有失败或不支持的指导可以恢复");
+    instruction.status = "restored"; instruction.restoredAt = stamp(); return instruction;
+  }
   if (method === "run.steer.ack") {
     const { l } = current(hub, peer, a);
     const instruction = l.steering?.find(v => v.id === a.id && v.runId === a.runId);
@@ -62,7 +70,11 @@ export function runCoordination(hub, peer, method, a) {
     const q = { id: randomUUID(), ownerId: peer.id, prompt: value(a.prompt, 20000), mode: a.mode, files: a.files || [], status: "queued", at: stamp() };
     // Validate file declarations without generating a run request that would change lane state.
     if (!Array.isArray(q.files) || q.files.length > 30 || q.files.some(f => typeof f !== "string" || f.length > 500)) throw Error("文件列表无效");
-    q.files = q.files.map(filePath);
+    const scopes = fileScopes(q.files,a.fileScopes);
+    // Keep legacy paths separately; only explicit kinds enter fileScopes on resubmission.
+    q.fileScopes = scopes.filter(scope => scope.kind !== "unknown");
+    q.files = scopes.filter(scope => scope.kind === "unknown").map(scope => scope.path);
+    q.planIds = planIds(s,a.planIds); q.branch = branchName(a.branch);
     l.queue.push(q); return q;
   }
   if (method === "run.queue.cancel") {
@@ -76,7 +88,7 @@ export function runCoordination(hub, peer, method, a) {
     if (["running", "awaiting"].includes(l.status)) throw Error("当前任务尚未结束");
     const q = l.queue?.find(q => q.status === "queued");
     if (!q) return null;
-    const approval = hub.act(peer, "run.request", { sessionId: a.sessionId, laneId: a.laneId, prompt: q.prompt, mode: q.mode, files: q.files });
+    const approval = hub.act(peer, "run.request", { sessionId: a.sessionId, laneId: a.laneId, prompt: q.prompt, mode: q.mode, files: q.files, fileScopes:q.fileScopes, planIds:q.planIds, branch:q.branch });
     q.status = "submitted"; q.approvalId = approval.id;
     return { queue: q, approval };
   }

@@ -1,6 +1,6 @@
 {
   "name": "ready-player-one",
-  "version": "0.4.0-beta.1",
+  "version": "0.4.1-beta.1",
   "description": "头号玩家 · 本地优先的 Agent Session Share 工作台",
   "type": "module",
   "main": "desktop/main.mjs",

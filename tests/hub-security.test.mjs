@@ -115,3 +115,11 @@ test("coordination RPC context and persisted tool requests redact secrets like p
   assert.equal(JSON.stringify(tool).includes("Z".repeat(40)),false);
   assert.equal(JSON.stringify(hub.db.toolApprovals).includes("Z".repeat(40)),false);
 });
+test("ACP lanes require a UUID provider and expose only its public label including child lanes",async t=>{
+  const {act}=await setup(t),provider=`acp-${randomUUID()}`;
+  const lane=act("lane.create",{provider,providerLabel:"Team ACP"});assert.equal(lane.provider,provider);assert.equal(lane.providerLabel,"Team ACP");
+  for(const invalid of ["acp", "acp-../provider", "acp-not-a-uuid",`acp-${randomUUID()}-suffix`])assert.throws(()=>act("lane.create",{provider:invalid}),/未知智能体/);
+  assert.throws(()=>act("lane.create",{provider,token:"secret"}),/不接收/);
+  const task=act("subtask.request",{parentLaneId:lane.id,title:"ACP child",prompt:"task",baseCommit:"c".repeat(40),requiredCheckIds:["test"]});
+  const child=act("subtask.claim",{id:task.id,baseCommit:task.baseCommit,worktreeReady:true});assert.equal(child.lane.provider,provider);assert.equal(child.lane.providerLabel,"Team ACP");
+});

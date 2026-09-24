@@ -215,7 +215,10 @@ export function ImageAttachments({
       const selected = (await call("providers.images.pick")) as ProviderImage[];
       if (images.length + selected.length > 5)
         throw new Error("最多添加 5 张图片");
-      onChange([...images, ...selected]);
+      const combined = await call("providers.images.validate", {
+        images: [...images, ...selected],
+      });
+      onChange(combined);
     } catch (e) {
       setError(e instanceof Error ? e.message : "图片读取失败");
     } finally {
@@ -268,6 +271,7 @@ export function DictationControl({
   supported,
   listening,
   busy = false,
+  disabled = false,
   onStart,
   onStop,
   error,
@@ -275,6 +279,7 @@ export function DictationControl({
   supported: boolean;
   listening: boolean;
   busy?: boolean;
+  disabled?: boolean;
   onStart: () => void;
   onStop: () => void;
   error?: string;
@@ -288,7 +293,7 @@ export function DictationControl({
         aria-label={listening ? "停止语音输入" : "语音输入"}
         title={listening ? "停止语音输入" : "语音输入"}
         aria-pressed={listening}
-        disabled={busy}
+        disabled={busy || (disabled && !listening)}
         onClick={listening ? onStop : onStart}
       >
         {busy ? (

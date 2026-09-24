@@ -363,3 +363,212 @@ test("starting assistant message is not displayed as a JSON tool event", async (
   assert.equal(h.events.length, n);
   h.runtime.close();
 });
+
+test("Codex reasoning summary/text deltas and final parts use distinct stable reasoning IDs, never tool rows", async () => {
+  const h = harness("codex");
+  await h.start;
+  h.transport.emit("message", {
+    method: "item/started",
+    params: {
+      threadId: "native-thread",
+      item: { id: "reason", type: "reasoning" },
+    },
+  });
+  h.transport.emit("message", {
+    method: "item/reasoning/summaryTextDelta",
+    params: {
+      threadId: "native-thread",
+      itemId: "reason",
+      summaryIndex: 0,
+      delta: "Summary",
+    },
+  });
+  h.transport.emit("message", {
+    method: "item/reasoning/textDelta",
+    params: {
+      threadId: "native-thread",
+      itemId: "reason",
+      contentIndex: 0,
+      delta: "Visible reasoning",
+    },
+  });
+  h.transport.emit("message", {
+    method: "item/completed",
+    params: {
+      threadId: "native-thread",
+      item: {
+        id: "reason",
+        type: "reasoning",
+        summary: ["Summary"],
+        content: ["Visible reasoning"],
+      },
+    },
+  });
+  assert.equal(h.events.filter((e) => e.type === "tool").length, 0);
+  const finals = h.events.filter((e) => e.type === "message");
+  assert.equal(finals.length, 2);
+  for (const final of finals) {
+    assert.equal(final.role, "reasoning");
+    assert.equal(final.streamed, true);
+    assert.ok(
+      h.events.some(
+        (e) =>
+          e.type === "delta" &&
+          e.itemId === final.itemId &&
+          e.text === final.text,
+      ),
+    );
+  }
+  await h.runtime.close();
+});
+test("Claude thinking deltas match final thinking blocks and omit signature/redacted data", async () => {
+  const h = harness("claude");
+  await h.start;
+  const stream = (event) =>
+    h.transport.emit("message", { type: "stream_event", event });
+  stream({ type: "message_start", message: { id: "answer-1" } });
+  stream({
+    type: "content_block_delta",
+    index: 0,
+    delta: { type: "thinking_delta", thinking: "Visible thought" },
+  });
+  stream({
+    type: "content_block_delta",
+    index: 0,
+    delta: { type: "signature_delta", signature: "PRIVATE_SIGNATURE" },
+  });
+  stream({
+    type: "content_block_delta",
+    index: 2,
+    delta: { type: "text_delta", text: "Answer" },
+  });
+  h.transport.emit("message", {
+    type: "assistant",
+    message: {
+      id: "answer-1",
+      content: [
+        {
+          type: "thinking",
+          thinking: "Visible thought",
+          signature: "PRIVATE_SIGNATURE",
+        },
+        { type: "redacted_thinking", data: "PRIVATE_REDACTED" },
+        { type: "text", text: "Answer" },
+      ],
+    },
+  });
+  const final = h.events.find(
+    (e) => e.type === "message" && e.role === "reasoning",
+  );
+  assert.equal(final.itemId, "answer-1:thinking:0");
+  assert.equal(final.streamed, true);
+  assert.ok(
+    h.events.some((e) => e.type === "delta" && e.itemId === final.itemId),
+  );
+  assert.ok(!JSON.stringify(h.events).includes("PRIVATE_"));
+  assert.equal(
+    h.events.find((e) => e.type === "message" && e.role === "assistant").text,
+    "Answer",
+  );
+  await h.runtime.close();
+});
+
+test("Codex reasoning summary/content streams reconcile by part and never render as tools", async () => {
+  const h = harness();
+  await h.start;
+  const notify = (method, params) =>
+    h.transport.emit("message", {
+      method,
+      params: { threadId: "native-thread", ...params },
+    });
+  notify("item/started", { item: { id: "r", type: "reasoning" } });
+  notify("item/reasoning/summaryTextDelta", {
+    itemId: "r",
+    summaryIndex: 0,
+    delta: "Checking",
+  });
+  notify("item/reasoning/textDelta", {
+    itemId: "r",
+    contentIndex: 0,
+    delta: "Visible thought",
+  });
+  notify("item/completed", {
+    item: {
+      id: "r",
+      type: "reasoning",
+      summary: ["Checking files", "Next step"],
+      content: ["Visible thought"],
+    },
+  });
+  const final = h.events.filter((e) => e.type === "message");
+  assert.deepEqual(
+    final.map((e) => [e.itemId, e.role, e.streamed]),
+    [
+      ["r:summary:0", "reasoning", true],
+      ["r:summary:1", "reasoning", false],
+      ["r:content:0", "reasoning", true],
+    ],
+  );
+  assert.equal(
+    h.events.some((e) => e.type === "tool"),
+    false,
+  );
+  assert.equal(final[0].text, "Checking files");
+  const before = h.events.length;
+  h.transport.emit("message", {
+    method: "item/reasoning/textDelta",
+    params: { threadId: "other-thread", itemId: "r", delta: "wrong" },
+  });
+  assert.equal(h.events.length, before);
+  await h.runtime.close();
+});
+
+test("Claude thinking blocks reconcile separately from answer; signature/redacted blocks stay private", async () => {
+  const h = harness("claude");
+  await h.start;
+  const stream = (event) =>
+    h.transport.emit("message", { type: "stream_event", event });
+  stream({ type: "message_start", message: { id: "msg" } });
+  stream({
+    type: "content_block_delta",
+    index: 0,
+    delta: { type: "thinking_delta", thinking: "Checking" },
+  });
+  stream({
+    type: "content_block_delta",
+    index: 0,
+    delta: { type: "signature_delta", signature: "SECRET_SIGNATURE" },
+  });
+  stream({
+    type: "content_block_delta",
+    index: 1,
+    delta: { type: "text_delta", text: "Answer" },
+  });
+  h.transport.emit("message", {
+    type: "assistant",
+    message: {
+      id: "msg",
+      content: [
+        {
+          type: "thinking",
+          thinking: "Checking files",
+          signature: "SECRET_SIGNATURE",
+        },
+        { type: "text", text: "Answer" },
+        { type: "redacted_thinking", data: "SECRET_REDACTED" },
+        { type: "thinking", thinking: "Another visible block" },
+      ],
+    },
+  });
+  const final = h.events.filter((e) => e.type === "message");
+  assert.deepEqual(
+    final.map((e) => [e.itemId, e.role, e.streamed]),
+    [
+      ["msg", "assistant", true],
+      ["msg:thinking:0", "reasoning", true],
+      ["msg:thinking:3", "reasoning", false],
+    ],
+  );
+  assert.equal(JSON.stringify(h.events).includes("SECRET_"), false);
+  await h.runtime.close();
+});

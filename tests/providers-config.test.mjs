@@ -103,3 +103,27 @@ test("provider config fails closed when encryption unavailable or endpoints incl
   });
   assert.equal(noKey.hasKey, false);
 });
+
+test("custom reasoning levels are explicit, deduplicated and retained on edits", async () => {
+  const { store } = await setup();
+  const saved = await store.save({
+    ...input,
+    efforts: ["low", "high", "high"],
+  });
+  assert.deepEqual(saved.efforts, ["low", "high"]);
+  await store.save({
+    id: saved.id,
+    name: "Renamed",
+    baseUrl: input.baseUrl,
+    model: input.model,
+  });
+  assert.deepEqual((await store.getRuntimeConfig(saved.id)).efforts, [
+    "low",
+    "high",
+  ]);
+  await assert.rejects(
+    store.save({ ...saved, efforts: ["unadvertised"] }),
+    /推理强度/,
+  );
+  assert.deepEqual((await store.list())[0].efforts, ["low", "high"]);
+});

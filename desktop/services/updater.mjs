@@ -512,7 +512,20 @@ if [ -e "$backup" ]; then exit 21; fi
 mv "$target" "$backup"
 if ! mv "$next" "$target"; then mv "$backup" "$target"; exit 22; fi
 if [ "$platform" = "darwin" ]; then
-  if ! /usr/bin/open "$target"; then mv "$target" "$next"; mv "$backup" "$target"; /usr/bin/open "$target"; exit 23; fi
+  relaunch() {
+    set -- -n
+    if [ -n "\${RPO_DATA_DIR:-}" ]; then
+      set -- "$@" --env "RPO_DATA_DIR=$RPO_DATA_DIR"
+    fi
+    if [ -n "\${RPO_IDENTITY_ISSUER:-}" ]; then
+      set -- "$@" --env "RPO_IDENTITY_ISSUER=$RPO_IDENTITY_ISSUER"
+    fi
+    if [ -n "\${RPO_IDENTITY_PUBLIC_KEY_FILE:-}" ]; then
+      set -- "$@" --env "RPO_IDENTITY_PUBLIC_KEY_FILE=$RPO_IDENTITY_PUBLIC_KEY_FILE"
+    fi
+    /usr/bin/open "$@" "$target"
+  }
+  if ! relaunch; then mv "$target" "$next"; mv "$backup" "$target"; relaunch; exit 23; fi
 else
   "$target" >/dev/null 2>&1 &
 fi
