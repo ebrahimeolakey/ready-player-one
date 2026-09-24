@@ -106,6 +106,15 @@ try {
   const owner = 401;
   const { id } = await terminal.open(owner, { cwd: process.env.RPO_DATA_DIR, cols: 100, rows: 28 });
   assert.throws(() => terminal.input(owner + 1, { id, data: 'exit\r' }), /无权/);
+  // ConPTY creation precedes the interactive shell attaching its input reader.
+  // Wait for an actual PowerShell prompt; otherwise early input can disappear
+  // before the shell starts (observed on the Windows 2022 runner).
+  await waitFor(() => {
+    if (exit) throw Error(`PowerShell exited before its first prompt: ${exit.exitCode}`);
+    return /PS [^\r\n]*> ?$/.test(clean(output));
+  });
+  evidence.powershellReady = {initialPromptObserved:true};
+  writeEvidence();
   // Split strings prevent echoed command input from falsely satisfying output checks.
   terminal.input(owner, { id, data: "Write-Output ('RPO_' + 'PTY_OK'); Write-Output ('RPO_TTY_' + (-not [Console]::IsInputRedirected))\r" });
   await waitFor(() => clean(output).includes('RPO_PTY_OK') && clean(output).includes('RPO_TTY_True'));
