@@ -1,3 +1,5 @@
+import { EditorSettings, EditorSettingsContext } from "./EditorSettings";
+import { resolveEditorSettings } from "../core/editor-settings.mjs";
 import { WorkspaceDeletion } from "./WorkspaceDeletion";
 import { KeyboardContext, KeyboardSettings, shortcutsAllowed } from "./KeyboardSettings";
 import { matchesBinding } from "../core/keybindings.mjs";
@@ -110,16 +112,29 @@ function App() {
     }
   };
   useEffect(() => {
+    const unsubscribe = api.subscribe(setState);
+    void api.invoke<State>("bootstrap").then(setState).catch(e=>notify(e.message));
+    return unsubscribe;
+  }, []);
+  const updateHealth = state.local.updateVerification;
+  const updateLocked = updateHealth?.status === "checking" || updateHealth?.status === "error";
+  useEffect(() => {
+    const marker = updateHealth?.bootstrapMarker;
+    if (!marker || !updateLocked) return;
+    document.documentElement.dataset.rpoUpdateBootstrap = marker;
+    void api.invoke("updates.rendererReady", {marker}).catch(e=>notify(e.message));
+    return () => { delete document.documentElement.dataset.rpoUpdateBootstrap; };
+  }, [updateHealth?.bootstrapMarker, updateLocked]);
+  useEffect(() => {
+    if (!state.local.dataDir || updateLocked) return;
     void (async()=>{
       for(const key of Object.keys(localStorage).filter(key=>/^rpo-(prompt|file)-/.test(key))){
         const value=localStorage.getItem(key);if(value===null)continue;
         if(await api.invoke("draft.read",{key})===null)await api.invoke("draft.set",{key,value});
         localStorage.removeItem(key);
       }
-      setState(await api.invoke<State>("bootstrap"));
     })().catch(e=>notify(e.message));
-    return api.subscribe(setState);
-  }, []);
+  }, [state.local.dataDir, updateLocked]);
   useEffect(() => {
     if (!state.workspaces.some((w) => w.id === workspace)) {
       setWorkspace(state.workspaces[0]?.id || "");
@@ -187,7 +202,13 @@ function App() {
         ? a.title.localeCompare(b.title)
         : Date.parse(b.at) - Date.parse(a.at),
     );
+  if (!state.local.dataDir) return <div role="status" style={{display:"grid",placeContent:"center",height:"100vh"}}>正在打开…</div>;
+  if (updateLocked) return <div data-update-verification role="status" style={{display:"grid",placeContent:"center",height:"100vh",padding:32,textAlign:"center",gap:12}}>
+    <strong>{updateHealth?.status === "error" ? "更新未通过检查" : "正在验证更新"}</strong>
+    <p>{updateHealth?.message || "正在检查本机数据和界面，请稍候。"}</p>
+  </div>;
   return (
+    <EditorSettingsContext.Provider value={resolveEditorSettings(state.local.editorSettings)}>
     <KeyboardContext.Provider value={{os:state.local.os,bindings:state.local.keyboard}}>
     <div className={"app-shell " + (!sidebar ? "sidebar-collapsed" : "")}>
       <div className="titlebar">
@@ -399,6 +420,7 @@ function App() {
                 <div className="nav-label">个人</div>
                 {[
                   [Settings2, "general", "通用"],
+                  [TerminalSquare, "editor", "编辑器"],
                   [TerminalSquare, "providers", "提供商"],
                   [Github, "github", "GitHub"],
                   [Keyboard, "keyboard", "快捷键"],
@@ -433,6 +455,7 @@ function App() {
                     (
                       {
                         general: "通用",
+                        editor: "编辑器",
                         providers: "提供商",
                         github: "GitHub",
                         keyboard: "快捷键",
@@ -450,6 +473,7 @@ function App() {
                     onRepos={() => setRepoPicker(true)}
                   />
                 )}{" "}
+                {setting === "editor" && <EditorSettings settings={state.local.editorSettings} call={call}/>}
                 {setting === "general" && (
                   <>
                     <form
@@ -732,6 +756,7 @@ function App() {
       )}
       {repoPicker && (
         <GitHubPicker
+          identityKey={`${state.identity?.audience||""}:${state.me?.id||""}:${github?.label||""}:${github?.authenticated||false}`}
           call={call}
           workspaceId={state.local.remote ? workspace : undefined}
           onClose={() => setRepoPicker(false)}
@@ -1147,6 +1172,7 @@ function App() {
       )}
     </div>
     </KeyboardContext.Provider>
+    </EditorSettingsContext.Provider>
   );
 }
 createRoot(document.getElementById("root")!).render(<App />);

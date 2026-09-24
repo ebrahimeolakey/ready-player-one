@@ -1,0 +1,17 @@
+.editor-settings{width:100%;color:#ccc}
+.editor-settings header,.editor-settings footer{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.editor-settings header{justify-content:flex-end;margin-top:-8px}
+.editor-settings fieldset{min-width:0;border:1px solid #2c2c2c;border-radius:10px;background:#1c1c1c;padding:0;margin:24px 0}
+.editor-settings legend{padding:0 8px;color:#888;font-size:11px;margin-left:9px}
+.editor-settings label{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 16px;border-bottom:1px solid #292929;font-size:12px;min-height:48px}
+.editor-settings label:last-child{border-bottom:0}
+.editor-settings input:not([type=checkbox]),.editor-settings select{width:210px;max-width:48%;padding:6px 9px;background:#171717;border:1px solid #393939;border-radius:5px;color:inherit;font:inherit}
+.editor-settings input[type=number]{width:106px}
+.editor-settings input[type=checkbox]{appearance:none;position:relative;flex-shrink:0;width:32px;height:18px;border:1px solid #555;border-radius:10px;background:#3b3b3b;cursor:pointer}
+.editor-settings input[type=checkbox]::before{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#888}
+.editor-settings input[type=checkbox]:checked{background:#eee;border-color:#eee}
+.editor-settings input[type=checkbox]:checked::before{left:16px;background:#222}
+.editor-settings input:focus-visible,.editor-settings select:focus-visible{outline:2px solid #8cc9a1;outline-offset:2px}
+.editor-settings-note{padding:0 16px;font-size:11px;color:#888;line-height:1.6}
+.editor-settings footer>span{font-size:12px;color:#9abea3}
+.rpo-code-editor{flex:1;min-height:0;overflow:hidden}

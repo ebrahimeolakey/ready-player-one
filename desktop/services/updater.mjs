@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID, randomBytes } from "node:crypto";
 import { createReadStream, constants } from "node:fs";
 import {
   access,
@@ -8,12 +8,15 @@ import {
   mkdtemp,
   open,
   readdir,
+  readFile,
+  realpath,
   rm,
   writeFile,
 } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { bundleDigest, bundleIdentity, macContract, validatePlan, HEALTH_PROTOCOL, DATA_EPOCH } from "./update-health-worker.mjs";
 const exec = promisify(execFile);
 export const UPDATE_REPOSITORY = "ebrahimeolakey/ready-player-one";
 const DOWNLOAD_HOSTS = new Set([
@@ -24,6 +27,10 @@ const DOWNLOAD_HOSTS = new Set([
 ]);
 const MAX_DOWNLOAD = 1024 * 1024 * 1024;
 
+export function supportsAutomaticRollback(oldContract, newContract) {
+  return [oldContract,newContract].every(c => c?.id === "com.readyplayerone.desktop" &&
+    c.protocol === HEALTH_PROTOCOL && c.dataEpoch === DATA_EPOCH);
+}
 export function compareVersions(a, b) {
   const parse = (value) => {
     const m =
@@ -139,6 +146,7 @@ export class UpdateService {
     platform = process.platform,
     arch = process.arch,
     cacheDir,
+    dataDir,
     execPath = process.execPath,
     isPackaged = false,
     appImagePath = process.env.APPIMAGE,
@@ -152,6 +160,7 @@ export class UpdateService {
       platform,
       arch,
       cacheDir,
+      dataDir,
       execPath,
       isPackaged,
       appImagePath,
@@ -224,7 +233,7 @@ export class UpdateService {
       () => this.operation?.abort(new Error("检查更新超时")),
       20000,
     );
-    this.emit({ status: "checking", error: null });
+    this.emit({ status: "checking", error: null, healthMode: null, warning: null, backupPath: null });
     try {
       const response = await this.github(
         `https://api.github.com/repos/${UPDATE_REPOSITORY}/releases?per_page=50`,
@@ -347,7 +356,7 @@ export class UpdateService {
   cancel() {
     this.operation?.abort(new Error("更新已取消"));
   }
-  async install() {
+  async install({ withoutAutomaticRollback = false } = {}) {
     if (this.operation || this.installing) throw new Error("更新操作正在进行");
     if (!this.options.isPackaged) throw new Error("开发模式不能替换应用");
     if (!this.prepared) throw new Error("请先下载更新");
@@ -366,10 +375,22 @@ export class UpdateService {
         this.quit();
         return { installing: true, method: "nsis" };
       }
-      const plan =
-        this.options.platform === "darwin"
+      const plan = prepared.plan ||= (this.options.platform === "darwin"
           ? await this.prepareMac(prepared)
-          : await this.prepareLinux(prepared);
+          : await this.prepareLinux(prepared));
+      if (this.options.platform === "darwin") {
+        if ((await bundleDigest(plan.target)) !== plan.oldDigest || (await bundleDigest(plan.next)) !== plan.newDigest)
+          throw new Error("应用已改变，请重新下载更新");
+        if (supportsAutomaticRollback(plan.oldContract, plan.newContract)) {
+          await this.startHealthWorker(prepared, plan);
+          this.quit();
+          return { installing: true, method: "mac-health-transaction" };
+        }
+        if (!withoutAutomaticRollback) {
+          this.installing = false;
+          return this.emit({status: "ready", healthMode: "manual", backupPath: plan.backup, warning: "此版本未声明相同的数据兼容代际。安装后保留旧包备份，启动失败需手动恢复，不会自动回滚。"});
+        }
+      }
       const script = join(prepared.directory, "apply-update.sh");
       await writeFile(script, INSTALL_SCRIPT, { mode: 0o700, flag: "wx" });
       await this.launch(
@@ -403,7 +424,8 @@ export class UpdateService {
     });
   }
   async prepareMac(prepared) {
-    const target = dirname(dirname(dirname(this.options.execPath)));
+    const target = await realpath(dirname(dirname(dirname(this.options.execPath))));
+    if (resolve(this.options.execPath) !== await realpath(this.options.execPath)) throw new Error("应用启动路径不能经过符号链接");
     if (!target.endsWith(".app") || target.includes("/AppTranslocation/"))
       throw new Error("请先把应用移到“应用程序”再安装更新");
     await access(dirname(target), constants.W_OK);
@@ -469,7 +491,49 @@ export class UpdateService {
     const next = join(dirname(target), `.rpo-next-${suffix}.app`);
     const backup = join(dirname(target), `.rpo-backup-${suffix}.app`);
     await exec("/usr/bin/ditto", [source, next]);
-    return { target, next, backup, method: "mac-replace" };
+    const oldContract = await macContract(target), newContract = await macContract(next);
+    if (oldContract.version !== this.options.version) throw new Error("正在运行的版本与安装目录不一致");
+    return { id: suffix, target, next, backup, failed: join(dirname(target), `.rpo-failed-${suffix}.app`),
+      oldContract, newContract, oldDigest: await bundleDigest(target), newDigest: await bundleDigest(next),
+      oldIdentity: await bundleIdentity(target), nextIdentity: await bundleIdentity(next), method: "mac-replace" };
+  }
+  async startHealthWorker(prepared, staged) {
+    if (!this.options.dataDir) throw new Error("缺少更新健康确认的数据目录");
+    const directory = await realpath(prepared.directory), dataDir = await realpath(this.options.dataDir);
+    const relaunchEnv = {};
+    for (const key of ["RPO_IDENTITY_ISSUER", "RPO_IDENTITY_PUBLIC_KEY_FILE"])
+      if (process.env[key]) relaunchEnv[key] = process.env[key];
+    const plan = validatePlan({...staged, format:1, platform:"darwin", directory, dataDir,
+      archiveDigest:prepared.selection.sha256, token:randomBytes(32).toString("hex"), parentPid:process.pid,
+      timeoutMs:120000, stabilityMs:10000, relaunchEnv});
+    // The entire old runtime is copied before either installed bundle moves.
+    // Its libraries/resources must not resolve via the soon-to-be-replaced path.
+    const runtime = join(directory, "worker-runtime.app");
+    await mkdir(runtime); // exclusive ownership; never merge into an existing copy
+    await exec("/usr/bin/ditto", [plan.target, runtime], {timeout:180000});
+    if (await bundleDigest(runtime) !== plan.oldDigest) throw new Error("更新工作进程运行时副本校验失败；尚未替换应用");
+    const script = join(directory,"update-health-worker.mjs"), planPath = join(directory,"plan.json");
+    await writeFile(script, await readFile(new URL("./update-health-worker.mjs",import.meta.url)), {mode:0o600,flag:"wx"});
+    const bytes = JSON.stringify(plan), digest = createHash("sha256").update(bytes).digest("hex");
+    await writeFile(planPath, bytes, {mode:0o600,flag:"wx"});
+    const env = {...process.env, ELECTRON_RUN_AS_NODE:"1"};delete env.RPO_UPDATE_HEALTH_TICKET;
+    await this.launch(join(runtime,"Contents","MacOS",plan.oldContract.binary), [script,planPath,digest], {env,detached:true,stdio:"ignore"});
+    // Spawn alone does not prove the independent worker is operational. The app
+    // stays open unless that exact transaction has reached its wait-for-exit gate.
+    const deadline = Date.now()+15000;
+    while (Date.now()<deadline) {
+      try {
+        const state = JSON.parse(await readFile(join(directory,"journal.json"),"utf8"));
+        if (state.id === plan.id && state.status === "waiting-for-exit") {
+          const activation={id:plan.id,proof:createHmac("sha256",plan.token).update(JSON.stringify({id:plan.id,action:"install"})).digest("hex")};
+          await writeFile(join(directory,"activate.json"),JSON.stringify(activation),{mode:0o600,flag:"wx"});
+          this.emit({healthMode:"automatic",warning:null});return;
+        }
+        throw new Error("更新工作进程未就绪；当前应用保持运行");
+      } catch(error) {if(error.code!=="ENOENT")throw error;}
+      await new Promise(r=>setTimeout(r,100));
+    }
+    throw new Error("更新工作进程启动超时；当前应用保持运行");
   }
   async prepareLinux(prepared) {
     if (!this.options.appImagePath)

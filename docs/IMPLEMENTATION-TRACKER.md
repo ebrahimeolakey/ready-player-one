@@ -87,3 +87,16 @@ Windows 同版本原生 CI **28/28 通过**并构建 ZIP/NSIS；下载后的 SHA
 干净发行源码 **319/319 回归通过**，TypeScript/Vite 构建通过。隔离构建发现并修复了可选群聊表缺失时的删除错误，新增无群聊模块的真实 Hub/磁盘回归。Mac arm64 / x64 包内 **71 个 core/desktop/dist 文件**与发行源码逐字节一致，108 个提交源码文件与构建目录一致；ZIP 完整性及内含 ASAR 哈希核对通过。
 
 Mac arm64 包实际启动；合成项目通过界面保存了消息评论。消息定位、diff 评论、记忆历史的完整桌面/双机交互仍需继续验收，自动化通过不替代这些检查。Windows 原生运行和包验证见 [WINDOWS-NATIVE-CI](WINDOWS-NATIVE-CI.md)。Apple 签名/公证与团队 OAuth 继续延期；房主在线范围例外保持不变。A7 活跃文件聚合、完整视觉对照和更多真实环境验收仍未完成。
+
+## 0.4.5-beta.1 进展
+
+- 活动视图：聚合未过期的打开/变更/任务范围，按工作区去重并显示会话来源；区分文件、目录和未知范围。无活动时隐藏统计。见 [ACTIVITY-VIEW](ACTIVITY-VIEW.md)。
+- GitHub：应用内审阅并创建仓库，显式克隆或绑定已有 Git 目录；持久化投递记录防止丢响应后重复创建，账号与协作身份变化时重新核对，不覆盖已有 origin。见 [GITHUB-REPOSITORY-CREATE](GITHUB-REPOSITORY-CREATE.md)。
+- 编辑器：字体、字号、缩进、换行、空白、参考线与可导航代码缩略图；JSON 格式化和限定行尾清理默认关闭。保存过程中继续输入不会被格式化结果覆盖。见 [EDITOR-SETTINGS](EDITOR-SETTINGS.md)。
+- Mac 更新：双阶段加密数据/真实 React 界面检查，检查前暂停执行和同步；兼容声明一致时启动失败恢复旧包，目标或备份改变时保留人工恢复。旧包无声明时明确二次确认手动安装。见 [UPDATE-HEALTH](UPDATE-HEALTH.md)。
+
+真实 Electron 主进程测试确认与拒绝两条路径均通过，发现并修复 Electron ASAR 虚拟文件统计造成的校验误报。证据见 [桌面更新检查](UPDATE-HEALTH-DESKTOP-SMOKE.md)。这是实际启动门禁与模拟健康服务的验证，不等于已发布包之间的完整安装替换演练。
+
+本机再次只读观察 Amoeba 设置页面，记录了尚未覆盖的通用偏好；见 [原版实测补充](UI-OBSERVATION-2026-09-24.md)。并未据此宣称所有 UI 1:1。
+
+隔离发行源码完整回归 **361/361 通过**，TypeScript/Vite 构建通过；包含真实 Electron 编辑器测试，没有跳过项。安装包验证结果随后补充。

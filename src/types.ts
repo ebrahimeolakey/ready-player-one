@@ -109,9 +109,11 @@ export type State = {
   shared?: boolean;
   local: {
     referenceIssues?:{workspaceId:string;sessionId?:string;message:string}[];
+    editorSettings?:import("../core/editor-settings.mjs").EditorSettingsValue;
     keyboard?:Record<string,string>;
     modelCatalogs?:Record<string,import("./ProviderControls").ProviderModel[]>;
     laneOptions?: Record<string,{model?:string;effort?:string}>;
+    updateVerification?:{status:string;message?:string;bootstrapMarker?:string|null};
     update?:import("./UpdatePanel").UpdateState;
     runIssues?:{sessionId:string;runId:string;message:string}[];
     sync?: Record<string, {status:string; message?:string; files?:string[]; commit?:string; at?:string}>;

@@ -16,6 +16,9 @@ export interface UpdateState {
   progress?: number;
   size?: number;
   error?: string | null;
+  healthMode?: "automatic" | "manual" | null;
+  warning?: string | null;
+  backupPath?: string | null;
 }
 export function UpdatePanel({
   call,
@@ -41,7 +44,7 @@ export function UpdatePanel({
   async function action(method: string) {
     setError("");
     try {
-      const result = await call(method);
+      const result = await call(method, method === "updates.install" && state.healthMode === "manual" ? {withoutAutomaticRollback:true} : undefined);
       if (result?.status) setState(result);
     } catch (error) {
       setError(error instanceof Error ? error.message : "更新失败");
@@ -54,7 +57,7 @@ export function UpdatePanel({
     available: "下载更新",
     current: "已是最新版本",
     downloading: `下载中 ${state.progress || 0}%`,
-    ready: "安装并重启",
+    ready: state.healthMode === "manual" ? "仅安装并保留备份" : "安装并重启",
     installing: "正在安装",
     error: "重新检查",
   };
@@ -74,6 +77,8 @@ export function UpdatePanel({
         <small>
           {state.version ? `新版本 ${state.version}` : "来自官方 GitHub 发布"}
         </small>
+        {state.warning && <small role="status">{state.warning}</small>}
+        {state.backupPath && <details><summary>备份位置</summary><small>{state.backupPath}</small></details>}
         {(error || state.error) && (
           <small className="provider-error" role="alert">
             {error || state.error}

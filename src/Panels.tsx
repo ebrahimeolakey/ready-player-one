@@ -58,7 +58,8 @@ import {
   languageExtensions,
   type DefinitionLocation,
 } from "./language-extension";
-import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { CodeEditor } from "./CodeEditor";
 import { javascript } from "@codemirror/lang-javascript";
 import { markdown } from "@codemirror/lang-markdown";
 import { json } from "@codemirror/lang-json";
@@ -961,11 +962,14 @@ export function Editor({
   const save = async () => {
     if (openedFor !== contextKey || rootChanged || !fileRoot) return;
     const openedRequest = openSequence.current;
-    const r = await call("file.save", { ...params, path: file, content, hash, expectedRoot:fileRoot });
+    const requestedContent = content;
+    const r = await call("file.save", { ...params, path: file, content:requestedContent, hash, expectedRoot:fileRoot });
     if (r && currentView.current === viewIdentity && openedRequest === openSequence.current) {
+      const savedContent = typeof r.content === "string" ? r.content : requestedContent;
       setHash(r.hash);
-      setOriginal(content);
-      notify("文件已保存到本机");
+      setOriginal(savedContent);
+      if (currentContent.current === requestedContent) setContent(savedContent);
+      notify(r.notices?.length ? "已保存 · " + r.notices.join("；") : "文件已保存到本机");
     }
   };
   const loadLegacyDraft = async () => {
@@ -1178,13 +1182,13 @@ export function Editor({
                 <button onClick={() => setPendingFile("")}>取消</button>
               </div>
             )}
-            <CodeMirror
+            <CodeEditor
               ref={codeRef}
               value={content}
               height="100%"
               theme="dark"
               extensions={[ext, ...intelligence]}
-              onChange={setContent}
+              onChange={(value) => { currentContent.current=value; setContent(value); }}
               onUpdate={(update) => {
                 if (!update.selectionSet && !update.docChanged) return;
                 const range = update.state.selection.main;

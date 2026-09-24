@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   Globe,
 } from "lucide-react";
+import {CreateGitHubRepository} from "./CreateGitHubRepository";
 import {TeamIdentity} from "./TeamIdentity";
 import {ACPSetup} from "./ACPSetup";
 import {ProviderSetup} from "./ProviderSetup";
@@ -286,6 +287,7 @@ export function Accounts({
 }
 export function GitHubPicker({
   call,
+  identityKey,
   onClose,
   onImported,
   workspaceId,
@@ -293,8 +295,10 @@ export function GitHubPicker({
   call: Call;
   onClose: () => void;
   onImported: (w: any) => void;
+  identityKey?: string;
   workspaceId?: string;
 }) {
+  const [creating,setCreating]=useState(false);
   const [repos, setRepos] = useState<any[]>([]),
     [search, setSearch] = useState(""),
     [busy, setBusy] = useState(false),
@@ -316,11 +320,13 @@ export function GitHubPicker({
     setBusy(false);
     if (w) onImported(w);
   };
+  if(creating)return <Modal title="创建 GitHub 仓库" close={onClose}><CreateGitHubRepository key={identityKey} call={window.rpo.invoke} workspaceId={workspaceId} onImported={onImported} onBack={()=>{setCreating(false);void load();}}/></Modal>;
   return (
     <Modal
       title={workspaceId ? "克隆并关联仓库" : "打开 GitHub 仓库"}
       close={onClose}
     >
+      <button className="button" disabled={busy} onClick={()=>setCreating(true)}>创建新仓库</button>
       <div className="inline-form">
         <input
           autoFocus

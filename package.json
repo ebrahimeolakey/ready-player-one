@@ -1,6 +1,6 @@
 {
   "name": "ready-player-one",
-  "version": "0.4.4-beta.1",
+  "version": "0.4.5-beta.1",
   "description": "头号玩家 · 本地优先的 Agent Session Share 工作台",
   "type": "module",
   "main": "desktop/main.mjs",
@@ -77,7 +77,9 @@
       ],
       "extendInfo": {
         "NSMicrophoneUsageDescription": "按下语音按钮后录制你的口述内容。",
-        "NSSpeechRecognitionUsageDescription": "将你主动录制的语音转为输入框中的文字。"
+        "NSSpeechRecognitionUsageDescription": "将你主动录制的语音转为输入框中的文字。",
+        "RPOUpdateHealthProtocol": 1,
+        "RPODataCompatibilityEpoch": 1
       },
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist"

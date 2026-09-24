@@ -1,0 +1,129 @@
+{
+  "version": "0.4.5-beta.1",
+  "target": "node_modules/electron/dist/Electron.app",
+  "digest": "36335b346f75a12b81f6b404c8c7788480edce641e344d99ca4bd33665a98f46",
+  "startedAt": "2026-09-24T09:58:47.169Z",
+  "scenarios": [
+    {
+      "mode": "confirm",
+      "status": "passed",
+      "checks": [
+        "health ticket consumed from process.env by actual main",
+        "actual React checking view mounted, nonce matches main, wrong nonce refused",
+        "settings.name / terminal.open / updates.install all rejected before confirmation; name unchanged",
+        "two authenticated phases unlock actual app shell and settings.name mutation"
+      ],
+      "authenticatedReadyPhases": 2,
+      "protocol": {
+        "mode": "confirm",
+        "ready": [
+          {
+            "phase": "loaded",
+            "pid": 7426,
+            "version": "0.4.5-beta.1",
+            "digest": "36335b346f75a12b81f6b404c8c7788480edce641e344d99ca4bd33665a98f46",
+            "dataLoaded": true,
+            "rendererReady": true,
+            "at": "2026-09-24T09:58:49.843Z"
+          },
+          {
+            "phase": "stable",
+            "pid": 7426,
+            "version": "0.4.5-beta.1",
+            "digest": "36335b346f75a12b81f6b404c8c7788480edce641e344d99ca4bd33665a98f46",
+            "dataLoaded": true,
+            "rendererReady": true,
+            "at": "2026-09-24T09:58:50.351Z"
+          }
+        ],
+        "challenges": 3,
+        "rejections": 0,
+        "errors": []
+      },
+      "blockedBefore": [
+        {
+          "method": "settings.name",
+          "rejected": true,
+          "message": "Error invoking remote method 'rpo:invoke': Error: 正在验证更新，请稍候"
+        },
+        {
+          "method": "terminal.open",
+          "rejected": true,
+          "message": "Error invoking remote method 'rpo:invoke': Error: 正在验证更新，请稍候"
+        },
+        {
+          "method": "updates.install",
+          "rejected": true,
+          "message": "Error invoking remote method 'rpo:invoke': Error: 正在验证更新，请稍候"
+        }
+      ]
+    },
+    {
+      "mode": "reject",
+      "status": "passed",
+      "checks": [
+        "health ticket consumed from process.env by actual main",
+        "actual React checking view mounted, nonce matches main, wrong nonce refused",
+        "settings.name / terminal.open / updates.install all rejected before confirmation; name unchanged",
+        "server rejection retains error UI and all IPC gates; encrypted settings unchanged"
+      ],
+      "authenticatedReadyPhases": 1,
+      "protocol": {
+        "mode": "reject",
+        "ready": [
+          {
+            "phase": "loaded",
+            "pid": 7456,
+            "version": "0.4.5-beta.1",
+            "digest": "36335b346f75a12b81f6b404c8c7788480edce641e344d99ca4bd33665a98f46",
+            "dataLoaded": true,
+            "rendererReady": true,
+            "at": "2026-09-24T09:58:53.976Z"
+          }
+        ],
+        "challenges": 2,
+        "rejections": 1,
+        "errors": []
+      },
+      "blockedBefore": [
+        {
+          "method": "settings.name",
+          "rejected": true,
+          "message": "Error invoking remote method 'rpo:invoke': Error: 正在验证更新，请稍候"
+        },
+        {
+          "method": "terminal.open",
+          "rejected": true,
+          "message": "Error invoking remote method 'rpo:invoke': Error: 正在验证更新，请稍候"
+        },
+        {
+          "method": "updates.install",
+          "rejected": true,
+          "message": "Error invoking remote method 'rpo:invoke': Error: 正在验证更新，请稍候"
+        }
+      ],
+      "blockedAfter": [
+        {
+          "method": "settings.name",
+          "rejected": true,
+          "message": "Error invoking remote method 'rpo:invoke': Error: 更新检查进程拒绝确认"
+        },
+        {
+          "method": "terminal.open",
+          "rejected": true,
+          "message": "Error invoking remote method 'rpo:invoke': Error: 更新检查进程拒绝确认"
+        },
+        {
+          "method": "updates.install",
+          "rejected": true,
+          "message": "Error invoking remote method 'rpo:invoke': Error: 更新检查进程拒绝确认"
+        }
+      ]
+    }
+  ],
+  "modelCalls": 0,
+  "installedApplicationsModified": false,
+  "status": "passed",
+  "completedAt": "2026-09-24T09:58:55.111Z",
+  "rawEvidenceDirectory": "/private/var/folders/x9/znxmzx5x7b56cwz_dzsb54ch0000gn/T/rpo-update-health-desktop-ayTfdt"
+}

@@ -1,4 +1,5 @@
 import { createWorkspaceLifecycle } from "./services/workspace-lifecycle.mjs";
+import { resolveEditorSettings, validateEditorSettings, prepareEditorSave } from "../core/editor-settings.mjs";
 import { defaultBindings, validateBindings } from "../core/keybindings.mjs";
 import { ACPConfigStore } from "../core/acp-config.mjs";
 import { registerACP, probeACP } from "../core/providers/acp.mjs";
@@ -70,6 +71,8 @@ import {
   fileReferences,
   checkReferences,
 } from "./services/references.mjs";
+import { GithubRepositoryService } from "./services/github-repository.mjs";
+import { takeUpdateHealthTicket, confirmUpdateHealth } from "./services/update-health-client.mjs";
 import { UpdateService } from "./services/updater.mjs";
 import { TerminalService } from "./services/terminal.mjs";
 import { ProviderCLIService } from "./services/provider-cli.mjs";
@@ -84,6 +87,12 @@ import {
 } from "../core/accounts.mjs";
 import { installTool } from "../core/installers.mjs";
 import { Tunnel, parseInvitation, makeInvitation } from "../core/tunnel.mjs";
+// Consume before any account/runtime captures the environment.
+const updateHealthTicket = takeUpdateHealthTicket();
+let updateVerification = { status: updateHealthTicket ? "checking" : "not-required" };
+const updateBootstrapMarker = updateHealthTicket ? randomUUID() : null;
+let updateRendererFrame = null;
+const updateBlocked = () => ["checking", "error"].includes(updateVerification.status);
 const base = dirname(fileURLToPath(import.meta.url));
 app.setName("头号玩家");
 const dir = process.env.RPO_DATA_DIR || join(homedir(), ".ready-player-one");
@@ -272,6 +281,15 @@ async function withRepository(root, action) {
     repoLocks.delete(root);
   }
 }
+const githubRepository = new GithubRepositoryService({
+  store: () => settingsStore,
+  scope: () => {
+    const audience = client?.state?.identity?.audience, member = client?.state?.me?.id;
+    if (!audience || !member) throw Error("请先连接工作区");
+    return JSON.stringify([audience, member]);
+  },
+  withRepository,
+});
 const gitService = new GitService({ env: local.localEnv(), isBusy: rootBusy });
 gitService.locks = repoLocks;
 const gitMethods = new Set([
@@ -296,10 +314,12 @@ const state = () => ({
     members: [],
   }),
   local: {
+    editorSettings: resolveEditorSettings(config.editorSettings),
     keyboard: { ...defaultBindings(process.platform), ...config.keyboard },
     runIssues: coordinator?.issues || [],
     referenceIssues: [...referenceIssues.values()],
     update: updater?.getState(),
+    updateVerification: {...updateVerification, bootstrapMarker: updateBootstrapMarker},
     laneOptions: config.laneOptions,
     modelCatalogs: config.modelCatalogs,
     sync: Object.fromEntries(syncStates),
@@ -548,8 +568,10 @@ async function connect(url, token) {
   try {
     await next.connect(url, auth);
     pendingTeamConnection = null;
-    await workspaceLifecycle.recover();
-    await coordinator.resume();
+    if (!updateBlocked()) {
+      await workspaceLifecycle.recover();
+      await coordinator.resume();
+    }
   } catch (error) {
     if (/GitHub.*身份|GitHub.*用户/.test(error.message))
       pendingTeamConnection = { url, ...auth, remote };
@@ -558,10 +580,11 @@ async function connect(url, token) {
   emit();
 }
 async function processRuns() {
+  if (updateBlocked()) return;
   await coordinator.process();
 }
 async function syncSession(sessionId) {
-  if (!online || syncBusy.has(sessionId)) return;
+  if (updateBlocked() || !online || syncBusy.has(sessionId)) return;
   const syncClient=client;
   const s = client?.state?.sessions.find((s) => s.id === sessionId);
   const lane = s?.lanes.find((l) => l.ownerId === client.state.me.id);
@@ -741,6 +764,12 @@ const hubMethods = new Set([
 ]);
 async function invoke(method, a) {
   if (method === "bootstrap") return state();
+  if (method === "updates.rendererReady") {
+    if (!updateHealthTicket || a.marker !== updateBootstrapMarker) throw Error("更新界面确认无效");
+    updateRendererFrame = win.webContents.mainFrame;
+    return true;
+  }
+  if (updateBlocked()) throw Error(updateVerification.message || "正在验证更新，请稍候");
   if (["workspace.delete.preview","workspace.delete"].includes(method)) { const result=await workspaceLifecycle.invoke(method,a); emit(); return result; }
   if (method === "link.open") {
     await shell.openExternal(browserURL(a.url));
@@ -870,13 +899,17 @@ async function invoke(method, a) {
     if (
       method === "updates.install" &&
       (runtime.runs.size ||
+        providerCLIService.openingRoots.size ||
+        [...terminalService.terminals.values()].some(r => r.providerCLI && !r.exited) ||
         repoLocks.size ||
         [...debuggerService.records.values()].some((r) =>
           debuggerService.isBusy(r.root),
         ))
     )
       throw Error("请先等待或停止正在运行的 Agent，再安装更新");
-    return updater[method.split(".")[1]]();
+    return method === "updates.install"
+      ? updater.install({withoutAutomaticRollback:a.withoutAutomaticRollback===true})
+      : updater[method.split(".")[1]]();
   }
   if (handlesTaskCoordination(method)) {
     const result = await taskCoordination.invoke(method, a);
@@ -1083,9 +1116,29 @@ async function invoke(method, a) {
       .finally(emit);
     return true;
   }
+  if (method === "github.create.preview") return githubRepository.preview(a);
+  if (method === "github.create") return githubRepository.create(a);
+  if (method === "github.create.lookup") return githubRepository.lookup(a);
+  if (method === "github.create.history") return githubRepository.history();
+  if (method === "github.bind.confirm") return githubRepository.bind(a);
+  if (method === "github.bind.preview") {
+    const currentScope = githubRepository.currentScope();
+    await githubRepository.lookup({id:a.id});
+    const result = await dialog.showOpenDialog(win, {title:"选择要绑定的 Git 项目",properties:["openDirectory"]});
+    if (result.canceled) return null;
+    if (githubRepository.currentScope() !== currentScope) throw Error("连接已切换，请重新选择项目");
+    return githubRepository.previewBind({id:a.id,path:result.filePaths[0]});
+  }
   if (method === "github.repositories") return repositories();
   if (method === "github.clone") {
     validateRepo(a.repo);
+    const verifyCreation = async () => {
+      if (!a.creationId) return;
+      const receipt = await githubRepository.lookup({id:a.creationId});
+      if (!["created","observed"].includes(receipt.status) || receipt.repo?.fullName.toLowerCase() !== a.repo.toLowerCase())
+        throw Error("创建记录与仓库不符，请重新核实");
+    };
+    await verifyCreation();
     if (
       a.workspaceId &&
       !client.state.workspaces.some((w) => w.id === a.workspaceId)
@@ -1098,6 +1151,7 @@ async function invoke(method, a) {
     });
     if (result.canceled) return null;
     const target = join(result.filePaths[0], a.repo.split("/")[1]);
+    await verifyCreation();
     await cloneRepository(a.repo, target);
     const p = await local.inspectProject(target);
     if (a.workspaceId) {
@@ -1266,9 +1320,10 @@ async function invoke(method, a) {
   if (method === "file.search.cancel") return fileSearchService.cancel(win.webContents.id, a);
   if (method === "file.read") return local.readBound(canonicalRoot(localRoot(a)), a.path);
   if (method === "file.save") {
-    const c=client,root=canonicalRoot(localRoot(a)),result=await local.saveBound(root,a.path,a.content,a.hash,a.expectedRoot);
+    const prepared=prepareEditorSave({path:a.path,content:a.content,settings:config.editorSettings});
+    const c=client,root=canonicalRoot(localRoot(a)),result=await local.saveBound(root,a.path,prepared.content,a.hash,a.expectedRoot);
     await referenceRefresh.refresh({root,workspaceId:a.workspaceId,sessionId:a.sessionId,reason:'保存文件',paths:[a.path],expectedClient:c,isCurrent:()=>canonicalRoot(localRoot(a))===root});
-    return result;
+    return {...result,content:prepared.content,notices:prepared.notices};
   }
   if (method === "git.changes") return local.changes(localRoot(a));
   if (method === "diff.publish") {
@@ -1279,6 +1334,14 @@ async function invoke(method, a) {
   if (method === "providers.refresh") {
     await refreshAccounts();
     return providerList;
+  }
+  if (method === "settings.editor.get") return resolveEditorSettings(config.editorSettings);
+  if (method === "settings.editor.save") {
+    const previous=config.editorSettings;
+    config.editorSettings=validateEditorSettings(a.settings);
+    try { saveConfig(); } catch(error) { config.editorSettings=previous; throw error; }
+    emit();
+    return config.editorSettings;
   }
   if (method === "settings.keyboard") {
     config.keyboard = validateBindings(a.bindings, process.platform);
@@ -1432,6 +1495,7 @@ app
         execPath: process.execPath,
         isPackaged: app.isPackaged,
         appImagePath: process.env.APPIMAGE,
+        dataDir: dir,
         onState: () => emit(),
         quit: () => app.quit(),
       });
@@ -1568,6 +1632,25 @@ app
       win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
       win.webContents.on("will-navigate", (event) => event.preventDefault());
       await win.loadFile(entry);
+      if (updateHealthTicket) {
+        void confirmUpdateHealth({
+          ticket: updateHealthTicket, version: app.getVersion(), execPath: process.execPath, dataDir: dir,
+          onState: value => { updateVerification = value; emit(); },
+          verifyReady: async () => {
+            if (!win || win.isDestroyed() || win.webContents.isDestroyed() || !updateRendererFrame || win.webContents.mainFrame !== updateRendererFrame) return false;
+            // Re-read authenticated encrypted records in both health phases.
+            settingsStore.readJSON("client.json");
+            hub.store.readJSON(hub.file);
+            if (!online || !client?.state?.me || !Array.isArray(client.state.sessions)) return false;
+            return await win.webContents.executeJavaScript(`document.documentElement.dataset.rpoUpdateBootstrap === ${JSON.stringify(updateBootstrapMarker)} && document.querySelector('[data-update-verification]') !== null`) === true;
+          },
+        }).then(async () => {
+          await workspaceLifecycle.recover();
+          await coordinator.resume();
+        }).catch(error => {
+          updateVerification = {status:"error",message:error.message}; emit();
+        });
+      }
       refreshAccounts().catch(console.error);
       refreshCustomProviders().catch(console.error);
       refreshACP().catch(console.error);

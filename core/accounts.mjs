@@ -115,7 +115,7 @@ export async function accountStatus(id, run = exec) {
     }
     const r = await run(
       command,
-      ["api", "user", "--jq", "{login: .login, name: .name}"],
+      ["api", "--hostname", "github.com", "user", "--jq", "{login: .login, name: .name}"],
       { env: { ...localEnv(), GH_PROMPT_DISABLED: "1" }, timeout: 15000 },
     );
     const info = JSON.parse(r.stdout);
@@ -255,11 +255,13 @@ export class AccountManager extends EventEmitter {
     for (const id of this.processes.keys()) this.cancel(id);
   }
 }
-export async function repositories() {
-  const { stdout } = await exec(
+export async function repositories(run = exec) {
+  const { stdout } = await run(
     "gh",
     [
       "api",
+      "--hostname",
+      "github.com",
       "user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member",
       "--jq",
       "[.[] | {fullName: .full_name, name: .name, private: .private, description: .description, defaultBranch: .default_branch}]",
@@ -281,10 +283,10 @@ export function validateRepo(repo) {
     throw Error("仓库应为 owner/repository 格式");
   return repo;
 }
-export async function cloneRepository(repo, target) {
+export async function cloneRepository(repo, target, run = exec) {
   validateRepo(repo);
-  await exec("gh", ["repo", "clone", repo, target], {
-    env: { ...localEnv(), GH_PROMPT_DISABLED: "1", GIT_TERMINAL_PROMPT: "0" },
+  await run("gh", ["repo", "clone", `https://github.com/${repo}.git`, target], {
+    env: { ...localEnv(), GH_HOST: "github.com", GH_PROMPT_DISABLED: "1", GIT_TERMINAL_PROMPT: "0" },
     timeout: 180000,
     maxBuffer: 3e6,
   });
