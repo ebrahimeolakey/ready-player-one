@@ -92,6 +92,32 @@ export async function files(root, path = "") {
     )
     .slice(0, 500);
 }
+// Bounded project filename search using the same path and symlink boundaries as the tree.
+export async function searchFiles(root, query) {
+  if (typeof query !== "string" || !query.trim() || query.length > 200)
+    return [];
+  const q = query.trim().toLowerCase(),
+    queue = [""],
+    found = [];
+  let visited = 0;
+  while (queue.length && visited < 20000 && found.length < 100) {
+    const path = queue.shift();
+    let entries;
+    try {
+      entries = await files(root, path);
+    } catch {
+      continue;
+    }
+    for (const f of entries) {
+      visited++;
+      if (f.directory) {
+        if (f.path.split("/").length < 20) queue.push(f.path);
+      } else if (f.path.toLowerCase().includes(q)) found.push(f);
+      if (found.length >= 100) break;
+    }
+  }
+  return found;
+}
 export const hash = (content) =>
   createHash("sha256").update(content).digest("hex");
 export async function read(root, path) {

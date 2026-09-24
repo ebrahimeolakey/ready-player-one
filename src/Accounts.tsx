@@ -1,20 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
-  Code2,
+  TerminalSquare,
   Github,
-  Check,
+  RefreshCw,
   Download,
   ExternalLink,
   LoaderCircle,
-  RefreshCw,
-  ShieldCheck,
-  X,
   Globe,
 } from "lucide-react";
 import type { State } from "./types";
-type Call = (method: string, args?: Record<string, unknown>) => Promise<any>;
+import { Modal, type Call } from "./ui";
 const names: Record<string, string> = {
-  codex: "OpenAI Codex",
+  codex: "Codex CLI",
   claude: "Claude Code",
   github: "GitHub",
 };
@@ -22,284 +19,262 @@ export function Accounts({
   state,
   call,
   onRepos,
+  section = "providers",
 }: {
   state: State;
   call: Call;
   onRepos: () => void;
+  section?: string;
 }) {
   const [selected, setSelected] = useState(""),
     [code, setCode] = useState("");
-  const accounts = state.local.accounts || [];
-  const job = state.local.authJobs?.find((j) => j.id === selected);
+  const job = state.local.authJobs?.find((j) => j.id === selected),
+    install = state.local.installations?.find((j) => j.id === "cloudflared");
   return (
     <>
-      <div className="settings-section">
-        <div className="account-heading">
-          <div>
-            <h2>账号与授权</h2>
-            <p>登录你自己的账号。授权在官方页面完成，凭据由本机 CLI 保存。</p>
-          </div>
-          <button
-            className="button"
-            disabled={state.local.accountLoading}
-            onClick={() => call("accounts.refresh")}
-          >
-            <RefreshCw
-              size={14}
-              className={state.local.accountLoading ? "spin" : ""}
-            />
-            刷新
-          </button>
-        </div>
-        {["codex", "claude", "github"].map((id) => {
-          const a = accounts.find((v) => v.id === id),
-            install = state.local.installations?.find((j) => j.id === id),
-            auth = state.local.authJobs?.find((j) => j.id === id);
-          return (
-            <div className="account-card" key={id}>
-              <div className={"provider-icon " + id}>
-                {id === "codex" ? (
-                  <Code2 />
-                ) : id === "github" ? (
-                  <Github />
-                ) : (
-                  <span>✳</span>
-                )}
-              </div>
-              <div className="account-detail">
-                <strong>{names[id]}</strong>
-                <small>
-                  {state.local.accountLoading && !a ? (
-                    "正在检查本机账号……"
-                  ) : a?.authenticated ? (
-                    <>
-                      <Check size={11} />
-                      {a.label}
-                      {a.plan ? " · " + a.plan : ""}
-                    </>
-                  ) : (
-                    a?.label || "尚未安装"
-                  )}
-                </small>
-                <small className="account-version">
-                  {a?.version || "支持在应用内安装官方 CLI，无需 Node.js"}
-                </small>
-                {install && (
-                  <div className={"install-progress " + install.status}>
-                    {install.status === "running" && (
-                      <LoaderCircle size={12} className="spin" />
-                    )}
-                    {install.message}
-                  </div>
-                )}
-              </div>
-              <div className="account-actions">
-                {a?.available ? (
-                  <>
-                    <span
-                      className={"tag " + (a.authenticated ? "green" : "amber")}
-                    >
-                      {a.authenticated ? "已授权" : "需要登录"}
-                    </span>
-                    <button
-                      className="button"
-                      onClick={async () => {
-                        setSelected(id);
-                        if (auth?.status !== "running")
-                          await call("accounts.login", { id });
-                      }}
-                    >
-                      {auth?.status === "running"
-                        ? "查看登录进度"
-                        : a.authenticated
-                          ? "重新登录"
-                          : "登录账号"}
-                    </button>
-                    {id === "github" && a.authenticated && (
-                      <button className="button primary" onClick={onRepos}>
-                        选择仓库
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <button
-                    className="button"
-                    disabled={
-                      state.local.accountLoading ||
-                      install?.status === "running"
-                    }
-                    onClick={() => call("tools.install", { id })}
-                  >
-                    <Download size={14} />
-                    {install?.status === "running"
-                      ? "正在安装"
-                      : "安装官方 CLI"}
-                  </button>
-                )}
-              </div>
+      {section === "network" ? (
+        <>
+          <div className="setting-card">
+            <Globe size={18} />
+            <div className="grow">
+              <strong>互联网协作</strong>
+              <small>
+                {state.local.tunnel?.status === "ready"
+                  ? "已连接"
+                  : state.local.tunnel?.installed
+                    ? "组件已安装"
+                    : "需要安装组件"}
+              </small>
             </div>
-          );
-        })}
-        <div className="account-notice">
-          <ShieldCheck size={15} />
-          <span>
-            Codex 与 Claude 的模型调用使用你自己的订阅或 API 额度；GitHub
-            授权用于读取、克隆你有权访问的仓库。账号详情和登录信息不会同步给协作者。
-          </span>
-        </div>
-      </div>
-      <div className="settings-section">
-        <div className="account-heading">
-          <div>
-            <h2>互联网协作</h2>
-            <p>
-              通过 Cloudflare
-              临时加密通道，让不同网络的同事直接加入。房主需保持应用打开。
-            </p>
-          </div>
-          <Globe size={23} />
-        </div>
-        <div className="network-settings">
-          <span
-            className={
-              "tag " + (state.local.tunnel?.status === "ready" ? "green" : "")
-            }
-          >
-            {state.local.tunnel?.status === "ready"
-              ? "互联网共享在线"
-              : state.local.tunnel?.installed
-                ? "组件已安装"
-                : "尚未安装组件"}
-          </span>
-          <button
-            className="button"
-            disabled={state.local.installations?.some(
-              (j) => j.id === "cloudflared" && j.status === "running",
+            {state.local.tunnel?.status === "ready" ? (
+              <button
+                className="button"
+                onClick={() => call("share.stopInternet")}
+              >
+                关闭
+              </button>
+            ) : (
+              <button
+                className="button"
+                disabled={install?.status === "running"}
+                onClick={() => call("tools.install", { id: "cloudflared" })}
+              >
+                <Download size={13} />
+                {state.local.tunnel?.installed ? "更新" : "安装"}
+              </button>
             )}
-            onClick={() => call("tools.install", { id: "cloudflared" })}
-          >
-            <Download size={14} />
-            {state.local.tunnel?.installed
-              ? "更新协作组件"
-              : "安装互联网协作组件"}
-          </button>
-          {state.local.tunnel?.status === "ready" && (
-            <button
-              className="button"
-              onClick={() => call("share.stopInternet")}
+          </div>
+          {install && (
+            <p
+              className={
+                "small-note " + (install.status === "error" ? "warning" : "")
+              }
             >
-              关闭互联网共享
+              {install.message}
+            </p>
+          )}
+          <p className="small-note">临时加密通道 · 房主需在线</p>
+          <details className="help-details">
+            <summary>连接详情</summary>
+            <p>通过 Cloudflare 中继，非端到端加密。断线或重启后需重新邀请。</p>
+          </details>
+        </>
+      ) : (
+        <>
+          <div className="settings-toolbar">
+            <button
+              className="icon-button"
+              title="刷新登录状态"
+              aria-label="刷新登录状态"
+              disabled={state.local.accountLoading}
+              onClick={() => call("accounts.refresh")}
+            >
+              <RefreshCw
+                size={14}
+                className={state.local.accountLoading ? "spin" : ""}
+              />
+            </button>
+          </div>
+          {(section === "github" ? ["github"] : ["claude", "codex"]).map(
+            (id) => {
+              const a = state.local.accounts?.find((a) => a.id === id),
+                install = state.local.installations?.find((j) => j.id === id),
+                auth = state.local.authJobs?.find((j) => j.id === id);
+              return (
+                <div key={id}>
+                  <div className="setting-card">
+                    <span className="provider-symbol">
+                      {id === "github" ? (
+                        <Github size={17} />
+                      ) : (
+                        <TerminalSquare size={17} />
+                      )}
+                    </span>
+                    <div className="grow">
+                      <strong>{names[id]}</strong>
+                      {section === "github" && a?.authenticated && (
+                        <small>{a.label}</small>
+                      )}
+                    </div>
+                    {a?.available ? (
+                      <>
+                        <button
+                          className="button"
+                          title={
+                            a.authenticated
+                              ? "切换或重新登录账号"
+                              : "在官方页面登录"
+                          }
+                          onClick={async () => {
+                            setSelected(id);
+                            if (auth?.status !== "running")
+                              await call("accounts.login", { id });
+                          }}
+                        >
+                          {auth?.status === "running"
+                            ? "继续登录"
+                            : a.authenticated
+                              ? "切换账号"
+                              : "登录"}
+                        </button>
+                        <span
+                          className={"tag " + (a.authenticated ? "green" : "")}
+                          title={a.version}
+                        >
+                          {a.authenticated ? "已连接" : "未登录"}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="button"
+                          disabled={
+                            state.local.accountLoading ||
+                            install?.status === "running"
+                          }
+                          onClick={() => call("tools.install", { id })}
+                        >
+                          {install?.status === "running" ? (
+                            <LoaderCircle size={13} className="spin" />
+                          ) : null}
+                          安装
+                        </button>
+                        <span className="tag">
+                          {state.local.accountLoading ? "检测中" : "未安装"}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  {install && (
+                    <p
+                      className={
+                        "small-note " +
+                        (install.status === "error" ? "warning" : "")
+                      }
+                    >
+                      {install.message}
+                    </p>
+                  )}
+                </div>
+              );
+            },
+          )}
+          {section === "github" && (
+            <button className="button full" onClick={onRepos}>
+              <Github size={14} />
+              打开仓库
             </button>
           )}
-        </div>
-        {state.local.installations
-          ?.filter((j) => j.id === "cloudflared")
-          .map((j) => (
-            <p className="install-progress" key={j.id}>
-              {j.status === "running" && (
-                <LoaderCircle size={13} className="spin" />
-              )}
-              {j.message}
-            </p>
-          ))}
-        <p className="small-note">
-          此模式适合同事内测，邀请传输经
-          Cloudflare；临时地址在关闭或断线后会变化。局域网模式仍可独立使用。
-        </p>
-      </div>
+          <details className="help-details">
+            <summary>账号详情</summary>
+            <p>使用本机官方 CLI 授权，凭据保留在此电脑。</p>
+            {state.local.accounts
+              ?.filter((a) =>
+                section === "github" ? a.id === "github" : a.id !== "github",
+              )
+              .map((a) => (
+                <p key={a.id}>
+                  {names[a.id]} · {a.label} · {a.version}
+                </p>
+              ))}
+          </details>
+        </>
+      )}
       {selected && (
-        <div className="modal-backdrop" onClick={() => setSelected("")}>
-          <div
-            className="modal auth-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button className="modal-close" onClick={() => setSelected("")}>
-              <X size={18} />
-            </button>
-            <div className="modal-icon">
-              <ShieldCheck />
-            </div>
-            <h2>登录 {names[selected]}</h2>
-            <p>请在官方浏览器页面完成授权。这里仅显示本机登录进度。</p>
-            <div className="auth-status">
-              <span
-                className={"tag " + (job?.status === "done" ? "green" : "")}
-              >
-                {job?.status === "running"
-                  ? "等待官方授权"
-                  : job?.status === "done"
-                    ? "登录已完成"
-                    : job?.status === "cancelled"
-                      ? "已取消"
-                      : "登录状态"}
-              </span>
-              {job?.status === "running" && (
-                <LoaderCircle size={15} className="spin" />
-              )}
-            </div>
-            <pre className="auth-log">{job?.log || "准备启动……"}</pre>
-            {job?.url && (
-              <button
-                className="button primary full"
-                onClick={() => call("accounts.open", { id: selected })}
-              >
-                <ExternalLink size={14} />
-                打开官方授权页面
-              </button>
-            )}
-            {job?.status === "running" && selected === "claude" && (
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  await call("accounts.code", { id: selected, code });
-                  setCode("");
-                }}
-              >
-                <label>
-                  若官方页面要求回填授权码
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    placeholder="仅在官方页面提示时粘贴"
-                  />
-                </label>
-                <button className="button full" disabled={!code.trim()}>
-                  提交授权码
-                </button>
-              </form>
-            )}
-            {selected === "codex" &&
-              job?.status !== "running" &&
-              job?.status !== "done" && (
-                <button
-                  className="button full gap-top"
-                  onClick={() =>
-                    call("accounts.login", { id: selected, device: true })
-                  }
-                >
-                  改用设备码登录
-                </button>
-              )}
+        <Modal title={"登录 " + names[selected]} close={() => setSelected("")}>
+          <div className="auth-status">
+            <span className="tag">
+              {job?.status === "running"
+                ? "等待授权"
+                : job?.status === "done"
+                  ? "已登录"
+                  : job?.status === "cancelled"
+                    ? "已取消"
+                    : job?.status === "error"
+                      ? "登录失败"
+                      : "准备中"}
+            </span>
             {job?.status === "running" && (
-              <button
-                className="text-button danger"
-                onClick={() => call("accounts.cancel", { id: selected })}
-              >
-                取消本次登录
-              </button>
-            )}
-            {job?.status === "done" && (
-              <button
-                className="button full gap-top"
-                onClick={() => setSelected("")}
-              >
-                完成
-              </button>
+              <LoaderCircle className="spin" size={14} />
             )}
           </div>
-        </div>
+          <pre className="auth-log">{job?.log || "启动登录…"}</pre>
+          {job?.url && (
+            <button
+              className="button primary full"
+              onClick={() => call("accounts.open", { id: selected })}
+            >
+              <ExternalLink size={14} />
+              打开授权页面
+            </button>
+          )}
+          {job?.status === "running" && selected === "claude" && (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await call("accounts.code", { id: selected, code });
+                setCode("");
+              }}
+            >
+              <input
+                className="full"
+                type="password"
+                autoComplete="off"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="授权码（仅在官方页面要求时填写）"
+              />
+              <button className="button full" disabled={!code.trim()}>
+                提交
+              </button>
+            </form>
+          )}
+          {selected === "codex" &&
+            job?.status !== "running" &&
+            job?.status !== "done" && (
+              <button
+                className="button full"
+                onClick={() =>
+                  call("accounts.login", { id: selected, device: true })
+                }
+              >
+                使用设备码
+              </button>
+            )}
+          {job?.status === "running" && (
+            <button
+              className="text-button"
+              onClick={() => call("accounts.cancel", { id: selected })}
+            >
+              取消登录
+            </button>
+          )}
+          {job?.status === "done" && (
+            <button className="button full" onClick={() => setSelected("")}>
+              完成
+            </button>
+          )}
+        </Modal>
       )}
     </>
   );
@@ -315,93 +290,82 @@ export function GitHubPicker({
   onImported: (w: any) => void;
   workspaceId?: string;
 }) {
-  const [repos, setRepos] = useState<any[] | null>(null),
+  const [repos, setRepos] = useState<any[]>([]),
     [search, setSearch] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const load = async () => {
     setBusy(true);
+    setError("");
     const rows = await call("github.repositories");
     setRepos(rows || []);
     setBusy(false);
-    if (!rows) setError("仓库列表读取失败，请先完成 GitHub 授权。");
+    if (!rows) setError("请先在设置中登录 GitHub");
+  };
+  useEffect(() => {
+    load();
+  }, []);
+  const clone = async (repo: string) => {
+    setBusy(true);
+    const w = await call("github.clone", { repo, workspaceId });
+    setBusy(false);
+    if (w) onImported(w);
   };
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal repo-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose}>
-          <X size={18} />
+    <Modal
+      title={workspaceId ? "克隆并关联仓库" : "打开 GitHub 仓库"}
+      close={onClose}
+    >
+      <div className="inline-form">
+        <input
+          autoFocus
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="搜索或输入 owner/repository"
+          aria-label="搜索仓库"
+        />
+        <button
+          className="icon-button"
+          title="刷新仓库"
+          aria-label="刷新仓库"
+          disabled={busy}
+          onClick={load}
+        >
+          <RefreshCw size={14} className={busy ? "spin" : ""} />
         </button>
-        <div className="modal-icon">
-          <Github />
-        </div>
-        <h2>{workspaceId ? "为共享工作区克隆仓库" : "从 GitHub 打开项目"}</h2>
-        <p>使用你已授权的 GitHub 账号。选择仓库后，会提示选择本机保存位置。</p>
-        <div className="inline-form">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索或输入 owner/repository"
-          />
-          <button className="button" disabled={busy} onClick={load}>
-            <RefreshCw size={14} className={busy ? "spin" : ""} />
-            {repos ? "刷新" : "加载仓库"}
-          </button>
-        </div>
-        {error && <p className="install-progress error">{error}</p>}
-        <div className="repo-list">
-          {repos
-            ?.filter((r) =>
-              (r.fullName + " " + (r.description || ""))
-                .toLowerCase()
-                .includes(search.toLowerCase()),
-            )
-            .map((r) => (
-              <button
-                key={r.fullName}
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  const w = await call("github.clone", {
-                    repo: r.fullName,
-                    workspaceId,
-                  });
-                  setBusy(false);
-                  if (w) onImported(w);
-                }}
-              >
-                <Github size={17} />
-                <div>
-                  <strong>{r.fullName}</strong>
-                  <small>{r.description || r.defaultBranch}</small>
-                </div>
-                <span className="tag">{r.private ? "私有" : "公开"}</span>
-              </button>
-            ))}
-        </div>
-        {search.includes("/") && (
-          <button
-            className="button primary full"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              const w = await call("github.clone", {
-                repo: search.trim(),
-                workspaceId,
-              });
-              setBusy(false);
-              if (w) onImported(w);
-            }}
-          >
-            克隆 {search.trim()}
-          </button>
-        )}
-        {busy && (
-          <p className="small-note">
-            正在读取或克隆，请稍候；大型仓库需要更长时间。
-          </p>
-        )}
       </div>
-    </div>
+      {error && <p className="warning">{error}</p>}
+      <div className="repo-list">
+        {repos
+          .filter((r) =>
+            (r.fullName + " " + (r.description || ""))
+              .toLowerCase()
+              .includes(search.toLowerCase()),
+          )
+          .map((r) => (
+            <button
+              key={r.fullName}
+              disabled={busy}
+              onClick={() => clone(r.fullName)}
+            >
+              <Github size={16} />
+              <div>
+                <strong>{r.fullName}</strong>
+              </div>
+              <span className="tag">{r.private ? "私有" : "公开"}</span>
+            </button>
+          ))}
+      </div>
+      {search.includes("/") && (
+        <button
+          className="button primary full"
+          disabled={busy}
+          onClick={() => clone(search.trim())}
+        >
+          克隆 {search.trim()}
+        </button>
+      )}
+      {busy && <p className="small-note">处理中…</p>}
+    </Modal>
   );
 }

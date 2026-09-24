@@ -58,3 +58,13 @@
 ## 构建产物
 
 `npm run distribute` 生成 macOS arm64 和 x64 ZIP；本机安装至 `~/Applications/头号玩家.app`。应用包含原创图标、中文原生菜单和隔离的 preload 桥。两种 ZIP 的 app.asar 与打包目录一致，所有 core / desktop / dist 运行文件与当前源码构建逐文件哈希匹配。arm64 安装版已启动，界面显示 0.2.0-beta.1、原有会话保留。未做 Developer ID 签名或公证。
+
+## v0.3 界面重构验收
+
+- 对照本机 Amoeba 0.1.38，重做会话列表、新建会话、成员、设置、会话工作区和分享侧栏。对照范围见 [UI-REFERENCE.md](UI-REFERENCE.md)。
+- 原生 Electron UI：创建测试会话、添加 Codex、提交只读审批、拒绝审批，状态正确返回待命，未调用模型。
+- 搜索 `Studio.tsx`，返回嵌套路径 `src/Studio.tsx` 并成功打开；新分栏可同时查看两个会话，关闭后恢复文件树与成员面板；测试会话已归档。
+- 设置正确显示本机 Codex / Claude 已连接；分享以右侧抽屉呈现，详细共享范围默认折叠；长运行日志默认折叠。
+- `npm test`：23 项通过。新增文件搜索测试验证嵌套路径、忽略目录、空查询和外部符号链接排除。
+- TypeScript 与 Vite 构建通过；Apple Silicon / Intel ZIP 生成成功，ZIP 内 app.asar 与构建目录一致，全部运行文件与当前源码构建哈希一致。
+- UI 使用中文、保留头号玩家品牌，未宣称未覆盖的原版企业 / IDE 界面逐像素等价。

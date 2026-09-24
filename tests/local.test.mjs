@@ -86,3 +86,20 @@ test("provider adapters use explicit bounded modes and normalize real CLI event 
   );
   assert.equal(local.normalizeEvent("codex", { type: "thread.started" }), null);
 });
+test("project file search finds nested paths and excludes ignored and external trees", async (t) => {
+  const root = await fixture(t);
+  await mkdir(join(root, "src"));
+  await writeFile(join(root, "src", "auth.ts"), "test");
+  await mkdir(join(root, "node_modules"));
+  await writeFile(join(root, "node_modules", "auth.ts"), "private dependency");
+  await mkdir(join(root, ".git"));
+  await writeFile(join(root, ".git", "auth"), "private git");
+  await symlink("/etc", join(root, "external"));
+  const rows = await local.searchFiles(root, "AUTH");
+  assert.deepEqual(
+    rows.map((r) => r.path),
+    ["src/auth.ts"],
+  );
+  assert.deepEqual(await local.searchFiles(root, "external"), []);
+  assert.deepEqual(await local.searchFiles(root, ""), []);
+});

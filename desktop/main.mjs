@@ -390,6 +390,7 @@ async function invoke(method, a) {
     return path;
   }
   if (method === "files") return local.files(localRoot(a), a.path);
+  if (method === "file.search") return local.searchFiles(localRoot(a), a.query);
   if (method === "file.read") return local.read(localRoot(a), a.path);
   if (method === "file.save")
     return local.save(localRoot(a), a.path, a.content, a.hash);
@@ -579,7 +580,7 @@ app
         minWidth: 1080,
         minHeight: 700,
         title: "头号玩家",
-        backgroundColor: "#111416",
+        backgroundColor: "#121212",
         titleBarStyle: "hiddenInset",
         webPreferences: {
           preload: join(base, "preload.cjs"),
