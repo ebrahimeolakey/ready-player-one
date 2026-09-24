@@ -25,4 +25,4 @@ xterm 原样发送 onData 字节，Shift+Tab 为 `ESC [ Z`。现有全局快捷�
 
 `tests/provider-cli.test.mjs` 在真实 macOS node-pty 内启动合成 Node CLI，验证 TTY、中文/空格/引号/命令替换字符的 cwd/argv 原样到达、Shift+Tab 字节、权限与目录围栏、重复点击不重发、退出码、父子进程关闭与启动竞态。`tests/terminal.test.mjs` 验证真实 shell 的 resize/Ctrl-C/owner 清理。
 
-Windows npm/native 解析有跨平台文件 fixture；本轮没有 Windows 机器，因此不能称 Windows ConPTY 实机验收。合成 CLI 测试不是 Codex/Claude 登录后的真实付费交互测试。
+Windows npm/native 解析有跨平台文件 fixture；0.4.4 的 Windows 2022 原生 runner 已在真实 ConPTY 中运行经验证的 console node.exe 合成 CLI，验证相同的参数、Shift+Tab、幂等与退出清理，见 [Windows 原生记录](WINDOWS-NATIVE-CI.md)。首次实验使用 Electron GUI 可执行文件作为 console fixture 启动失败，改用 runner 的实际 Node 后保留全部断言通过；应用运行时代码没有为测试放宽。合成 CLI 测试不是 Codex/Claude 登录后的真实付费交互测试。

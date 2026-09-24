@@ -58,3 +58,21 @@ Windows 2022 x64：**28/28 回归通过**，Renderer 构建、实际 Electron 40
 本批本机完整源码回归 277/277；Windows 使用现有平台回归清单，没有把全部 277 项在 Windows 重跑。实体机器首次安装、真实账号登录和双机公网仍需同事验收。
 
 下载后已核对 runner SHA256；Windows ASAR 内 59 个 core/desktop/dist 文件与发行源码一致（仅允许 CRLF/LF 差异）。ZIP 完整性通过。本轮安装器 SHA256 `155266ff231e20747051ee87379cd07ee7c19dcf1907bfeceb7501a390e8c3f4`；便携 ZIP SHA256 `0b2d5f304919f8f406a896664750c61e97dece77881ef1ab2329f2d61ec8cad0`。
+
+
+## 0.4.4-beta.1 原生验证
+
+[成功运行](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/35982061256)，源码提交 `b740399dde53d579d3b6d6151006cb2bdc95499f`。
+
+Windows 2022 x64 的现有平台回归 **28/28 通过**；实际 Electron 40.10.6 主入口、Hub、加密设置、React、PowerShell PTY 全部通过。新增 Provider CLI 检查用 runner 的 console Node 22.23.2 在真实 ConPTY 中验证中文/空格/引号/元字符参数、TTY、规范目录、本人权限、Shift+Tab 原字节、重复打开不重发、退出码和清理。没有调用真实 Codex/Claude 模型或登录账号。
+
+第一次新增实验使用 Electron GUI 程序作为 console fixture，未成功就绪；改为经过 PE console subsystem 验证的真实 node.exe 后，保持相同断言通过。该修复只修改测试入口，未放宽应用权限或终端逻辑。
+
+ZIP/NSIS 在同一 runner 构建成功，下载后的 SHA256 与 runner 一致；ZIP 完整性通过。ASAR 中 71 个 core/desktop/dist 文件与发行源码一致（仅归一化 CRLF/LF）；ASAR SHA256 `2d751839b163ace1345628ae22f805d7820f2c66b5f888e4ef26176a822a4077`。
+
+- 安装器：`5bc5d066fe8a6a6e345e6c83db1d71a4e2e40d0150cf1135b53176e07070098a`
+- 便携 ZIP：`28cde531567c09ca6e57121f92456ffbfe56d941d39766b79effd060b523bf2a`
+
+![0.4.4 Windows 原生启动](evidence/windows-native-0.4.4.png)
+
+本机完整回归 319/319，并非全部 319 项都在 Windows 重跑。实体 Windows 首次安装、真实账号 GUI 登录与双机公网仍需同事验收。

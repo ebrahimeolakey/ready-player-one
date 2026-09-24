@@ -1,11 +1,11 @@
 # 头号玩家 · Mac 同事内测指南
 
-版本：0.4.3-beta.1。适用场景：每人一台 Mac，在不同网络里共享同一个 Agent 会话。
+版本：0.4.4-beta.1。适用场景：每人一台 Mac，在不同网络里共享同一个 Agent 会话。
 
 ## 1. 安装
 
-- Apple Silicon（M 系列）：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.3-beta.1/Ready-Player-One-0.4.3-beta.1-mac-arm64.zip)。
-- Intel Mac：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.3-beta.1/Ready-Player-One-0.4.3-beta.1-mac-x64.zip)。
+- Apple Silicon（M 系列）：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.4-beta.1/Ready-Player-One-0.4.4-beta.1-mac-arm64.zip)。
+- Intel Mac：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.4-beta.1/Ready-Player-One-0.4.4-beta.1-mac-x64.zip)。
 - 解压，把「头号玩家.app」拖到「应用程序」，然后打开。使用 Git 仓库功能时需安装 Git；普通本机文件夹可直接打开。无需 Node.js 或 Homebrew。
 - 这是未做 Developer ID 签名、公证的内部测试包。macOS 可能阻止第一次打开；仅在确认文件来自本仓库、校验与发布一致后，按系统「隐私与安全性」中的提示选择是否允许。公司设备若禁止未公证应用，请交给 IT 处理。不要关闭 Gatekeeper 或移除系统安全策略。
 - GitHub 仓库已公开。任何同事均可直接下载安装包，无需 GitHub 登录或源码仓库权限。

@@ -6,19 +6,19 @@
 
 ## 直接下载
 
-当前测试版：**0.4.3-beta.1** · Apache-2.0 · 下载无需登录
+当前测试版：**0.4.4-beta.1** · Apache-2.0 · 下载无需登录
 
 | 系统 | 安装包 |
 | --- | --- |
-| Mac · Apple Silicon（M 系列） | **[↓ 下载 Mac M 系列版](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.3-beta.1/Ready-Player-One-0.4.3-beta.1-mac-arm64.zip)** |
-| Mac · Intel | **[↓ 下载 Mac Intel 版](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.3-beta.1/Ready-Player-One-0.4.3-beta.1-mac-x64.zip)** |
-| Windows 10 / 11 · x64 | **[↓ 下载 Windows 安装器](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.3-beta.1/Ready-Player-One-0.4.3-beta.1-windows-x64-setup.exe)** · [免安装 ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.3-beta.1/Ready-Player-One-0.4.3-beta.1-windows-x64.zip) |
+| Mac · Apple Silicon（M 系列） | **[↓ 下载 Mac M 系列版](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.4-beta.1/Ready-Player-One-0.4.4-beta.1-mac-arm64.zip)** |
+| Mac · Intel | **[↓ 下载 Mac Intel 版](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.4-beta.1/Ready-Player-One-0.4.4-beta.1-mac-x64.zip)** |
+| Windows 10 / 11 · x64 | **[↓ 下载 Windows 安装器](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.4-beta.1/Ready-Player-One-0.4.4-beta.1-windows-x64-setup.exe)** · [免安装 ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.4-beta.1/Ready-Player-One-0.4.4-beta.1-windows-x64.zip) |
 
 Mac 解压后将「头号玩家.app」拖入「应用程序」。Windows 运行安装器，或完整解压 ZIP 后运行「头号玩家.exe」。无需另装 Node.js。
 
 **未签名、未公证测试版。** 系统可能拦截首次启动，见 [Mac 安装指南](docs/BETA-TESTING.md#1-安装) / [Windows 安装指南](docs/WINDOWS.md)。AI 需要自己的账号及额度；Git 功能需要本机 Git。Codex 普通对话可在非 Git 文件夹运行。
 
-[版本说明](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.4.3-beta.1) · [SHA256 校验](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.3-beta.1/SHA256SUMS-0.4.3-beta.1.txt) · [反馈问题](https://github.com/ebrahimeolakey/ready-player-one/issues)
+[版本说明](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.4.4-beta.1) · [SHA256 校验](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.4-beta.1/SHA256SUMS-0.4.4-beta.1.txt) · [反馈问题](https://github.com/ebrahimeolakey/ready-player-one/issues)
 
 ## 可以用来做什么
 
@@ -42,9 +42,9 @@ Mac 解压后将「头号玩家.app」拖入「应用程序」。Windows 运行�
 ## 这个版本包含
 
 - **Agent Session Share**：原生 Codex / Claude 会话、流式输出、指导、队列、逐工具审批与断线补传。
-- **团队协作**：角色权限、任务认领与转交、代码行评论、共享记忆、快照同步、冲突处理、额度待接管、未知结果确认与 Agent MCP 独立子任务。
-- **工作台**：文件编辑、可取消搜索、交互终端、内嵌浏览器、Git 暂存/提交/分支/同步、JS/TS 补全和诊断、Node.js 调试、可编辑快捷键。
-- **输入与账号**：本机 CLI 登录、GitHub 仓库授权、实际模型目录、成员模型共享与上下文用量、自定义兼容 API、可配置 ACP、图片输入、Mac 语音入口。
+- **团队协作**：会话限定邀请、任务认领/归还/转交、消息与代码差异评论、共享记忆与历史、快照同步、冲突处理、额度待接管、未知结果确认与 Agent MCP 独立子任务。
+- **工作台**：文件编辑、可取消搜索、交互终端、独立 Codex/Claude CLI、内嵌浏览器、Git 暂存/提交/分支/同步、JS/TS 补全和诊断、Node.js 调试、可编辑快捷键。
+- **输入与账号**：长提示原文传递、本机 CLI 登录、GitHub 仓库授权、实际模型目录、成员模型共享与上下文用量、自定义兼容 API、可配置 ACP、图片输入、Mac 语音入口。
 - **本机保存**：应用会话、配置、文字图片草稿与补传记录加密，输入冲突保留备份；GitHub 下载更新和文件校验。
 
 ## 测试版边界

@@ -75,3 +75,15 @@ Windows 原生 CI 已验证实际 Electron、加密设置、PowerShell PTY、退
 完整隔离源码回归 **277/277 通过**，TypeScript/Vite 构建通过。Mac 两包 59 个核心/桌面/前端文件与发行源码一致，ZIP 完整性通过；Apple Silicon 安装包实际启动、恢复确认记录、保存 Agent 子任务检查设置并搜索/清空文件。Apple 签名与团队 OAuth 外部配置继续按用户决定延期。
 
 Windows 同版本原生 CI **28/28 通过**并构建 ZIP/NSIS；下载后的 SHA256 与 runner 记录一致。包内 59 个核心/桌面/前端文件与发行源码按 LF/CRLF 归一化比较一致。四种包及更新清单随 0.4.3-beta.1 发布，旧资产保持不变。
+
+
+## 0.4.4-beta.1 进展
+
+- A5：消息 ID/哈希评论、本机 diff 左右行/片段评论与只读历史定位；保存/Git/同步/子任务集成/接管后检查引用；记忆版本冲突保护及分页历史。见 [REFERENCES](REFERENCES.md)。
+- A6：Commenter 归还步骤、Editor 会话限定邀请、Owner 删除范围预览与加密关联记录清理/重启恢复。会话邀请不授予其他会话或共享记忆权限；保留本机项目和缺少身份索引的草稿。见 [WORKSPACE-LIFECYCLE](WORKSPACE-LIFECYCLE.md)。
+- A8：独立本机 Codex/Claude CLI，命令/目录/账号来源可见，参数数组启动、重复打开不重发、退出清理。见 [PROVIDER-CLI](PROVIDER-CLI.md)。
+- A9：100,000 码点/400,000 UTF-8 字节的任务原文，协调摘要与附加上下文另限；原文通过 owner-only claim/read 传递，超限报错，断线与恢复不重跑。见 [LONG-PROMPTS](LONG-PROMPTS.md)。
+
+干净发行源码 **319/319 回归通过**，TypeScript/Vite 构建通过。隔离构建发现并修复了可选群聊表缺失时的删除错误，新增无群聊模块的真实 Hub/磁盘回归。Mac arm64 / x64 包内 **71 个 core/desktop/dist 文件**与发行源码逐字节一致，108 个提交源码文件与构建目录一致；ZIP 完整性及内含 ASAR 哈希核对通过。
+
+Mac arm64 包实际启动；合成项目通过界面保存了消息评论。消息定位、diff 评论、记忆历史的完整桌面/双机交互仍需继续验收，自动化通过不替代这些检查。Windows 原生运行和包验证见 [WINDOWS-NATIVE-CI](WINDOWS-NATIVE-CI.md)。Apple 签名/公证与团队 OAuth 继续延期；房主在线范围例外保持不变。A7 活跃文件聚合、完整视觉对照和更多真实环境验收仍未完成。
