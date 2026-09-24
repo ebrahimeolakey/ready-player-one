@@ -36,7 +36,7 @@ try {
   await app.whenReady();
   let win;
   await waitFor(async () => {
-    win = BrowserWindow.getAllWindows().find(window => window.getTitle() === '头号玩家');
+    win = BrowserWindow.getAllWindows().find(window => window.getTitle().startsWith('头号玩家'));
     if (!win || win.webContents.isLoading()) return false;
     return win.webContents.executeJavaScript('!!document.querySelector("#root")?.children.length').catch(() => false);
   }, 45000);
@@ -44,6 +44,7 @@ try {
   assert.ok(renderer.buttons > 3, 'The real React application must render interactive controls');
   assert.match(renderer.text, /头号玩家|工作区|项目|会话/);
   assert.equal(renderer.node, 'undefined', 'Renderer must not expose Node');
+  assert.equal(renderer.bridge, 'object', 'Real preload IPC bridge must be available');
   evidence.renderer = renderer;
   evidence.checks.push('actual desktop entry, local Hub, encrypted settings and React render');
   writeFileSync(join(artifacts, 'windows-desktop.png'), (await win.webContents.capturePage()).toPNG());
