@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
+import './github-create.css';
 import type {Call} from './ui';
 type Receipt={id:string;owner:string;name:string;visibility:'private'|'public';account:{id:number;login:string};status:string;message?:string;repo?:{fullName:string;url:string};at:string};
 type Binding={bindingId:string;path:string;fullName:string;url:string;dirty:boolean;alreadyBound:boolean};

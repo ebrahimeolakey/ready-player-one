@@ -1,0 +1,7 @@
+.github-create .form-grid{display:grid;grid-template-columns:1fr;gap:14px}
+.github-create .form-grid label{display:flex;flex-direction:column;gap:7px;font-size:12px;color:#b8b8b8}
+.github-create .form-grid input,.github-create .form-grid select{box-sizing:border-box;width:100%;min-width:0;padding:9px 10px;border:1px solid #3a3a3a;border-radius:6px;background:#151515;color:#eee;font:inherit}
+.github-create>.button.primary{margin-top:18px}
+.github-create .auth-status{overflow-wrap:anywhere}
+.github-create .inline-form{display:flex;flex-wrap:wrap;gap:8px}
+.github-create .repo-list button{width:100%;text-align:left}
