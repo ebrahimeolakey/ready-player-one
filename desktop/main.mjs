@@ -16,6 +16,7 @@ import { spawn } from "node:child_process";
 import { Hub } from "../core/hub.mjs";
 import { HubClient } from "../core/client.mjs";
 import * as local from "../core/local.mjs";
+import { shellCommand, binaryName, stopProcess } from "../core/platform.mjs";
 import {
   AccountManager,
   repositories,
@@ -59,11 +60,7 @@ let win,
   providerList = [],
   shutting = false;
 const terminals = new Set();
-const stopTerminal = (p) => {
-  try {
-    process.kill(-p.pid, "SIGTERM");
-  } catch {}
-};
+const stopTerminal = (p) => stopProcess(p);
 const runner = new local.AgentRunner(),
   claimed = new Set(),
   stops = new Map();
@@ -87,7 +84,7 @@ const state = () => ({
     installations: [...installations.values()],
     tunnel: {
       ...tunnel.state,
-      installed: existsSync(join(dir, "bin", "cloudflared")),
+      installed: existsSync(join(dir, "bin", binaryName("cloudflared"))),
     },
     accountLoading,
     appVersion: app.getVersion(),
@@ -494,10 +491,12 @@ async function invoke(method, a) {
     if (typeof a.command !== "string" || a.command.length > 8000)
       throw Error("命令无效");
     return new Promise((resolve) => {
-      const p = spawn("/bin/zsh", ["-lc", a.command], {
+      const [program, args] = shellCommand(a.command);
+      const p = spawn(program, args, {
         cwd,
         env: local.localEnv(),
-        detached: true,
+        detached: process.platform !== "win32",
+        windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
       });
       terminals.add(p);
@@ -506,9 +505,7 @@ async function invoke(method, a) {
         stopTerminal(p);
         setTimeout(() => {
           if (terminals.has(p)) {
-            try {
-              process.kill(-p.pid, "SIGKILL");
-            } catch {}
+            stopProcess(p, "SIGKILL");
           }
         }, 3000).unref();
       }, 60000);
@@ -581,7 +578,7 @@ app
         minHeight: 700,
         title: "头号玩家",
         backgroundColor: "#121212",
-        titleBarStyle: "hiddenInset",
+        titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
         webPreferences: {
           preload: join(base, "preload.cjs"),
           contextIsolation: true,

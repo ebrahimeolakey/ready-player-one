@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { localEnv } from "./local.mjs";
+import { stopProcess } from "./platform.mjs";
 export function tunnelAddress(text) {
   return text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com\b/)?.[0] || null;
 }
@@ -78,7 +79,12 @@ export class Tunnel extends EventEmitter {
           "--edge-ip-version",
           "4",
         ],
-        { env: localEnv(), stdio: ["ignore", "pipe", "pipe"], detached: true },
+        {
+          env: localEnv(),
+          stdio: ["ignore", "pipe", "pipe"],
+          detached: process.platform !== "win32",
+          windowsHide: true,
+        },
       );
       this.child = child;
       let buffer = "",
@@ -147,12 +153,7 @@ export class Tunnel extends EventEmitter {
     this.cancelStart?.();
     const child = this.child;
     this.child = null;
-    if (child)
-      try {
-        process.kill(-child.pid, "SIGTERM");
-      } catch {
-        child.kill?.();
-      }
+    if (child) stopProcess(child);
     if (notify) {
       this.state = { status: "off", url: null, message: "互联网共享已关闭" };
       this.emit("change");

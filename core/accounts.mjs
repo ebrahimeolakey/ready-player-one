@@ -2,6 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { EventEmitter } from "node:events";
 import { localEnv } from "./local.mjs";
+import { stopProcess } from "./platform.mjs";
 const exec = promisify(execFile);
 export const ACCOUNT_IDS = ["codex", "claude", "github"];
 const commands = { codex: "codex", claude: "claude", github: "gh" };
@@ -170,7 +171,8 @@ export class AccountManager extends EventEmitter {
     const child = this.spawnProcess(command, args, {
       env: { ...localEnv(), NO_COLOR: "1", CLICOLOR: "0" },
       stdio: ["pipe", "pipe", "pipe"],
-      detached: true,
+      detached: process.platform !== "win32",
+      windowsHide: true,
     });
     this.processes.set(id, child);
     let ended = false,
@@ -231,11 +233,7 @@ export class AccountManager extends EventEmitter {
     if (job && child) {
       job.status = "cancelled";
       job.log += "\n" + message;
-      try {
-        process.kill(-child.pid, "SIGTERM");
-      } catch {
-        child.kill?.();
-      }
+      stopProcess(child);
       this.processes.delete(id);
       this.emit("change");
     }

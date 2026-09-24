@@ -14,7 +14,8 @@
     "test": "node --test tests/*.test.mjs",
     "package": "npm run build && electron-builder --mac dir",
     "hub": "node core/standalone.mjs",
-    "distribute": "npm run build && electron-builder --mac zip --arm64 --x64"
+    "distribute": "npm run build && electron-builder --mac zip --arm64 --x64",
+    "distribute:windows": "npm run build && electron-builder --win zip nsis --x64"
   },
   "dependencies": {
     "@codemirror/lang-javascript": "^6.2.0",
@@ -58,7 +59,22 @@
       "identity": null,
       "icon": "assets/icon.png"
     },
-    "artifactName": "Ready-Player-One-${version}-mac-${arch}.${ext}"
+    "artifactName": "Ready-Player-One-${version}-mac-${arch}.${ext}",
+    "win": {
+      "target": [
+        "zip",
+        "nsis"
+      ],
+      "artifactName": "Ready-Player-One-${version}-windows-${arch}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Ready-Player-One-${version}-windows-${arch}-setup.${ext}",
+      "createDesktopShortcut": true
+    }
   },
   "engines": {
     "node": ">=22"
