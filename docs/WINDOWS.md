@@ -1,10 +1,10 @@
 # Windows 测试版
 
-适用于 **Windows 10 / 11 x64**。当前版本 0.4.1-beta.1，与 Mac 同版；Amoeba 功能补齐仍在开发。
+适用于 **Windows 10 / 11 x64**。当前版本 0.4.2-beta.1，与 Mac 同版；Amoeba 功能补齐仍在开发。
 
 ## 安装
 
-- 安装器：运行 `Ready-Player-One-0.4.1-beta.1-windows-x64-setup.exe`，按提示安装到当前用户目录。
+- 安装器：运行 `Ready-Player-One-0.4.2-beta.1-windows-x64-setup.exe`，按提示安装到当前用户目录。
 - 免安装 ZIP：完整解压，再运行文件夹内的 `头号玩家.exe`。请保留旁边的所有文件，不能只拷贝 EXE。
 - 此版没有 Windows 代码签名。SmartScreen 可能显示未知发布者；请从本仓库 Release 获取并核对 SHA-256，组织电脑按所在组织的软件安装策略操作。
 
@@ -29,9 +29,9 @@
 
 ## 当前验证范围
 
-已在 macOS 上交叉构建 Windows x64 ZIP / NSIS 安装器，并检查安装包内容与 Windows PE 架构。针对 Windows PATH、Shell 参数、官方安装包选择的自动测试已通过。
+0.4.2 已在 GitHub Windows 2022 runner 上原生构建 ZIP / NSIS，并通过 27 项回归、真实 Electron 启动、加密设置、PowerShell PTY 输入输出/尺寸/取消/退出清理。源码提交和产物 SHA256 均已核对，见 [Windows 原生 CI 证据](WINDOWS-NATIVE-CI.md)。
 
-**尚未在 Windows 实机完成 GUI 启动、首次账号授权、Agent 执行和 Mac–Windows 公网双机验收。** 能下载与打包成功不等于这些运行路径已经完成验收。
+**仍需实体 Windows 首次安装、新账号 GUI 授权、真实 Agent 执行和 Mac–Windows 公网双机验收。** 原生 CI 不替代这些同事实测。
 
 ## 从源码构建
 

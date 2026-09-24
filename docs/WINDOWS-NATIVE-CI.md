@@ -32,3 +32,17 @@
 - 未验证跨公网两台实体电脑的完整协作流程。
 - ZIP / NSIS 构建通过不等于安装向导、SmartScreen、卸载或自更新闭环通过。
 - 此分支基于已发布 0.4.1 源码，不包含主工作区此后未提交的群聊改动。
+
+
+## 0.4.2-beta.1 原生验证
+
+[成功运行](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/35976364396)，准确源码提交 `c5f2c4abdaa28b4ad4bfc9b48728791cb05a27c2`。
+
+- Windows 2022 x64：**27/27 回归通过**，Renderer 构建通过。
+- Electron 40.10.6 真正启动主入口、Hub、加密设置、preload 与 React；真实 PowerShell PTY 输入输出、TTY、109×37 resize、Ctrl-C、退出码及进程清理通过。
+- ZIP / NSIS 原生构建成功；下载后的 SHA256 与 runner 一致。
+- 包内 51 个 core/desktop 源文件与发行源码比较，仅 Windows CRLF / LF 行结束符不同；编译后的 JS/CSS 一致。未混入另一批群聊与项目上下文开发。
+
+![0.4.2 Windows 原生启动](evidence/windows-native-0.4.2.png)
+
+仍未覆盖实体 Windows 首次安装、SmartScreen/安装向导、真实账号 GUI 登录、全部 Provider 及两台实体机器公网流程。

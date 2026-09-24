@@ -49,7 +49,7 @@
 
 用户确认先发未签名测试版，Apple Developer 证书、GitHub OAuth 应用与固定 HTTPS 回调配置以后补。本节内容随 0.4.1-beta.1 发布；原 0.4.0 安装包保持不变。
 
-## 0.4.2-beta.1 源码进展
+## 0.4.2-beta.1 进展
 
 - 上下文用量：原生 Codex / Claude、ACP 与兼容 API 统一口径，当前占用与累计分开、缺失值明确未知；共享、持久化和重传。真实 Codex 返回 `USAGE_OK`，UI 读数与 Hub 一致并跨重启保留。见 [PROVIDER-USAGE](PROVIDER-USAGE.md)。
 - 成员模型：成员栏和通道标题显示模型；下次选择、本轮发送和 Provider 确认分开记录。真实 Codex `MODEL_OK` 已核对。见 [MODEL-SHARING](MODEL-SHARING.md)。
@@ -61,3 +61,6 @@
 Windows 原生 CI 已验证实际 Electron、加密设置、PowerShell PTY、退出清理与 ZIP/NSIS 构建，见 [WINDOWS-NATIVE-CI](WINDOWS-NATIVE-CI.md)。仍未覆盖实体设备首次安装、真实账号 GUI 登录及两台实体机器公网协作。
 
 本批发行源码隔离构建的完整回归 **247/247 通过**，TypeScript / Vite 构建通过。新增目录绑定保存校验：进入工作树或重新关联项目后，文件/Git 面板刷新，旧编辑内容不会写进新目录；草稿按真实目录隔离，旧草稿可明确预览并载入，载入本身不保存文件。
+
+
+发行验证：Mac arm64 / x64 ZIP 完整性检查通过；两包 54 个核心/桌面/前端文件与发行源码逐字节一致。Mac arm64 安装包实际启动并恢复模型和上下文用量。旧草稿手动预览载入后磁盘文件 SHA256 未变；独立工作树创建后旧编辑缓冲区保留且保存禁用，选择保留草稿后新文件可打开，Git 面板显示新分支。Windows 同版本原生 CI **27/27 通过**并产出 ZIP/NSIS，平台验证边界见对应文档。四种包及校验清单随 0.4.2-beta.1 发布，旧资产不覆盖。
