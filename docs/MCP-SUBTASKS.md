@@ -50,3 +50,5 @@
 这些证据不等同真实 Codex/Claude/ACP 已自主选择该工具或两台实体电脑验收；本批没有模型调用、发布、外部服务部署或自动集成。
 
 2026-09-24 本批验证：`node --test tests/subtask-bridge.test.mjs tests/task-coordination-service.test.mjs tests/coordination.test.mjs tests/mcp-memory.test.mjs tests/subtasks.test.mjs` **50/50 通过**，其中桥接新增 6 个场景。`tsc --noEmit`、主线程语法检查与相关文件 diff 空白检查通过。日志为 `/tmp/rpo-mcp-spawn-validated.log`。代码在这组验证后冻结，交由发行流程完成真实桌面集成验收。
+
+0.4.3 Mac Apple Silicon 打包应用已实际打开“Agent 子任务检查”，在合成项目中启用并保存 `git diff --check`，界面显示已启用。真实模型自行选择 MCP 工具仍待验收；不把配置保存等同于模型调用。
