@@ -30,10 +30,14 @@ const waitFor = async (predicate, timeout = 15000) => {
   }
 };
 const clean = value => value.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\r/g, '');
+async function run() {
 try {
+  evidence.stage = 'import-desktop'; writeEvidence();
   // Import the actual app entry: safeStorage, local Hub, IPC, preload and React UI all start.
   await import('../desktop/main.mjs');
+  evidence.stage = 'electron-ready'; writeEvidence();
   await app.whenReady();
+  evidence.stage = 'renderer'; writeEvidence();
   let win;
   await waitFor(async () => {
     win = BrowserWindow.getAllWindows().find(window => window.getTitle().startsWith('头号玩家'));
@@ -49,6 +53,7 @@ try {
   evidence.checks.push('actual desktop entry, local Hub, encrypted settings and React render');
   writeFileSync(join(artifacts, 'windows-desktop.png'), (await win.webContents.capturePage()).toPNG());
 
+  evidence.stage = 'powershell-pty'; writeEvidence();
   terminal = new TerminalService();
   let exit;
   terminal.on('event', (_owner, event) => {
@@ -88,3 +93,7 @@ try {
   app.once('will-quit', () => { clearTimeout(deadline); console.log('WINDOWS_NATIVE_SMOKE_OK'); });
   app.quit();
 } catch (error) { fail(error); }
+
+}
+// Do not top-level-await app.whenReady: Electron waits for its ESM entry to finish before ready.
+void run();
