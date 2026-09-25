@@ -1,0 +1,32 @@
+{
+  "version": "0.4.6-beta.1",
+  "sourceCommit": "65b0439f7cc6cb0bf944753fcbfd196d8924d3da",
+  "architectures": [
+    "arm64",
+    "x64"
+  ],
+  "matchedCoreDesktopDistFiles": 81,
+  "matchedCoreDesktopSrcPackageJsonFiles": 127,
+  "asarSha256": "52cdb24e4bbfcd836e5cd3bde8eb869a90b9b6e4987e352f2599dabbb2dbf906",
+  "zipIntegrity": true,
+  "healthProtocol": 1,
+  "dataCompatibilityEpoch": 1,
+  "license": "Apache-2.0",
+  "signed": false,
+  "notarized": false,
+  "arm64PackagedApplicationOpened": true,
+  "packagedSettingsRestored": true,
+  "intelExecutionVerified": false,
+  "artifacts": [
+    {
+      "name": "Ready-Player-One-0.4.6-beta.1-mac-arm64.zip",
+      "size": 123756387,
+      "sha256": "f0268554ab70b5c701a658934d6538b5f605db890ddc9cef15f42f91184488da"
+    },
+    {
+      "name": "Ready-Player-One-0.4.6-beta.1-mac-x64.zip",
+      "size": 128750835,
+      "sha256": "bca4fb7b54b41f722deb4da21d3c013e9630d2c88466691e54679600e893ef8c"
+    }
+  ]
+}

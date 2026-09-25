@@ -1,6 +1,6 @@
 # 与 Amoeba 的功能差距
 
-核对日期：2026-09-24。本表以**头号玩家 0.4.5-beta.1 发行源码与测试**为当前状态，对照 **Amoeba 0.1.38**；0.1.40 增量单列。安装包见 README 下载区。群聊与 ProjectContext 属于另一批开发，未包含在本次发行源码中。
+本项目状态更新：2026-09-25；原版核对：2026-09-24。本表以**头号玩家 0.4.6-beta.1 发行源码与测试**为当前状态，对照 **Amoeba 0.1.38**；0.1.40 增量单列。安装包见 README 下载区。群聊与 ProjectContext 属于另一批开发，未包含在本次发行源码中。
 
 官方文档没有逐页版本号，下表将其作为功能说明，版本归属优先参考[官方发布日志](https://useamoeba.com/changelog)。核对当日最新日志已到 0.1.40；其 Mac 版本仍等待公证，Mac 下载和更新仍为 0.1.38。不能把最新文档中的每句话未经确认倒推为所有旧版已交付行为。
 
@@ -14,11 +14,11 @@
 - **外部配置延后**：用户接受先发未签名测试版；证书、OAuth 应用和固定 HTTPS 回调以后补。
 - **范围例外**：房主在线、无常驻协调服务；后续本机接力/可选云执行已有设计，尚未部署，不阻塞当前本地版本验收。
 
-本批隔离发行源码完整回归 **361/361 通过**，TypeScript/Vite 构建通过；平台及桌面证据见 [实施记录](IMPLEMENTATION-TRACKER.md)。自动化不等同全部硬件和用户流程验收。早期 [VALIDATION](VALIDATION.md) 的 22 项和 [UI-REFERENCE](UI-REFERENCE.md) 的 v0.3 观察属于历史记录，不能覆盖后续实现，也不能当成当前全部 UI 的验收。
+本批隔离发行源码完整回归 **375/375 通过**，TypeScript/Vite 构建通过；平台及桌面证据见 [实施记录](IMPLEMENTATION-TRACKER.md)。自动化不等同全部硬件和用户流程验收。早期 [VALIDATION](VALIDATION.md) 的 22 项和 [UI-REFERENCE](UI-REFERENCE.md) 的 v0.3 观察属于历史记录，不能覆盖后续实现，也不能当成当前全部 UI 的验收。
 
 ## 0.1.38 基线：当前实现与真实剩余项
 
-| 项目 | 0.4.5 实际状态及本地证据 | 还缺什么 / 还需验收 | 判断 |
+| 项目 | 0.4.6 实际状态及本地证据 | 还缺什么 / 还需验收 | 判断 |
 | --- | --- | --- | --- |
 | 多人 Agent Session Share | `core/hub.mjs`、`core/client.mjs`、多通道 UI；真实双客户端转录、计划、审批同步；公网 WSS 验证见 [互联网记录](INTERNET-VERIFICATION.md) | 现有公网测试是同机独立进程，不是两台实体 Mac 不同网络；20 个活动 Agent 的压力/重连未验收 | 已实现，待验收 |
 | 账号、模型和运行 | Codex app-server、Claude 双向 stream-json、原生 resume/steer、模型目录和 lane 配置持久化；真实两种 CLI 已调用，见 [运行时](PROVIDER-RUNTIME.md) | 新电脑首次登录及完整工具种类；Windows 真实 CLI；非本人 Provider session 不迁移，接管在新账号开新原生会话 | 已实现，待验收 |
@@ -40,8 +40,8 @@
 | 图片、语音、转录 | 图片选择/拖入/粘贴、真实 Codex 返回蓝色图片结果；reasoning 增量、工具生命周期、复制、链接选择和 Esc 停止；macOS 语音 helper 已构建/探测 | 语音尚未完成用户主动录音端到端；自定义 API 的真实供应商调用和图片兼容性未验收 | 已实现，待验收 |
 | 自定义 Provider / ACP | 密钥及启动配置加密、CRUD、模型目录/默认值、兼容 API 六类受审批工具；ACP OpenCode/Hermes 预设与真实 stdio fixture；[ACP 边界](ACP-PROVIDERS.md) | fixture 不是 OpenCode/Hermes，也没调用其模型；没有这些 CLI 的真实账号验收。ACP 不提供通用 OS 沙箱/所有工具强制审批保证 | 已实现适配，待真实 Provider 验收 |
 | 数据保护 | 系统密钥加密、迁移、脱敏、保留期；Owner 删除范围预览、加密转录/关联记录清理与失败恢复，保留项目及无身份索引的草稿 | 备份恢复统一演练；其他成员离线副本、Provider 历史和外部导出不自动删除；脱敏限已识别模式 | 已实现，待完整恢复演练 |
-| 系统通知与更新 | 通知、平台更新、digest 校验、显式安装；Mac 同协议/同数据代际的双阶段健康确认和失败恢复，目标改变保留人工恢复，真实 main/React 确认与拒绝测试通过。见 [更新健康](UPDATE-HEALTH.md) | 旧发布无兼容声明时仅手动安装并保留备份；Windows NSIS 不具备此自动恢复。已发布 UI→后续安装包的实际完整替换仍待验收，fixture 不替代该过程 | 已实现健康流程，待发行包升级验收 |
-| 通用偏好 | 已有自动检查更新、部分系统通知、双栏工具与编辑器偏好 | 实测原版另有深浅主题、启动恢复、对话密度、布局偏好、通知分类、菜单栏图标/声音、VS Code 导入等，目前未全部提供。见 [实测补充](UI-OBSERVATION-2026-09-24.md) | 部分实现 |
+| 系统通知与更新 | 通知、平台更新、digest 校验、显式安装；Mac 同协议/同数据代际的双阶段健康确认和失败恢复，目标改变保留人工恢复，真实 main/React 确认与拒绝测试通过。见 [更新健康](UPDATE-HEALTH.md) | 旧发布无兼容声明时仅手动安装并保留备份；Windows NSIS 不具备此自动恢复。Apple Silicon 已完成已发布 0.4.5→0.4.6 的真实 UI 下载/替换/双阶段确认及设置保留，见 [升级实测](PUBLISHED-UPGRADE-0.4.6.md)；其他平台和真实失败回滚仍需验证 | 已实现，Mac 单条升级路径实测通过 |
+| 通用偏好 | 会话布局/对话密度、空编辑器隐藏、通知总开关与审批/接管/结果分类、菜单栏图标、独立完成提示音、启动更新检查；加密保存、重启恢复和保存失败回退。见 [通用设置](GENERAL-SETTINGS.md) | 深浅主题、启动恢复、聊天编辑器标签、审查控件位置、协作者颜色/缩略图位置、VS Code 导入及提示重置尚未提供。见 [实测补充](UI-OBSERVATION-2026-09-24.md) | 部分实现 |
 | UI 对齐 | 中文核心布局、会话/分享/成员/设置、并排通道、编辑器/Agent 栏已对照重做，后续能力已接入 | [v0.3 对照](UI-REFERENCE.md)不是 0.4.1 全状态逐像素证明；窄屏/空态/错误态/角色差异/全部新增面板需固定尺寸矩阵复核 | 部分完成，尚非全部 UI 1:1 |
 
 原版协作行为依据：[协作/计划/评论](https://useamoeba.com/docs/collaboration/live-sessions)、[Provider/接管/子任务/恢复](https://useamoeba.com/docs/agents/providers)、[工作区与记忆](https://useamoeba.com/docs/concepts/workspaces)、[角色与数据](https://useamoeba.com/docs/admin/members)、[Git 与工作树](https://useamoeba.com/docs/git/repositories)、[快捷键/MCP/结果未知](https://useamoeba.com/docs/help/troubleshooting)。每项本地证据不等于原版全部内部行为已复现。
@@ -61,7 +61,7 @@
 
 以下仅依据[0.1.40 发布日志](https://useamoeba.com/changelog)，核对当日 Mac 尚未切换到该版本。
 
-| 官方新增/改进方向 | 头号玩家 0.4.5 状态 | 下一步 |
+| 官方新增/改进方向 | 头号玩家 0.4.6 状态 | 下一步 |
 | --- | --- | --- |
 | 自定义 API 推理强度；编辑/删除提供商和密钥 | 配置/UI 已支持明确列出的 efforts 与 CRUD，加密保存 | 真实端点验收；不猜模型支持的 effort |
 | Explorer 高亮、选中代码评论 | 已有文件选择高亮、CodeMirror 选区评论与 hash 校验 | 对照 0.1.40 的具体交互再判差距，不重复宣称未做 |
@@ -81,4 +81,4 @@
 
 可直接开发的任务与逐项验收动作见 [AMOEBA-ACCEPTANCE](AMOEBA-ACCEPTANCE.md)。
 
-0.4.5 新增内容见 [实施记录](IMPLEMENTATION-TRACKER.md)；旧版安装包保持不变。
+0.4.6 新增内容见 [实施记录](IMPLEMENTATION-TRACKER.md)；旧版安装包保持不变。

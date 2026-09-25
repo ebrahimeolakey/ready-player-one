@@ -95,3 +95,27 @@ ZIP 与 NSIS 在同一 runner 构建成功，下载后的 SHA256 与 runner 一�
 ![0.4.5 Windows 原生启动](evidence/windows-native-0.4.5.png)
 
 本机隔离完整回归 361/361；并非全部 361 项在 Windows 重跑。此证据不覆盖实体 Windows 首次安装、SmartScreen / 安装向导、真实账号 GUI 登录、Windows 自更新或两台实体机器的公网协作；macOS 更新健康门禁验证另见 [实际桌面记录](UPDATE-HEALTH-DESKTOP-SMOKE.md)。
+
+
+## 0.4.6-beta.1 原生验证
+
+[最终成功运行](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/35987512860)，精确提交 `65b0439f7cc6cb0bf944753fcbfd196d8924d3da`。
+
+Windows 2022 x64 的现有平台回归 **28/28 通过**；实际 Electron 40.10.6 / Node 24.15.0 主入口、Hub、preload / React、PowerShell PTY 与 Provider CLI ConPTY 检查通过。真实 IPC 保存通用偏好后，新建 SecureStore 使用 safeStorage 解包密钥读回一致；非法输入被拒绝且加密文件字节不变。实际界面由编辑器布局 / 紧凑对话切换到 Agent 布局 / 详细对话，并检查空编辑器高度为 0。验证中通知、声音、托盘均关闭，没有真实账号或模型调用。
+
+[首轮运行](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/35987154236) 的通用偏好检查通过，但 PowerShell 首次命令未产生输出，记录只有随后出现的初始提示符。测试入口增加等待真实 PowerShell 提示符后再输入命令；其余 TTY、resize、Ctrl-C、退出码、权限和清理断言不变。最终运行通过。这是测试就绪时序修正，不代表修复或完整验证了产品在 shell 启动前处理输入的行为。
+
+ZIP / NSIS 在同一 runner 构建成功，下载后的 SHA256 与 runner 一致，ZIP 全部 CRC 通过。包内 **81 个 core/desktop/dist 文件**与隔离发行目录完全同清单：79 个仅 CRLF/LF 不同，编译 JS/CSS 两个文件逐字节相同。隔离目录的 128 个 core/desktop/src/package 文件另与精确提交逐字节核对一致，未混入主工作区的群聊与项目上下文改动。manifest 为 `0.4.6-beta.1` / Apache-2.0；ASAR SHA256 `a6fe58563cad4d17c7a214989a5ab030091c28b3491748959717731c4f4ef82a`。
+
+| 文件 | 字节数 | SHA256 |
+| --- | ---: | --- |
+| `Ready-Player-One-0.4.6-beta.1-windows-x64-setup.exe` | 104946640 | `477df93488898377f8bd9610509abbeb43c1126501f5476223233a9213e4e05f` |
+| `Ready-Player-One-0.4.6-beta.1-windows-x64.zip` | 147974446 | `e20741d45f4ea2ccb6295241a4c00cd662e6c0ea60caaf972f8691f33210bd53` |
+
+[结构化审计](evidence/windows-native-0.4.6.json)；[运行证据 artifact](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/35987512860/artifacts/10802549188)；[原生构建包 artifact](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/35987512860/artifacts/10803335431)。artifact 有保留期，最终下载请使用项目 Releases。
+
+![0.4.6 Windows 原生启动](evidence/windows-native-0.4.6.png)
+
+[通用偏好合成会话截图](evidence/windows-native-0.4.6-preferences.png)。布局与隐藏状态以结构化证据中的实际 DOM / CSS 断言为准。
+
+本机完整回归 375/375，并非全部 375 项都在 Windows 重跑。仍未覆盖实体 Windows 首次安装、SmartScreen / 安装向导、真实账号 GUI 登录、实际 Windows 通知 / 托盘 / 声音、Windows 自更新或两台实体机器的公网协作。

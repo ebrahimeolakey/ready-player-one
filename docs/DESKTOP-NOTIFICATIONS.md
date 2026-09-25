@@ -55,7 +55,7 @@ if (client && coordinator.records.get(result.runId)?.scope === coordinator.scope
 notices.resetConnection();
 next.on('state', () => {
   if (client !== next) return;
-  notices.observeSnapshot(next.state,{connection:next,active:!updateBlocked()});
+  notices.observeSnapshot(next.state,{connection:next});
 });
 
 // before-quit
