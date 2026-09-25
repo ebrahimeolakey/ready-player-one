@@ -61,8 +61,4 @@ Mac 解压后将「头号玩家.app」拖入「应用程序」。Windows 运行�
 
 ## 关于项目
 
-头号玩家是受 Amoeba 协作工作流启发的独立实现，非 Amoeba 官方产品，尚未覆盖原版全部界面与功能。不包含原应用的打包代码或品牌素材。
-
-[与 Amoeba 的功能差距](docs/AMOEBA-GAPS.md) · [界面对照](docs/UI-REFERENCE.md) · [架构](docs/ARCHITECTURE.md) · [Apache License 2.0](LICENSE)
-
 当前主分支采用 Apache-2.0；已发布的 v0.3.0-beta.1 及更早版本保留发布时的 MIT 许可。第三方依赖遵循各自许可证。
