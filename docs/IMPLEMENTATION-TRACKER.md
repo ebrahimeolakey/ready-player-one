@@ -132,3 +132,18 @@ Windows 原生 CI 28/28 平台回归及真实偏好/PTY/CLI 通过，见 [平台
 详情见 [聊天标签](CHAT-EDITOR-TABS.md)、[位置标记](AGENT-EDIT-POSITIONS.md)、[会话恢复](SESSION-RESTORE.md)、[Git 审阅](GIT-REVIEW-CONTROLS.md)。提示抑制重置、扩展迁移、完整原版 UI 对照和实体双机验收仍未完成。
 
 Mac arm64 / x64 两包已构建，89 个包内运行文件与隔离源码逐字节一致，143 个 core/desktop/src/package 文件与候选提交一致；ZIP CRC 和 arm64 原生解压通过。Apple Silicon 实际包验证了聊天标签开关与浮动 Git 审阅偏好的保存、退出和新进程恢复。首轮 Windows 的 Ctrl+C 后继测试命令因固定等待导致未进入 PowerShell，后续测试提交改为新提示符握手；不改变产品运行文件。见 [Mac 审计](evidence/mac-package-0.4.8.json)。
+
+
+## 0.5.0-beta.1 · macOS 项目群与产物预览
+
+2026-09-26 已发布，仅更新 Mac Apple Silicon / Intel 下载；Windows 保留既有 0.4.7 下载，本轮未构建或发布 Windows。旧 0.4.8 草稿与既有 Windows evidence 改动保留，旧自动发布流程已暂停。
+
+- 团队沿用工作区成员隔离；新增长期项目群、多级项目和仓库/子目录绑定、持久 Agent 身份、负责人提案、DRI / Controllers、认领与运行代次。
+- 同屏群聊和静态 HTML / Markdown 产物；内容独立加密、版本 hash 校验、版本评论、同一 Provider Session 多轮执行、明确人类验收；不自动 Git Push。
+- 群聊从独立入口访问；原有会话继续默认进入 IDE。保留并接入已有群聊/ProjectContext 原型，不覆盖交接中的研究文档和 Windows evidence。
+- 442 项完整回归通过，最后导航/权限专项 17 项通过。实际 Electron/ProviderRuntime/子进程用模拟 Codex 协议跑通评论后第二轮生成与验收；没有真实模型调用。实际 arm64 打包程序启动、关闭、重启、加密群聊恢复通过；更新健康门的确认/拒绝两条路径通过，但未将其当成真实旧 bundle 替换验收。
+- 两个 ZIP 内 ASAR 与包内 97 个运行文件逐字节匹配源码/构建产物，另核对运行 package 元数据。GitHub 4 个资产（两 ZIP、manifest、SHA256）大小/摘要核对，发布后匿名下载均为 200，manifest 与校验清单正文再次核对。
+
+使用、数据契约和边界见 [项目协作说明](PROJECT-COLLABORATION.md)；[本轮证据](evidence/project-collaboration-0.5.0.json)、[公开下载验证](evidence/project-collaboration-release-0.5.0.json)。源码 tag 固定到 `6da0e2d5e37a307d0b138a686ecb99d6e1e91e15`。
+
+仍待两台实体 Mac 跨公网、Intel 实机、新账号真实 Provider 完整流程、生产常在线 Hub/Worker 部署、签名公证与外部团队 OAuth；首版不包含动态 localhost 共享、完整自主 Agent 收件箱、自动迁移/接力或通用附件预览。不是 Raft / Amoeba 全功能完成声明。

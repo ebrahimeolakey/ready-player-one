@@ -1,11 +1,11 @@
 # 头号玩家 · Mac 同事内测指南
 
-版本：0.4.5-beta.1。适用场景：每人一台 Mac，在不同网络里共享同一个 Agent 会话。
+版本：0.5.0-beta.1。适用场景：每人一台 Mac，在不同网络里共享同一个 Agent 会话。
 
 ## 1. 安装
 
-- Apple Silicon（M 系列）：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.5-beta.1/Ready-Player-One-0.4.5-beta.1-mac-arm64.zip)。
-- Intel Mac：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.5-beta.1/Ready-Player-One-0.4.5-beta.1-mac-x64.zip)。
+- Apple Silicon（M 系列）：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/Ready-Player-One-0.5.0-beta.1-mac-arm64.zip)。
+- Intel Mac：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/Ready-Player-One-0.5.0-beta.1-mac-x64.zip)。
 - 解压，把「头号玩家.app」拖到「应用程序」，然后打开。使用 Git 仓库功能时需安装 Git；普通本机文件夹可直接打开。无需 Node.js 或 Homebrew。
 - 这是未做 Developer ID 签名、公证的内部测试包。macOS 可能阻止第一次打开；仅在确认文件来自本仓库、校验与发布一致后，按系统「隐私与安全性」中的提示选择是否允许。公司设备若禁止未公证应用，请交给 IT 处理。不要关闭 Gatekeeper 或移除系统安全策略。
 - GitHub 仓库已公开。任何同事均可直接下载安装包，无需 GitHub 登录或源码仓库权限。
@@ -22,11 +22,19 @@
 
 仓库列表展示最近更新的前 100 个有权限的仓库；其他仓库可以直接输入名称克隆。GitHub 授权用于仓库访问，不作为房间 SSO 或组织成员验证。
 
+## 项目群与产物（新版）
+
+从左侧「项目群」新建团队、项目，关联本机目录，再添加 Agent。群聊中创建任务或用「整理任务」生成提案。由执行设备认领，授权控制者后开始；右侧预览产物，评论后继续修改并验收。完整步骤与当前边界见 [项目协作说明](PROJECT-COLLABORATION.md)。
+
+邀请同事参与项目群时，进入「成员」→ 邀请，选择 **工作区范围**。仅邀请一个 Session 不授予项目群访问权。房主需在线；常驻 Hub 尚未部署。
+
+本轮新增链路已用模拟 Codex 协议子进程验证，没有将其当成真实模型或两台实体 Mac 测试。以下旧有 Session Share 流程仍可使用。
+
 ## 3. 房主创建公网邀请
 
 1. 打开本机文件夹，或克隆一个 Git 项目，新建会话。
 2. 进入会话后点右上角「分享」，网络选择「互联网」。首次点「安装协作组件」，等待下载校验完成。
-3. 点「复制邀请链接」，把链接发给同事。链接只授予当前工作区权限，24 小时有效。
+3. 点「复制邀请链接」，把链接发给同事。链接权限以分享面板所选范围为准，24 小时有效；参与项目群请选择工作区范围。
 4. 保持应用打开、Mac 不休眠。首次建立通道需要联网访问 Cloudflare。
 
 互联网模式通过 Cloudflare Quick Tunnel 进行 TLS 加密传输，Cloudflare 承担中继；不是端到端加密，不承诺正式生产环境可用性。网络无法访问该服务时，应用会报告失败，可使用双方已有的 VPN + 局域网模式。通道重启后，房主需发新的邀请；旧链接不会自动迁移。
@@ -59,7 +67,7 @@
 
 ## 界面入口
 
-- 左侧：会话、成员、工作区；左下角头像：设置。
+- 左侧：项目群、会话、成员、工作区；左下角头像：设置。
 - 会话：上方编辑器、下方 Agent / 终端、右侧会话 / 环境。
 - 右上角「新分栏」：并排打开第二个会话；「分享」：邀请侧栏。
 - 「环境」：运行目录、工作树、导出、归档。计划与评论在「会话」中。

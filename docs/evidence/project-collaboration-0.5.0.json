@@ -62,5 +62,12 @@
     "External GitHub team OAuth not configured"
   ],
   "windowsUpdated": false,
-  "publicReleaseVerified": false
+  "publicReleaseVerified": true,
+  "desktopUpdateHealth": {
+    "confirm": "passed",
+    "reject": "passed",
+    "actualBundleReplacement": false,
+    "modelCalls": 0
+  },
+  "releaseEvidence": "project-collaboration-release-0.5.0.json"
 }

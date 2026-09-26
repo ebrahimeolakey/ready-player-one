@@ -1,0 +1,44 @@
+{
+  "version": "0.5.0-beta.1",
+  "releaseId": 397272693,
+  "commit": "6da0e2d5e37a307d0b138a686ecb99d6e1e91e15",
+  "url": "https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.1",
+  "publishedAt": "2026-09-26T14:57:55Z",
+  "verifiedAt": "2026-09-26T14:58:11Z",
+  "assets": [
+    {
+      "name": "Ready-Player-One-0.5.0-beta.1-mac-arm64.zip",
+      "size": 123802801,
+      "digest": "sha256:3ed866f7a04fcdae8e03bdb0dd50a87840d64aaff55530a3d7151dba232bf611",
+      "id": 590854020,
+      "anonymousDownloadStatus": 200,
+      "url": "https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/Ready-Player-One-0.5.0-beta.1-mac-arm64.zip"
+    },
+    {
+      "name": "Ready-Player-One-0.5.0-beta.1-mac-x64.zip",
+      "size": 128797249,
+      "digest": "sha256:9e7047a8a7ab8bd16294e80a99b9964c438a7bb737de6c46ca54347954233132",
+      "id": 590854027,
+      "anonymousDownloadStatus": 200,
+      "url": "https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/Ready-Player-One-0.5.0-beta.1-mac-x64.zip"
+    },
+    {
+      "name": "updates-0.5.0-beta.1.json",
+      "size": 628,
+      "digest": "sha256:4c4054e7b1330d773f88272ad4bd4468c21bd52767bc30b8b14b006908dc89c7",
+      "id": 590853964,
+      "anonymousDownloadStatus": 200,
+      "url": "https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/updates-0.5.0-beta.1.json"
+    },
+    {
+      "name": "SHA256SUMS-0.5.0-beta.1.txt",
+      "size": 218,
+      "digest": "sha256:6f6701b1633e6d4a30a0609f8ab9f0b24f9038019f0ac7d0d0b2439a22cdc87f",
+      "id": 590854107,
+      "anonymousDownloadStatus": 200,
+      "url": "https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/SHA256SUMS-0.5.0-beta.1.txt"
+    }
+  ],
+  "onlyMacAssets": true,
+  "anonymousDownloadVerified": true
+}
