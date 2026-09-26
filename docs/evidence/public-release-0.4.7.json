@@ -1,0 +1,44 @@
+{
+  "tag": "v0.4.7-beta.1",
+  "commit": "a372a68db340f6e4c36fba03ac16bf3d70cb0180",
+  "releaseURL": "https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.4.7-beta.1",
+  "anonymousDownloadChecks": "HTTP 200; manifest and checksum bytes match local files",
+  "assets": [
+    {
+      "name": "Ready-Player-One-0.4.7-beta.1-mac-arm64.zip",
+      "size": 123767130,
+      "digest": "sha256:a4df82d3235cc5399451f6883e858b4765b34989f0edd4d6ba04c14263a94cd8",
+      "browser_download_url": "https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.7-beta.1/Ready-Player-One-0.4.7-beta.1-mac-arm64.zip"
+    },
+    {
+      "name": "Ready-Player-One-0.4.7-beta.1-mac-x64.zip",
+      "size": 128761578,
+      "digest": "sha256:e9d6f2f9ec0cd0fda1c661cf038713cbdd8e4c39fb6c8b32f4bcc3c266623179",
+      "browser_download_url": "https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.7-beta.1/Ready-Player-One-0.4.7-beta.1-mac-x64.zip"
+    },
+    {
+      "name": "Ready-Player-One-0.4.7-beta.1-windows-x64-setup.exe",
+      "size": 104956121,
+      "digest": "sha256:710a7044f6e7b5a18129272766faf279a8e780d2cb4d7e33a1e4fca392b9560b",
+      "browser_download_url": "https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.7-beta.1/Ready-Player-One-0.4.7-beta.1-windows-x64-setup.exe"
+    },
+    {
+      "name": "Ready-Player-One-0.4.7-beta.1-windows-x64.zip",
+      "size": 147985439,
+      "digest": "sha256:b014736c16158ef38fd8f91a044577765d7a8e1bb80cb638d51d3ee6201384aa",
+      "browser_download_url": "https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.7-beta.1/Ready-Player-One-0.4.7-beta.1-windows-x64.zip"
+    },
+    {
+      "name": "SHA256SUMS-0.4.7-beta.1.txt",
+      "size": 448,
+      "digest": "sha256:284224469015a0fc9aaa96236c692e5a0108312565538dd42532b3e5d39a9828",
+      "browser_download_url": "https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.7-beta.1/SHA256SUMS-0.4.7-beta.1.txt"
+    },
+    {
+      "name": "updates-0.4.7-beta.1.json",
+      "size": 1148,
+      "digest": "sha256:b37599faf382417301d6306536b66e0ddf660bd371c42e9dc32ee7368151cb23",
+      "browser_download_url": "https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.7-beta.1/updates-0.4.7-beta.1.json"
+    }
+  ]
+}

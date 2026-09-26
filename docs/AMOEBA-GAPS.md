@@ -1,6 +1,6 @@
 # 与 Amoeba 的功能差距
 
-本项目状态更新：2026-09-25；原版核对：2026-09-24。本表以**头号玩家 0.4.6-beta.1 发行源码与测试**为当前状态，对照 **Amoeba 0.1.38**；0.1.40 增量单列。安装包见 README 下载区。群聊与 ProjectContext 属于另一批开发，未包含在本次发行源码中。
+本项目状态更新：2026-09-26；原版基线核对：2026-09-24；通用偏好补查：2026-09-26。本表以**头号玩家 0.4.7-beta.1 发行源码与测试**为当前状态，对照 **Amoeba 0.1.38**；0.1.40 增量单列。安装包见 README 下载区。群聊与 ProjectContext 属于另一批开发，未包含在本次发行源码中。
 
 官方文档没有逐页版本号，下表将其作为功能说明，版本归属优先参考[官方发布日志](https://useamoeba.com/changelog)。核对当日最新日志已到 0.1.40；其 Mac 版本仍等待公证，Mac 下载和更新仍为 0.1.38。不能把最新文档中的每句话未经确认倒推为所有旧版已交付行为。
 
@@ -14,11 +14,11 @@
 - **外部配置延后**：用户接受先发未签名测试版；证书、OAuth 应用和固定 HTTPS 回调以后补。
 - **范围例外**：房主在线、无常驻协调服务；后续本机接力/可选云执行已有设计，尚未部署，不阻塞当前本地版本验收。
 
-本批隔离发行源码完整回归 **375/375 通过**，TypeScript/Vite 构建通过；平台及桌面证据见 [实施记录](IMPLEMENTATION-TRACKER.md)。自动化不等同全部硬件和用户流程验收。早期 [VALIDATION](VALIDATION.md) 的 22 项和 [UI-REFERENCE](UI-REFERENCE.md) 的 v0.3 观察属于历史记录，不能覆盖后续实现，也不能当成当前全部 UI 的验收。
+本批隔离发行源码完整回归 **401/401 通过**，TypeScript/Vite 构建通过；平台及桌面证据见 [实施记录](IMPLEMENTATION-TRACKER.md)。自动化不等同全部硬件和用户流程验收。早期 [VALIDATION](VALIDATION.md) 的 22 项和 [UI-REFERENCE](UI-REFERENCE.md) 的 v0.3 观察属于历史记录，不能覆盖后续实现，也不能当成当前全部 UI 的验收。
 
 ## 0.1.38 基线：当前实现与真实剩余项
 
-| 项目 | 0.4.6 实际状态及本地证据 | 还缺什么 / 还需验收 | 判断 |
+| 项目 | 0.4.7 实际状态及本地证据 | 还缺什么 / 还需验收 | 判断 |
 | --- | --- | --- | --- |
 | 多人 Agent Session Share | `core/hub.mjs`、`core/client.mjs`、多通道 UI；真实双客户端转录、计划、审批同步；公网 WSS 验证见 [互联网记录](INTERNET-VERIFICATION.md) | 现有公网测试是同机独立进程，不是两台实体 Mac 不同网络；20 个活动 Agent 的压力/重连未验收 | 已实现，待验收 |
 | 账号、模型和运行 | Codex app-server、Claude 双向 stream-json、原生 resume/steer、模型目录和 lane 配置持久化；真实两种 CLI 已调用，见 [运行时](PROVIDER-RUNTIME.md) | 新电脑首次登录及完整工具种类；Windows 真实 CLI；非本人 Provider session 不迁移，接管在新账号开新原生会话 | 已实现，待验收 |
@@ -35,13 +35,13 @@
 | 共享记忆 | 文件/commit/hash 关联、保存/合并/同步后自动置过期、显式更新基线、版本冲突检查和分页修改历史；MCP CRUD | Agent 自主复核内容及双机更新冲突的桌面验收 | 已实现，待验收 |
 | 离线执行与恢复 | 本机运行不中断、加密 outbox、幂等输出、丢响应恢复、跨重启不重跑未知动作；[恢复测试](../tests/run-coordinator-recovery.test.mjs) | 需要远端工具审批的新动作离线时等待决定，不能称所有动作无条件 fail-open；已补独立证据卡和人工确认 API、追加历史与版本冲突保护，见 [结果确认](UNKNOWN-OUTCOMES.md)；更多真实 Provider 中断状态仍需验收 | 已实现，待更多验收 |
 | Mission Control / 历史 | 计划进度、审批/接管/冲突/受阻聚合、归档导出；未过期 open/changed/declared 范围按工作区与路径去重，区分文件/目录/未知并显示来源；空闲隐藏统计。见 [活动视图](ACTIVITY-VIEW.md) | 完整桌面多成员视觉状态与账号来源需继续验收，不能把有限截图当作所有状态相同 | 已实现，待更多视觉验收 |
-| Git 工作流 | 导入/克隆、暂存、diff、提交、远程同步、分支、工作树；Editor 会话限定邀请；应用内 GitHub 建仓库/显式绑定，投递记录防重复、账号与身份校验、不覆盖 origin。见 [建仓库](GITHUB-REPOSITORY-CREATE.md) | 新 GitHub 账号/组织权限的真实创建、绑定、克隆全流程仍需同事验收；服务测试没有创建外部仓库 | 已实现，待真实账号验收 |
+| Git 工作流 | 导入/克隆、暂存、diff、提交、远程同步、分支、工作树；Editor 会话限定邀请；应用内 GitHub 建仓库/显式绑定，投递记录防重复、账号与身份校验、不覆盖 origin。见 [建仓库](GITHUB-REPOSITORY-CREATE.md) | 0.4.7 本机 Git 写操作尚未按 Viewer/Commenter 工作区角色限制，后续批次补齐；新 GitHub 账号/组织权限的真实创建、绑定、克隆全流程仍需同事验收 | 已实现，待真实账号验收 |
 | 编辑器、终端与浏览器 | CodeMirror、JS/TS 语言服务、取消搜索、真实 PTY、浏览器、Node 调试、独立 CLI；字体/缩进/换行/空白/参考线/缩略图设置及可选 JSON 保存格式化。见 [编辑器](EDITOR-SETTINGS.md)、[CLI](PROVIDER-CLI.md) | 格式化限严格 JSON，清理行尾限 JSON/.txt；其他语言/原版全部编辑器行为未覆盖。CLI 不等于共享原生 session 迁移；真实登录后完整交互待验收 | 已实现主要本地工具，存在明确范围差异 |
 | 图片、语音、转录 | 图片选择/拖入/粘贴、真实 Codex 返回蓝色图片结果；reasoning 增量、工具生命周期、复制、链接选择和 Esc 停止；macOS 语音 helper 已构建/探测 | 语音尚未完成用户主动录音端到端；自定义 API 的真实供应商调用和图片兼容性未验收 | 已实现，待验收 |
 | 自定义 Provider / ACP | 密钥及启动配置加密、CRUD、模型目录/默认值、兼容 API 六类受审批工具；ACP OpenCode/Hermes 预设与真实 stdio fixture；[ACP 边界](ACP-PROVIDERS.md) | fixture 不是 OpenCode/Hermes，也没调用其模型；没有这些 CLI 的真实账号验收。ACP 不提供通用 OS 沙箱/所有工具强制审批保证 | 已实现适配，待真实 Provider 验收 |
 | 数据保护 | 系统密钥加密、迁移、脱敏、保留期；Owner 删除范围预览、加密转录/关联记录清理与失败恢复，保留项目及无身份索引的草稿 | 备份恢复统一演练；其他成员离线副本、Provider 历史和外部导出不自动删除；脱敏限已识别模式 | 已实现，待完整恢复演练 |
 | 系统通知与更新 | 通知、平台更新、digest 校验、显式安装；Mac 同协议/同数据代际的双阶段健康确认和失败恢复，目标改变保留人工恢复，真实 main/React 确认与拒绝测试通过。见 [更新健康](UPDATE-HEALTH.md) | 旧发布无兼容声明时仅手动安装并保留备份；Windows NSIS 不具备此自动恢复。Apple Silicon 已完成已发布 0.4.5→0.4.6 的真实 UI 下载/替换/双阶段确认及设置保留，见 [升级实测](PUBLISHED-UPGRADE-0.4.6.md)；其他平台和真实失败回滚仍需验证 | 已实现，Mac 单条升级路径实测通过 |
-| 通用偏好 | 会话布局/对话密度、空编辑器隐藏、通知总开关与审批/接管/结果分类、菜单栏图标、独立完成提示音、启动更新检查；加密保存、重启恢复和保存失败回退。见 [通用设置](GENERAL-SETTINGS.md) | 深浅主题、启动恢复、聊天编辑器标签、审查控件位置、协作者颜色/缩略图位置、VS Code 导入及提示重置尚未提供。见 [实测补充](UI-OBSERVATION-2026-09-24.md) | 部分实现 |
+| 通用偏好 | 深浅主题/协作者颜色、会话布局/对话密度、空编辑器隐藏、通知总开关与审批/接管/结果分类、菜单栏图标、独立完成提示音、启动更新检查；加密保存、重启恢复和保存失败回退；VS Code 兼容设置/快捷键预览导入保留未保存草稿。见 [通用设置](GENERAL-SETTINGS.md) | 启动恢复、聊天编辑器标签、审查控件位置、Agent 在缩略图中的写入位置、VS Code 扩展迁移及恢复“不再询问”的警告尚未提供。见 [实测补充](AMOEBA-REMAINING-PREFERENCES.md) | 部分实现 |
 | UI 对齐 | 中文核心布局、会话/分享/成员/设置、并排通道、编辑器/Agent 栏已对照重做，后续能力已接入 | [v0.3 对照](UI-REFERENCE.md)不是 0.4.1 全状态逐像素证明；窄屏/空态/错误态/角色差异/全部新增面板需固定尺寸矩阵复核 | 部分完成，尚非全部 UI 1:1 |
 
 原版协作行为依据：[协作/计划/评论](https://useamoeba.com/docs/collaboration/live-sessions)、[Provider/接管/子任务/恢复](https://useamoeba.com/docs/agents/providers)、[工作区与记忆](https://useamoeba.com/docs/concepts/workspaces)、[角色与数据](https://useamoeba.com/docs/admin/members)、[Git 与工作树](https://useamoeba.com/docs/git/repositories)、[快捷键/MCP/结果未知](https://useamoeba.com/docs/help/troubleshooting)。每项本地证据不等于原版全部内部行为已复现。
@@ -61,7 +61,7 @@
 
 以下仅依据[0.1.40 发布日志](https://useamoeba.com/changelog)，核对当日 Mac 尚未切换到该版本。
 
-| 官方新增/改进方向 | 头号玩家 0.4.6 状态 | 下一步 |
+| 官方新增/改进方向 | 头号玩家 0.4.7 状态 | 下一步 |
 | --- | --- | --- |
 | 自定义 API 推理强度；编辑/删除提供商和密钥 | 配置/UI 已支持明确列出的 efforts 与 CRUD，加密保存 | 真实端点验收；不猜模型支持的 effort |
 | Explorer 高亮、选中代码评论 | 已有文件选择高亮、CodeMirror 选区评论与 hash 校验 | 对照 0.1.40 的具体交互再判差距，不重复宣称未做 |
@@ -81,4 +81,4 @@
 
 可直接开发的任务与逐项验收动作见 [AMOEBA-ACCEPTANCE](AMOEBA-ACCEPTANCE.md)。
 
-0.4.6 新增内容见 [实施记录](IMPLEMENTATION-TRACKER.md)；旧版安装包保持不变。
+0.4.7 新增内容见 [实施记录](IMPLEMENTATION-TRACKER.md)；旧版安装包保持不变。
