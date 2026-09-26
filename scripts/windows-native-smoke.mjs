@@ -116,6 +116,7 @@ try {
     if (event.type === 'exit') exit = event;
   });
   const owner = 401;
+  const hasPrompt = value => /PS [^\r\n]*> ?$/.test(clean(value));
   const { id } = await terminal.open(owner, { cwd: process.env.RPO_DATA_DIR, cols: 100, rows: 28 });
   assert.throws(() => terminal.input(owner + 1, { id, data: 'exit\r' }), /无权/);
   // ConPTY creation precedes the interactive shell attaching its input reader.
@@ -123,22 +124,30 @@ try {
   // before the shell starts (observed on the Windows 2022 runner).
   await waitFor(() => {
     if (exit) throw Error(`PowerShell exited before its first prompt: ${exit.exitCode}`);
-    return /PS [^\r\n]*> ?$/.test(clean(output));
+    return hasPrompt(output);
   });
   evidence.powershellReady = {initialPromptObserved:true};
   writeEvidence();
   // Split strings prevent echoed command input from falsely satisfying output checks.
   terminal.input(owner, { id, data: "Write-Output ('RPO_' + 'PTY_OK'); Write-Output ('RPO_TTY_' + (-not [Console]::IsInputRedirected))\r" });
-  await waitFor(() => clean(output).includes('RPO_PTY_OK') && clean(output).includes('RPO_TTY_True'));
+  await waitFor(() => clean(output).includes('RPO_PTY_OK') && clean(output).includes('RPO_TTY_True') && hasPrompt(output));
   terminal.resize(owner, { id, cols: 109, rows: 37 });
   terminal.input(owner, { id, data: "Write-Output ('RPO_SIZE_' + $Host.UI.RawUI.WindowSize.Width + '_' + $Host.UI.RawUI.WindowSize.Height)\r" });
-  await waitFor(() => clean(output).includes('RPO_SIZE_109_37'));
-  terminal.input(owner, { id, data: 'Start-Sleep -Seconds 30\r' });
-  await new Promise(resolve => setTimeout(resolve, 800));
+  await waitFor(() => clean(output).includes('RPO_SIZE_109_37') && hasPrompt(output));
+  const sleepOffset = output.length;
+  terminal.input(owner, { id, data: "Write-Output ('RPO_' + 'SLEEP_STARTED'); Start-Sleep -Seconds 30; Write-Output ('RPO_' + 'SLEEP_COMPLETED')\r" });
+  await waitFor(() => clean(output.slice(sleepOffset)).includes('RPO_SLEEP_STARTED'));
+  const interruptOffset = output.length;
   terminal.input(owner, { id, data: '\x03' });
-  await new Promise(resolve => setTimeout(resolve, 200));
+  // A fixed delay can send input before PowerShell reattaches its reader after
+  // Ctrl-C. Require a new prompt from this interruption, not an older repaint.
+  await waitFor(() => hasPrompt(output.slice(interruptOffset)));
+  assert.ok(!clean(output.slice(sleepOffset)).includes('RPO_SLEEP_COMPLETED'),'Ctrl-C must interrupt the 30-second sleep before normal completion');
+  evidence.powershellReady.sleepStartedObserved = true;
+  evidence.powershellReady.newPromptAfterInterrupt = true;
+  evidence.powershellReady.sleepInterruptedBeforeCompletion = true;
   terminal.input(owner, { id, data: "Write-Output ('RPO_' + 'INTERRUPTED')\r" });
-  await waitFor(() => clean(output).includes('RPO_INTERRUPTED'));
+  await waitFor(() => clean(output).includes('RPO_INTERRUPTED') && hasPrompt(output));
   terminal.input(owner, { id, data: 'exit 7\r' });
   await waitFor(() => exit);
   assert.equal(exit.exitCode, 7);
