@@ -1,0 +1,21 @@
+.chat-editor-deck {grid-column:3;grid-row:1;z-index:3;min-width:0;min-height:0;display:flex;flex-direction:column;pointer-events:none;overflow:hidden;}
+.chat-editor-deck[hidden] {display:none;}
+.chat-editor-tabbar {display:flex;flex-shrink:0;height:34px;overflow-x:auto;overflow-y:hidden;background:var(--appearance-raised,#151515);border-bottom:1px solid var(--appearance-line,#303030);pointer-events:auto;}
+.chat-editor-tabbar button {display:flex;align-items:center;gap:6px;flex-shrink:0;border:0;border-radius:0;background:transparent;color:var(--appearance-muted,#999);font:11px inherit;white-space:nowrap;cursor:pointer;}
+.chat-editor-tabbar>button {padding:0 12px;}
+.chat-editor-tab {display:flex;border-right:1px solid var(--appearance-line,#303030);flex-shrink:0;max-width:240px;}
+.chat-editor-tab>[role=tab] {padding:0 7px 0 12px;min-width:0;flex-shrink:1;}
+.chat-editor-tab span {overflow:hidden;text-overflow:ellipsis;}
+.chat-editor-tab.selected,.chat-editor-tabbar>button[aria-selected=true] {background:var(--appearance-surface,#202020);box-shadow:inset 0 2px var(--mint,#89c7ad);color:var(--appearance-text,#ddd);}
+.chat-editor-tab.selected>[role=tab] {color:var(--appearance-text,#ddd);}
+.chat-tab-close {padding:0 7px;}
+.chat-editor-tabbar button:hover {background:var(--appearance-hover,#292929);color:var(--appearance-text,#ddd);}
+.chat-editor-content {flex:1;min-height:0;overflow:hidden;pointer-events:auto;background:var(--bg,#131313);}
+.file-selected .chat-editor-content {display:none;}
+.studio.chat-tabs-open .editor-pane {padding-top:34px;}
+.studio.chat-showing .editor-pane {visibility:hidden;}
+.chat-view-instance {height:100%;min-height:0;min-width:0;}
+.chat-in-editor {display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:100%;color:var(--muted,#888);font-size:12px;}
+.local-directory-choice {display:flex;align-items:center;gap:5px;min-width:0;margin-left:auto;}
+.local-directory-choice select {max-width:175px;min-width:65px;background:transparent;border:0;color:var(--appearance-muted,#aaa);font:11px inherit;}
+@media(max-width:600px){.chat-editor-tab{max-width:175px}.local-directory-choice select{max-width:110px}}

@@ -145,3 +145,19 @@ ZIP 与 NSIS 同一 runner 原生构建成功。下载时直连 GitHub / blob �
 ![0.4.7 Windows 重启后恢复亮主题与单色头像](evidence/windows-native-0.4.7-appearance.png)
 
 本机完整回归 401/401，并非全部 401 项都在 Windows 重跑。仍未覆盖实体 Windows 首次安装、SmartScreen / 安装向导、真实账号 GUI 登录、实际 Windows 通知 / 托盘 / 声音、Windows 自更新或两台实体机器的公网协作。
+
+
+## 下一批 Windows 验证准备（会话恢复与 Git 审阅）
+
+这一增量尚未运行 Windows CI，也没有进入 0.4.7 安装包。既有 workflow 和 PowerShell 提示符就绪判断保持不变；待功能集成与版本冻结后，由原 `windows-native.yml` 在准确提交运行。
+
+`scripts/windows-native-smoke.mjs` 的额外测试清单现在包含 VS Code import 两套测试，以及 `session-navigation.test.mjs`、`git-access.test.mjs`、`git-review-view.test.mjs`。本机准备阶段 **49/49 通过、0 跳过**，不作为 Windows 结果。Git 权限测试使用真实临时 Git 仓库和真实 loopback Hub，验证 Viewer / Commenter 不写索引、Editor 可暂存 / 取消暂存、降权 / 撤销 / 跨会话 / 上下文注入拒绝；审阅测试在真实 Electron 中验证按钮位置、评论草稿保留、过期 diff fencing 和只读控件。
+
+Windows 入口继续顺序启动现有跨平台 Electron probe 分支，复用 macOS 同一组合成数据与断言：
+
+- `session-navigation-desktop-smoke.mjs`：`save`、`restore`、`disabled-save`、`disabled`、`reconnect-revoke` 五进程共用独立临时数据目录，验证加密恢复、仅恢复已打开视图、不创建 Agent、归档 / 关闭恢复设置阻止恢复，以及真实 loopback 断线重连保留 / 撤权立即清除视图。
+- `general-settings-desktop-smoke.mjs`：`save` / `restart` 两进程共用另一个临时目录，通过实际设置表单保存 `reviewControlLocation=floating`，检查加密保存失败回滚、下一进程读取与控件恢复、恢复默认。
+
+新增阶段日志分别写入 `ci-evidence/windows-navigation-*.log` 和 `windows-review-preference-*.log`；设置截图为 `windows-review-preferences.png`。主 JSON 增加 `sessionNavigation` / `reviewPreference` 及完整额外测试清单、TAP 计数。没有真实 Provider 请求或外部协作账号。整套入口上限调整至 360 秒以容纳新增七次实际主进程启动，各阶段既有断言和单阶段时限不变。
+
+本批额外清单还加入 `agent-edit-positions.test.mjs`、`edit-positions.test.mjs`、`edit-position-publisher.test.mjs`、`edit-position-view.test.mjs`、`chat-editor-tabs-view.test.mjs` 与 `composer-hook-view.test.mjs`，覆盖落盘内容 / hash / 行范围、真实 coordinator → loopback Hub 元数据链路、CodeMirror 标记、聊天移入编辑器标签、同 lane 草稿共享和只读隔离。主进程向采集器传入 `canonicalRoot(localRoot(...))`，落盘夹具使用 `realpath(mkdtemp(...))`，避免 macOS 临时目录别名与 Windows 规范路径不一致。本轮只读审查与本机 49 项检查不代替待执行的 Windows CI。

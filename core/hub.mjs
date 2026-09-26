@@ -1,3 +1,4 @@
+import { validateEditPositions } from "./edit-positions.mjs";
 import { workspaceLifecycle, recoverWorkspaceDeletions } from "./workspace-lifecycle.mjs";
 import { assertSessionScope, scopedResult, grantMembers } from "./access-scope.mjs";
 import { validatePrompt, summarizePrompt } from "./prompt-limits.mjs";
@@ -95,6 +96,7 @@ export class Hub extends EventEmitter {
         }
     for (const s of this.db.sessions)
       for (const l of s.lanes) {
+        delete l.editPositions;
         l.entries = l.entries.map(transcriptEntry);
         const log = this.logName(l);
         store.recoverFile(log, "jsonl");
@@ -294,8 +296,10 @@ export class Hub extends EventEmitter {
         if (p && ![...this.peers.values()].some((v) => v.id === p.id)) {
           for (const s of this.db.sessions)
             for (const l of s.lanes)
-              if (l.ownerId === p.id && l.status === "running")
-                l.offlineSince = now();
+              if (l.ownerId === p.id) {
+                delete l.editPositions;
+                if (l.status === "running") l.offlineSince = now();
+              }
         }
         this.broadcast();
       });
@@ -614,6 +618,7 @@ export class Hub extends EventEmitter {
       l.acceptedEventIds = [];
       delete l.usage;
       delete l.runConfiguration;
+      delete l.editPositions;
       delete l.failure;
       delete l.handoffNeeded;
       this.entry(l, "user", summarizePrompt(ap.prompt).display);
@@ -624,6 +629,19 @@ export class Hub extends EventEmitter {
           (m) => m.workspaceId === s.workspaceId && !m.retired,
         ),
       };
+    }
+    if (method === "run.editPositions") {
+      const { l } = this.lane(peer, a);
+      if (l.activeRunId !== a.runId || l.stopRequested || l.fencedRunId === a.runId || !["running", "done", "error", "interrupted"].includes(l.status)) throw Error("执行已结束或已撤销");
+      const positions = validateEditPositions(a);
+      if (positions.some(p => p.source !== l.provider || (p.phase === "pending" && l.status !== "running"))) throw Error("修改位置与执行状态不匹配");
+      const prior = l.editPositions;
+      if (prior?.runId === a.runId && a.sequence <= prior.sequence) {
+        if (a.sequence === prior.sequence && JSON.stringify(positions) !== JSON.stringify(prior.positions)) throw Error("修改位置序号内容冲突");
+        return {accepted:true,duplicate:true};
+      }
+      l.editPositions = {runId:a.runId,sequence:a.sequence,positions,expires:Date.now()+60000};
+      return {accepted:true,duplicate:false};
     }
     if (method === "run.configuration") {
       const { l } = this.lane(peer, a);

@@ -75,6 +75,7 @@ export function AgentLane({
   mapped,
   onBrowse,
   focusEntry,
+  onOpenInEditor,
 }: {
   lane: Lane;
   session: Session;
@@ -83,6 +84,7 @@ export function AgentLane({
   mapped: boolean;
   onBrowse?: (url: string) => void;
   focusEntry?:{entryId:string;hash:string;key:string};
+  onOpenInEditor?:()=>void;
 }) {
   const { conversationDensity } = useGeneralSettings();
   const [detailOpen, setDetailOpen] = useState<Record<string, boolean>>({});
@@ -96,11 +98,13 @@ export function AgentLane({
   };
   const [commentEntry,setCommentEntry]=useState<{id:string;text:string}|null>(null),[entryComment,setEntryComment]=useState(''),[entryCommentBusy,setEntryCommentBusy]=useState(false),[entryNotice,setEntryNotice]=useState('');
   const [focusedId,setFocusedId]=useState('');
-  const canComment=(state.me?.roles?.[s.workspaceId]||(state.me?.host?'owner':'viewer'))!=='viewer';
+  const workspaceRole=state.me?.roles?.[s.workspaceId]||(state.me?.host?'owner':'viewer');
+  const canComment=workspaceRole!=='viewer',canExecute=['owner','editor'].includes(workspaceRole);
   const hashText=async(text:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(b=>b.toString(16).padStart(2,'0')).join('');
   async function addEntryComment(){if(!commentEntry||!entryComment.trim())return;setEntryCommentBusy(true);try{const expectedHash=await hashText(commentEntry.text);if(await call('comment.add',{sessionId:s.id,workspaceId:s.workspaceId,text:entryComment,transcript:{laneId:l.id,entryId:commentEntry.id,expectedHash}})){setCommentEntry(null);setEntryComment('');}}finally{setEntryCommentBusy(false);}}
   const keyboard = useKeyboard();
-  const composer = useComposer(l.id);
+  const mine = l.ownerId === state.me?.id;
+  const composer = useComposer(l.id,mine);
   const {
     text: prompt,
     images,
@@ -215,10 +219,9 @@ export function AgentLane({
     scroll = useRef<HTMLDivElement>(null),
     [follow, setFollow] = useState(true);
   useEffect(()=>{let active=true;setFocusedId('');setEntryNotice('');if(focusEntry){setFollow(false);const entry=l.entries.find(e=>e.id===focusEntry.entryId);if(!entry)setEntryNotice('原消息已不可用');else void hashText(entry.text).then(hash=>{if(!active)return;if(hash!==focusEntry.hash){setEntryNotice('原消息内容已变化，无法定位原始片段');return;}setFocusedId(entry.id);setDetailOpen(current=>({...current,[entry.id]:true}));requestAnimationFrame(()=>scroll.current?.querySelector(`[data-entry-id="${CSS.escape(entry.id)}"]`)?.scrollIntoView({block:'center'}));});}return()=>{active=false;};},[focusEntry?.key,l.id,l.entries.find(e=>e.id===focusEntry?.entryId)?.text]);
-  const mine = l.ownerId === state.me?.id,
-    busy = ["running", "awaiting"].includes(l.status);
+  const busy = ["running", "awaiting"].includes(l.status);
   useEffect(() => {
-    if (!mine) return;
+    if (!mine || !canExecute) return;
     let active = true;
     void window.rpo
       .invoke("dictation.probe")
@@ -248,9 +251,9 @@ export function AgentLane({
       active = false;
       unsubscribe();
     };
-  }, [l.id, mine]);
+  }, [l.id, mine,canExecute]);
   async function startVoice() {
-    if (!mapped || !composer.current().ready || composer.current().busy || composer.current().blocked || s.status === "archived") return;
+    if (!canExecute || !mapped || !composer.current().ready || composer.current().busy || composer.current().blocked || s.status === "archived") return;
     composer.captureVoiceBase();
     setVoice((v) => ({ ...v, busy: true, error: "" }));
     try {
@@ -289,6 +292,7 @@ export function AgentLane({
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (
+      !canExecute ||
       !prompt.trim() ||
       !!promptError ||
       voice.listening ||
@@ -359,6 +363,7 @@ export function AgentLane({
           </strong>
           <small className="lane-provider">{providerLabel} · <LaneModel lane={l} /></small>
         </div>
+        {onOpenInEditor && <button className="icon-button" title="在编辑器中打开聊天" aria-label="在编辑器中打开聊天" onClick={onOpenInEditor}><FileCode2 size={14}/></button>}
         <span className={"lane-status " + l.status}>
           {l.status === "running" ? (
             <LoaderCircle className="spin" size={12} />
@@ -458,7 +463,7 @@ export function AgentLane({
         )}
         <div ref={bottom} />
       </div>
-      {mine ? (
+      {mine && canExecute ? (
         <form
           className="composer"
           onSubmit={submit}
@@ -740,7 +745,7 @@ export function AgentLane({
               ? `正在实时观看 ${l.owner} 的 Agent`
               : "此成员当前离线 · 历史通道已保留"}
           </span>
-          {l.status === "running" && (
+          {canExecute && l.status === "running" && (
             <button
               onClick={() =>
                 call("lane.stop", { sessionId: s.id, laneId: l.id })
@@ -765,12 +770,14 @@ export function Editor({
   search = false,
   rootRevision = "",
   onDocumentChange,
+  onOpenDocument,
 }: {
   welcome?: React.ReactNode;
   hidden?: boolean;
   search?: boolean;
   rootRevision?: string;
   onDocumentChange?: (opened: boolean) => void;
+  onOpenDocument?:()=>void;
   params: { workspaceId: string; sessionId: string; laneId?: string };
   mapped: boolean;
   call: Call;
@@ -876,6 +883,7 @@ export function Editor({
     };
   }, [search, hidden, mapped, filter, params.workspaceId, contextKey, rootRevision]);
   const open = async (p: string, force = false, keepDraft = false) => {
+    onOpenDocument?.();
     if (force && draftKey) {
       if (keepDraft) await writeDraft(draftKey, JSON.stringify({content,original,hash,canonicalRoot:fileRoot}));
       else await removeDraft(draftKey);
@@ -1197,6 +1205,7 @@ export function Editor({
               </div>
             )}
             <CodeEditor
+              agentDocument={{workspaceId:params.workspaceId,path:file,binding:rootRevision,blocked:rootChanged}}
               ref={codeRef}
               value={content}
               height="100%"

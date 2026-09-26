@@ -19,7 +19,7 @@ const evidence = { platform: process.platform, arch: process.arch, versions: pro
 const writeEvidence = () => writeFileSync(join(artifacts, 'windows-native.json'), JSON.stringify(evidence, null, 2));
 let terminal, providerTerminal, providerFixtureDir, output = '', providerOutput = '';
 const probeChildren = new Set();
-const deadline = setTimeout(() => fail(Error('Windows desktop smoke timed out after 180 seconds')), 180000);
+const deadline = setTimeout(() => fail(Error('Windows desktop smoke timed out after 360 seconds')), 360000);
 function fail(error) {
   evidence.error = error.stack || String(error);
   evidence.ptyOutput = output;
@@ -177,12 +177,15 @@ try {
   evidence.providerCLIRuntime={command:cliNode,version:nodeProbe.version,peSubsystem:subsystem};writeEvidence();
   // The existing workflow entry invokes this explicit extra Windows test list;
   // no workflow permission change and no Electron/GUI executable as Node runner.
-  const regressionFiles=['tests/vscode-import.test.mjs','tests/vscode-import-controller.test.mjs'];
-  const regressionLog=await runProbe(cliNode,['--test','--test-reporter=tap',...regressionFiles],cliEnv,'windows-import-regressions.log');
+  const regressionFiles=['tests/vscode-import.test.mjs','tests/vscode-import-controller.test.mjs',
+    'tests/session-navigation.test.mjs','tests/git-access.test.mjs','tests/git-review-view.test.mjs',
+    'tests/agent-edit-positions.test.mjs','tests/edit-positions.test.mjs','tests/edit-position-publisher.test.mjs',
+    'tests/edit-position-view.test.mjs','tests/chat-editor-tabs-view.test.mjs','tests/composer-hook-view.test.mjs'];
+  const regressionLog=await runProbe(cliNode,['--test','--test-concurrency=4','--test-reporter=tap',...regressionFiles],cliEnv,'windows-import-regressions.log');
   const totals=Object.fromEntries([...regressionLog.matchAll(/^# (tests|pass|fail|skipped) (\d+)\r?$/gm)].map(match=>[match[1],Number(match[2])]));
   assert.ok(totals.tests>0);assert.equal(totals.pass,totals.tests);assert.equal(totals.fail,0);assert.equal(totals.skipped,0);
   evidence.additionalRegressions={files:regressionFiles,...totals};
-  evidence.checks.push('VS Code import service/controller regression suite on real Windows console Node, zero failures/skips');
+  evidence.checks.push('Windows console Node regressions: VS Code import, encrypted navigation, real Hub/Git roles, Agent file-position collection/publishing and real Electron review/editor/chat/composer views; zero failures/skips');
   writeEvidence();
   // Only this synthetic Node peer runs here: no vendor CLI, account probe,
   // prompt, server, token or paid model is used by this check.
@@ -279,6 +282,32 @@ process.stdin.on('data',data=>{
     evidence.appearance ??= {};evidence.appearance[phase]=record;
   }
   evidence.checks.push('Appearance: two actual Electron/main/React processes, dark/light CSS, colored/monochrome avatars, encrypted settings restored after process exit and color palette restored');
+  // Reuse the same synthetic probes as macOS; only the outer driver differs.
+  // Their Electron branch has no POSIX shell launcher dependency. Each suite
+  // uses its own encrypted data directory and phases run strictly in sequence.
+  evidence.stage='session-navigation-restart';writeEvidence();
+  const navigationData=mkdtempSync(join(process.env.RPO_DATA_DIR,'navigation-processes-'));
+  evidence.sessionNavigation={phases:[],providerRuns:0};
+  for(const phase of ['save','restore','disabled-save','disabled','reconnect-revoke']){
+    const log=await runProbe(process.execPath,[fileURLToPath(new URL('./session-navigation-desktop-smoke.mjs',import.meta.url))],
+      {...appearanceEnv,RPO_DATA_DIR:navigationData,RPO_NAV_PHASE:phase},`windows-navigation-${phase}.log`);
+    assert.ok(log.includes('SESSION_NAV_PASS '+phase),'Navigation probe must report all assertions passing and exit normally');
+    evidence.sessionNavigation.phases.push(phase);writeEvidence();
+  }
+  evidence.sessionNavigation.passed=true;
+  evidence.checks.push('Navigation: five actual main/React processes, saved view restored without Agent runs, archived/disabled recovery denied, real loopback reconnect retained and revocation cleared immediately');
+  evidence.stage='review-preference-restart';writeEvidence();
+  const reviewData=mkdtempSync(join(process.env.RPO_DATA_DIR,'review-preference-processes-'));
+  evidence.reviewPreference={phases:[],reviewControlLocation:'floating'};
+  for(const phase of ['save','restart']){
+    const log=await runProbe(process.execPath,[fileURLToPath(new URL('./general-settings-desktop-smoke.mjs',import.meta.url))],
+      {...appearanceEnv,RPO_DATA_DIR:reviewData,RPO_GENERAL_SMOKE_PHASE:phase},`windows-review-preference-${phase}.log`);
+    assert.ok(log.includes('GENERAL_DESKTOP_PASS '+phase),'Review preference must survive a real main-process restart');
+    evidence.reviewPreference.phases.push(phase);writeEvidence();
+  }
+  writeFileSync(join(artifacts,'windows-review-preferences.png'),readFileSync(join(reviewData,'general-settings.png')));
+  evidence.reviewPreference.passed=true;
+  evidence.checks.push('Review preference: actual settings form saves floating location, encrypted write-failure rollback, new main process restores select value, explicit defaults reset succeeds');
   evidence.completedAt = new Date().toISOString();
   writeEvidence();
   // Exercise the actual app before-quit async cleanup, not a synthetic app.exit success.

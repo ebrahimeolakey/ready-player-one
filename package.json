@@ -1,6 +1,6 @@
 {
   "name": "ready-player-one",
-  "version": "0.4.7-beta.1",
+  "version": "0.4.8-beta.1",
   "description": "头号玩家 · 本地优先的 Agent Session Share 工作台",
   "type": "module",
   "main": "desktop/main.mjs",
@@ -11,7 +11,7 @@
     "build": "tsc --noEmit && vite build",
     "start": "npm run build:dictation && npm run build && electron .",
     "desktop": "npm run build:dictation && electron .",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test --test-concurrency=4 tests/*.test.mjs",
     "package": "npm run build:dictation && npm run build && electron-builder --mac dir",
     "hub": "node core/standalone.mjs",
     "distribute": "npm run build:dictation && npm run build && electron-builder --mac zip --arm64 --x64",

@@ -1,3 +1,4 @@
+import {ChatEditorTabs,ChatViewPortal} from "./ChatEditorTabs";
 import { useGeneralSettings } from "./GeneralSettings";
 import "./studio-preferences.css";
 import { useKeyboard, shortcutsAllowed } from "./KeyboardSettings";
@@ -62,6 +63,10 @@ export function Studio({
 }) {
   const keyboard = useKeyboard();
   const general = useGeneralSettings();
+  const chatScope=JSON.stringify([state.local.navigation?.scope ?? state.identity?.audience ?? '',state.me?.id,s.workspaceId,s.id]);
+  const [chatScopeKey,setChatScopeKey]=useState(chatScope);
+  const [chatTabs,setChatTabs]=useState<string[]>([]),[chatActiveId,setChatActiveId]=useState(''),[chatLaneId,setChatLaneId]=useState(''),[seenChats,setSeenChats]=useState<string[]>([]);
+  const [chatEditorTarget,setChatEditorTarget]=useState<HTMLDivElement|null>(null),[chatDockTarget,setChatDockTarget]=useState<HTMLDivElement|null>(null);
   const [editorDocument, setEditorDocument] = useState("");
   const [revealEmptyEditor, setRevealEmptyEditor] = useState(false);
   const [referenceComment,setReferenceComment]=useState<string|null>(null);
@@ -94,18 +99,29 @@ export function Studio({
   useEffect(() => { setHeight(null); }, [general.layout]);
   useEffect(() => { setRevealEmptyEditor(false); }, [general.autoHideEmptyEditor, s.id]);
   const own = s.lanes.filter((l) => l.ownerId === state.me?.id),
-    lane = s.lanes.find((l) => l.id === laneId) || own[0] || s.lanes[0],
+    lane = laneId==="__session__" ? undefined : s.lanes.find((l) => l.id === laneId) || own[0] || s.lanes[0],
     mapped = !!state.local.paths[s.workspaceId],
     params = {
       workspaceId: s.workspaceId,
       sessionId: s.id,
-      ...(lane?.ownerId === state.me?.id ? { laneId: lane.id } : {}),
+      ...(lane && lane.ownerId === state.me?.id ? { laneId: lane.id } : {}),
     },
     pending = state.approvals.filter(
       (a) => a.sessionId === s.id && a.status === "pending",
     );
+  const dockLane=s.lanes.find(l=>l.id===chatLaneId)||lane||s.lanes[0];
+  const openedChats=chatScopeKey===chatScope?chatTabs.flatMap(id=>s.lanes.filter(l=>l.id===id)):[];
+  const activeChat=openedChats.find(l=>l.id===chatActiveId)?.id||'';
+  const editorTools=['files','search','none'];
+  const chatsVisible=openedChats.length>0&&editorTools.includes(tool);
+  const visitedChats=s.lanes.filter(l=>seenChats.includes(l.id)||chatTabs.includes(l.id)||l.id===dockLane?.id);
+  useEffect(()=>{setChatTabs([]);setChatActiveId('');setChatLaneId('');setSeenChats([]);setChatScopeKey(chatScope);},[chatScope]);
+  useEffect(()=>{if(dockLane)setSeenChats(ids=>ids.includes(dockLane.id)?ids:[...ids,dockLane.id]);},[dockLane?.id]);
+  function openChat(id:string){if(!s.lanes.some(l=>l.id===id))return;setChatTabs(ids=>ids.includes(id)?ids:[...ids,id]);setChatActiveId(id);setTool('files');setRevealEmptyEditor(true);}
+  function chooseChat(id:string){if(general.openChatsAsEditorTabs||chatTabs.includes(id)){openChat(id);}else{setChatLaneId(id);setDock('agent');setShowDock(true);}}
+  function closeChat(id:string){setChatTabs(ids=>ids.filter(v=>v!==id));setChatActiveId(current=>current===id?'':current);setChatLaneId(id);setDock('agent');setShowDock(true);}
   const editorKey = params.laneId || s.id;
-  const emptyEditorHidden = general.autoHideEmptyEditor && !revealEmptyEditor && editorDocument !== editorKey && showDock && !["diff", "browser", "debug"].includes(tool);
+  const emptyEditorHidden = general.autoHideEmptyEditor && !openedChats.length && !revealEmptyEditor && editorDocument !== editorKey && showDock && !["diff", "browser", "debug"].includes(tool);
   useEffect(() => {
     if (dock === "terminal")
       setTerminalOpened((keys) =>
@@ -184,7 +200,7 @@ export function Studio({
       <div
         ref={root}
         className={
-          "studio layout-" + general.layout + (emptyEditorHidden ? " empty-editor-hidden " : " ") +
+          "studio layout-" + general.layout + (chatsVisible?" chat-tabs-open":"") + (chatsVisible&&activeChat?" chat-showing":"") + (emptyEditorHidden ? " empty-editor-hidden " : " ") +
           (!showDock ? "dock-hidden " : "") +
           (tool === "none" ? "files-hidden" : "")
         }
@@ -220,6 +236,7 @@ export function Studio({
         {mapped ? (
           <Editor
             key={editorKey}
+            onOpenDocument={()=>setChatActiveId('')}
             onDocumentChange={(opened) => setEditorDocument(opened ? editorKey : "")}
             rootRevision={(params.laneId && state.local.lanePaths?.[params.laneId]) || state.local.sessionPaths[s.id] || state.local.paths[s.workspaceId] || ""}
             params={params}
@@ -246,6 +263,10 @@ export function Studio({
             <div className="editor-pane">{welcome}</div>
           </>
         )}
+        {openedChats.length>0 && <ChatEditorTabs lanes={openedChats} activeId={activeChat} hidden={!chatsVisible} onSelect={setChatActiveId} onClose={closeChat} onMount={setChatEditorTarget}/>}
+        {visitedChats.map(chat=><ChatViewPortal key={chatScope+chat.id} target={chatTabs.includes(chat.id)?(chat.id===activeChat?chatEditorTarget:null):(chat.id===dockLane?.id?chatDockTarget:null)}>
+          <AgentLane lane={chat} session={s} state={state} call={call} mapped={mapped} focusEntry={focusEntry?.laneId===chat.id?focusEntry:undefined} onOpenInEditor={()=>openChat(chat.id)} onBrowse={url=>{setBrowserRequest({url,key:crypto.randomUUID()});setTool('browser');}}/>
+        </ChatViewPortal>)}
         {tool === "debug" && mapped && (
           <section className="studio-diff">
             <DebuggerPanel bridge={window.rpo} context={params} />
@@ -363,7 +384,7 @@ export function Studio({
                 <TerminalSquare size={13} />
                 终端
               </button>
-              {lane?.ownerId === state.me?.id && ["codex","claude"].includes(lane.provider) && <button
+              {lane && lane.ownerId === state.me?.id && ["codex","claude"].includes(lane.provider) && <button
                 disabled={!mapped}
                 className={dock === "provider-cli" ? "active" : ""}
                 title="打开此 Provider CLI · 本机独立会话"
@@ -380,6 +401,7 @@ export function Studio({
                   {pending.length} 待审批
                 </button>
               )}
+              <label className="local-directory-choice" title="选择文件编辑器和终端的本机工作目录"><FolderOpen size={12}/><select aria-label="本机工作目录" value={params.laneId||'__session__'} onChange={e=>setLaneId(e.target.value)}><option value="__session__">会话目录</option>{own.map(l=><option key={l.id} value={l.id}>{l.providerLabel||l.provider} · {l.id.slice(0,6)}</option>)}</select></label>
               <div className="grow" />
               {emptyEditorHidden && <button title="显示编辑器" aria-label="显示编辑器" onClick={() => { setRevealEmptyEditor(true); setTool("files"); }}><FileCode2 size={15}/></button>}
               <button
@@ -407,22 +429,9 @@ export function Studio({
                       ? "lane-container"
                       : "lane-container hidden"
                   }
+                  ref={setChatDockTarget}
                 >
-                  {lane ? (
-                    <AgentLane
-                      key={lane.id}
-                      focusEntry={focusEntry?.laneId===lane.id?focusEntry:undefined}
-                      lane={lane}
-                      session={s}
-                      state={state}
-                      call={call}
-                      mapped={mapped}
-                      onBrowse={(url) => {
-                        setBrowserRequest({ url, key: crypto.randomUUID() });
-                        setTool("browser");
-                      }}
-                    />
-                  ) : (
+                  {dockLane ? (chatTabs.includes(dockLane.id)?<div className="chat-in-editor"><span>聊天已在编辑器打开</span><button className="button" onClick={()=>openChat(dockLane.id)}>查看聊天</button><button onClick={()=>closeChat(dockLane.id)}>移回下方</button></div>:null) : (
                     <div className="agent-first">
                       <div className="lane-header">
                         <Avatar name={state.local.name || "我"} small />
@@ -594,13 +603,13 @@ export function Studio({
                               .map((l) => (
                                 <button
                                   key={l.id}
+                                  data-chat-open-id={l.id}
                                   className={
                                     "member-lane " +
-                                    (lane?.id === l.id ? "selected" : "")
+                                    ((activeChat||dockLane?.id) === l.id ? "selected" : "")
                                   }
                                   onClick={() => {
-                                    setLaneId(l.id);
-                                    setDock("agent");
+                                    chooseChat(l.id);
                                   }}
                                 >
                                   <span>
@@ -626,7 +635,7 @@ export function Studio({
                           </div>
                         ))}
                         <CollaborationPanel
-                          onOpenComment={c=>{if(c.transcript){setLaneId(c.transcript.laneId);setDock('agent');setShowDock(true);setFocusEntry({...c.transcript,key:crypto.randomUUID()});}else if(c.location)setReferenceComment(c.id);}}
+                          onOpenComment={c=>{if(c.transcript){chooseChat(c.transcript.laneId);setFocusEntry({...c.transcript,key:crypto.randomUUID()});}else if(c.location)setReferenceComment(c.id);}}
                           state={state}
                           session={s}
                           call={call}

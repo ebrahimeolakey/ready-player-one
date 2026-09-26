@@ -6,12 +6,13 @@ test('general settings keep explicit opt-ins off and reject malformed or prototy
   assert.equal(DEFAULT_GENERAL_SETTINGS.completionSound, false);
   assert.equal(DEFAULT_GENERAL_SETTINGS.trayIcon, false);
   assert.equal(DEFAULT_GENERAL_SETTINGS.restoreLastSession, true);
+  assert.equal(DEFAULT_GENERAL_SETTINGS.openChatsAsEditorTabs, true);
   assert.equal(DEFAULT_GENERAL_SETTINGS.theme, 'dark');
   assert.equal(DEFAULT_GENERAL_SETTINGS.reviewControlLocation, 'breadcrumb');
   assert.equal(DEFAULT_GENERAL_SETTINGS.collaboratorColors, true);
   assert.deepEqual(validateGeneralSettings({}), {...DEFAULT_GENERAL_SETTINGS});
   for (const value of [null, [], false, {layout:'vscode'}, {conversationDensity:'hidden'}, {notificationsEnabled:'false'},
-    {restoreLastSession:'true'}, {reviewControlLocation:'island'}, {reviewControlLocation:true}, {theme:'system'}, {theme:null}, {collaboratorColors:'false'}, {autoCheckUpdates:0}, {completionSound:null}, {constructor:true}, {toString:true}, JSON.parse('{"__proto__":{}}')]) {
+    {restoreLastSession:'true'}, {openChatsAsEditorTabs:'true'}, {reviewControlLocation:'island'}, {reviewControlLocation:true}, {theme:'system'}, {theme:null}, {collaboratorColors:'false'}, {autoCheckUpdates:0}, {completionSound:null}, {constructor:true}, {toString:true}, JSON.parse('{"__proto__":{}}')]) {
     assert.throws(() => validateGeneralSettings(value));
   }
   const saved = validateGeneralSettings({notificationsEnabled:false, notifyApprovals:true, layout:'editor', conversationDensity:'compact'});

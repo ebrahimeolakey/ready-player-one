@@ -1,6 +1,7 @@
 export const DEFAULT_GENERAL_SETTINGS = Object.freeze({
   autoCheckUpdates: true,
   restoreLastSession: true,
+  openChatsAsEditorTabs: true,
   theme: 'dark',
   collaboratorColors: true,
   layout: 'agent',

@@ -8,7 +8,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {spawn} from 'node:child_process';
 import {DEFAULT_GENERAL_SETTINGS} from '../core/general-settings.mjs';
 const script=fileURLToPath(import.meta.url),root=dirname(dirname(script));
-const expected={...DEFAULT_GENERAL_SETTINGS,theme:'light',collaboratorColors:false,layout:'editor',conversationDensity:'compact',reviewControlLocation:'floating',autoCheckUpdates:false,
+const expected={...DEFAULT_GENERAL_SETTINGS,theme:'light',collaboratorColors:false,layout:'editor',conversationDensity:'compact',reviewControlLocation:'floating',openChatsAsEditorTabs:false,autoCheckUpdates:false,
   autoHideEmptyEditor:false,notificationsEnabled:false,notifyApprovals:false,notifyHandoffs:false,notifyUnknownOutcomes:false};
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check){const deadline=Date.now()+20000;while(!await check()){if(Date.now()>deadline)throw Error('Desktop condition timed out');await sleep(30);}}
@@ -26,6 +26,15 @@ async function probe(){
     await until(async()=>{win=BrowserWindow.getAllWindows().find(item=>item.getTitle().startsWith('头号玩家'));return win&&!win.webContents.isLoading()&&await win.webContents.executeJavaScript('!!window.rpo && !!document.querySelector(".app-shell")');});
     const invoke=(method,args={})=>win.webContents.executeJavaScript(`window.rpo.invoke(${JSON.stringify(method)},${JSON.stringify(args)})`);
     if(phase==='save'){
+      // Exercise the legacy read-only Git changes IPC through the actual main gate.
+      const gitRoot=join(dir,'git-read-fixture');await mkdir(gitRoot);
+      await new Promise((resolve,reject)=>{const child=spawn('git',['init',gitRoot],{stdio:'ignore'});child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(Error('Git fixture init failed')));});
+      await writeFile(join(gitRoot,'sample.txt'),'fixture');
+      const workspace=await invoke('workspace.create',{name:'Read-only Git fixture'}),session=await invoke('session.create',{workspaceId:workspace.id,title:'Read-only changes'});
+      const originalPicker=dialog.showOpenDialog;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[gitRoot]});
+      try{await invoke('project.map',{workspaceId:workspace.id});}finally{dialog.showOpenDialog=originalPicker;}
+      const changes=await invoke('git.changes',{workspaceId:workspace.id,sessionId:session.id});assert.equal(changes.error,undefined);assert.ok(changes.files.some(file=>file.path==='sample.txt'));
+      await assert.rejects(invoke('git.changes',{workspaceId:workspace.id,sessionId:session.id,root:gitRoot}),/参数/);
       assert.deepEqual(await invoke('settings.general.get'),{...DEFAULT_GENERAL_SETTINGS});
       await win.webContents.executeJavaScript('document.querySelector(".profile").click()');
       await until(()=>win.webContents.executeJavaScript('!!document.querySelector(".general-settings")'));
@@ -38,7 +47,7 @@ async function probe(){
       await sleep(80);
       assert.deepEqual(await win.webContents.executeJavaScript('[...document.querySelectorAll(".general-settings select")].map(item=>item.value)'),['light','editor','compact','floating']);
       // Turn category switches off before their master so every control is exercised.
-      for(const label of ['协作者颜色','等待审批','任务接管','结果待确认','系统通知','隐藏空编辑器','启动时检查更新']){
+      for(const label of ['聊天作为编辑器标签','协作者颜色','等待审批','任务接管','结果待确认','系统通知','隐藏空编辑器','启动时检查更新']){
         await win.webContents.executeJavaScript(`([...document.querySelectorAll('.general-settings label')].find(row=>row.textContent===${JSON.stringify(label)})).querySelector('input').click()`);
       }
       await win.webContents.executeJavaScript('document.querySelector(".general-settings form").requestSubmit()');

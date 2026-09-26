@@ -119,3 +119,14 @@ Windows 原生 CI 28/28 平台回归及真实偏好/PTY/CLI 通过，见 [平台
 真实 CodeMirror/Xterm 视图测试验证切换主题不丢输入、选区或终端实例；真实 main/preload/React 两阶段测试验证浅色/中性头像保存与进程重启恢复。导入服务、文件控制器和真实 React/Electron 预览交互的 23 项测试通过，覆盖依赖、冲突、取消、作用域变化、失效预览及写盘失败回退。隔离发行源码完整回归 **401/401 通过**，零跳过，TypeScript/Vite 构建通过。隔离真实 main/preload/React 的通用设置保存/重启、导入/重启、更新健康确认/拒绝共三组两阶段验证通过。导入页面与设置表单的并存回归也验证了未保存字段及空数字输入不会被外部设置更新丢弃。Mac 两种架构安装包已构建；每包 83 个 core/desktop/dist 文件与隔离发行源码逐字节一致。Apple Silicon 包实际界面完成浅色保存与原生文件选择器导入；ZIP 完整性和原生解压通过，见 [Mac 包审计](evidence/mac-package-0.4.7.json)。Windows 原生 CI 的 28 项平台测试、22 项导入测试及主题保存/重启均已通过；ZIP/NSIS 的 runner SHA、ZIP CRC 和 83 个包内文件清单审计通过，见 [Windows 记录](WINDOWS-NATIVE-CI.md)。实体双机、真实账号及全部 UI 状态仍待继续验收。
 
 0.4.7-beta.1 已公开发布，tag 固定到 `a372a68db340f6e4c36fba03ac16bf3d70cb0180`。四个安装包和两个校验文件的 GitHub 大小、digest 与本地一致，六个匿名下载均 HTTP 200，公开 manifest / SHA256 清单字节一致，见 [发布核验](evidence/public-release-0.4.7.json)。README 下载区已切换。启动恢复和 Git 审阅按钮/角色校验属于后续源码批次，不在此发行包内；0.4.7 的本机 Git 写操作角色限制仍是已知边界。
+
+
+## 0.4.8-beta.1 开发批次
+
+新增启动恢复上次可见会话、聊天编辑器标签、可移动 Git 审阅操作和 Agent 修改位置标记。Git 读写入口复核当前连接、会话范围及角色；Viewer/Commenter 不能通过本机 Git 写操作越权，历史 git.changes 路由也纳入真实 IPC 回归。聊天切换保留原编辑器、终端、输入与附件；其他成员的聊天只读，不访问其本机草稿。
+
+位置标记只覆盖经过磁盘内容核验的 Codex fileChange、Claude Edit/Write，按当前文档完整哈希显示；不覆盖任意 shell 写入或实时光标。Hub 校验执行所有者、角色、序号、状态及 TTL，断线/撤权/重新绑定目录后清除旧位置。
+
+隔离发行源码完整回归 **432/432 通过**，无跳过，TypeScript/Vite 构建通过。真实 main/preload/React 的通用设置保存/重启（包含 Git changes IPC）、导航五阶段、更新健康确认/拒绝通过；使用临时数据及合成 Provider 事件，没有调用模型。代码缩略图深浅主题和中性成员颜色视觉复核通过。Windows 原生及安装包验证另记，不以本机测试代替。
+
+详情见 [聊天标签](CHAT-EDITOR-TABS.md)、[位置标记](AGENT-EDIT-POSITIONS.md)、[会话恢复](SESSION-RESTORE.md)、[Git 审阅](GIT-REVIEW-CONTROLS.md)。提示抑制重置、扩展迁移、完整原版 UI 对照和实体双机验收仍未完成。

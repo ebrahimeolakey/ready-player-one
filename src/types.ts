@@ -30,6 +30,7 @@ export type Lane = {
   handoffNeeded?:{runId:string;reason:ProviderFailure;at:string;lastConfirmedSnapshot:{ref:string;commit:string;at:string}|null};
   activity?:{fileScopes:FileScope[];branch:string|null;planIds:string[];at:string;expires:number};
   changesExpires?:number;
+  editPositions?:{runId:string;sequence:number;expires:number;positions:import("../core/edit-positions.mjs").EditPosition[]};
   steering?:{id:string;text:string;status:string;message?:string;runId?:string;restoredAt?:string}[];
   queue?:{id:string;prompt:string;status:string}[];
   diff?: string;

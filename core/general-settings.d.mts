@@ -1,6 +1,7 @@
 export type GeneralSettingsValue = {
   autoCheckUpdates: boolean;
   restoreLastSession: boolean;
+  openChatsAsEditorTabs: boolean;
   theme: 'dark' | 'light';
   collaboratorColors: boolean;
   layout: 'agent' | 'editor';

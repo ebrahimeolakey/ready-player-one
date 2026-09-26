@@ -7,8 +7,8 @@ import {mkdirSync,readFileSync,writeFileSync,renameSync,readdirSync} from 'node:
 import {join} from 'node:path';
 /** Durable, idempotent event delivery between local provider processes and a reconnecting Hub. */
 export class RunCoordinator {
- constructor({runtime,client,dir,root,options=()=>({}),onChange=()=>{},onFinish=()=>{},steeringImages=()=>[] }) {
-  Object.assign(this,{runtime,client,dir,root,options,onChange,onFinish,steeringImages});
+ constructor({runtime,client,dir,root,options=()=>({}),onChange=()=>{},onFinish=()=>{},steeringImages=()=>[],onProviderEvent=()=>{},onProviderFinish=()=>{} }) {
+  Object.assign(this,{runtime,client,dir,root,options,onChange,onFinish,steeringImages,onProviderEvent,onProviderFinish});
   this.records=new Map();this.claimed=new Set();this.prepared=new Map();this.flushing=new Set();this.decisions=new Set();this.deciding=new Set();this.steering=new Set();this.epoch=0;this.paused=false;
   mkdirSync(dir,{recursive:true,mode:0o700});
   for(const name of readdirSync(dir).filter(v=>/^[a-f0-9-]+\.json$/.test(v))) {
@@ -111,8 +111,10 @@ export class RunCoordinator {
    if(latest?.stopRequested||latest?.fencedRunId===r.runId)throw Error('执行已撤销');
    r.phase='starting';r.dispatchAt=new Date().toISOString();this.save(r);
    this.enqueue(r,'run.configuration',{phase:'requested',...publicConfiguration(options)});
-   await this.runtime.start({runId:r.runId,provider:approval.provider,cwd:this.root(approval),prompt,mode:approval.mode,sessionId:lane.providerSessionId,...options,
+   const runRoot=this.root(approval),positionContext={workspaceId:r.workspaceId,sessionId:r.sessionId,laneId:r.laneId,root:runRoot,connection:c};
+   await this.runtime.start({runId:r.runId,provider:approval.provider,cwd:runRoot,prompt,mode:approval.mode,sessionId:lane.providerSessionId,...options,
     onEvent:e=>{
+     if(c===this.client()&&epoch===this.epoch){try{void Promise.resolve(this.onProviderEvent(e,positionContext)).catch(()=>{});}catch{}}
      this.observe(r,e);
      if(e.type==='configuration'&&!r.ended){
       let configuration;try{configuration=publicConfiguration(e);}catch{return;}
@@ -130,7 +132,7 @@ export class RunCoordinator {
      if(e.type==='error')this.enqueue(r,'run.entry',{eventId:randomUUID(),role:'system',text:e.text||'执行错误'});
      if(e.type==='approval')this.enqueue(r,'tool.request',{providerRequestId:e.approvalId,action:e.request.tool||e.request.kind||'工具操作',input:e.request});
     },
-    onEnd:result=>{r.ended=true;if(result.status!=='done')this.reportOutcome?.(r,result.message||'执行中断');this.enqueue(r,'run.finish',{status:result.status,message:result.message||'执行结束',...(result.failure?{failure:result.failure}:{})});this.onFinish({...result,sessionId:r.sessionId});},
+    onEnd:result=>{if(c===this.client()&&epoch===this.epoch){try{void Promise.resolve(this.onProviderFinish(r.runId,positionContext)).catch(()=>{});}catch{}}r.ended=true;if(result.status!=='done')this.reportOutcome?.(r,result.message||'执行中断');this.enqueue(r,'run.finish',{status:result.status,message:result.message||'执行结束',...(result.failure?{failure:result.failure}:{})});this.onFinish({...result,sessionId:r.sessionId});},
    });
   } catch(e) {
    if(r?.phase==='prepared'){

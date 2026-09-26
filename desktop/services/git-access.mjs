@@ -1,4 +1,4 @@
-const read = {status:[],branches:[],diff:['path','staged']};
+const read = {status:[],branches:[],changes:[],diff:['path','staged']};
 const write = {stage:['paths'],unstage:['paths'],commit:['message'],fetch:['remote'],pull:['remote','branch'],push:['remote'],createBranch:['name'],switchBranch:['name']};
 const id=value=>typeof value==='string'&&value.length>0&&value.length<=512;
 /** Authorize the IPC context before resolving a local path or invoking Git. */

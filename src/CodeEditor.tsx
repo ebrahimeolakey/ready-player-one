@@ -1,7 +1,8 @@
-import {useAppearance, type AppearanceValue} from "./Appearance";
+import {useAgentEditPositions,type AgentDocument} from "./AgentEditPositions";
+import {useAppearance, avatarColors, type AppearanceValue} from "./Appearance";
 import {forwardRef,useMemo} from 'react';
 import CodeMirror,{type ReactCodeMirrorProps,type ReactCodeMirrorRef} from '@uiw/react-codemirror';
-import {EditorState,RangeSetBuilder,type Extension} from '@codemirror/state';
+import {EditorState,RangeSetBuilder,Facet,type Extension} from '@codemirror/state';
 import {Decoration,EditorView,ViewPlugin,highlightWhitespace,type DecorationSet,type ViewUpdate} from '@codemirror/view';
 import {indentUnit} from '@codemirror/language';
 import {useEditorSettings} from './EditorSettings';
@@ -20,16 +21,18 @@ function guides(width:number,theme:AppearanceValue["theme"]) {
  };
  return ViewPlugin.fromClass(class{decorations:DecorationSet;constructor(view:EditorView){this.decorations=decorate(view);}update(update:ViewUpdate){if(update.docChanged||update.viewportChanged)this.decorations=decorate(update.view);}},{decorations:v=>v.decorations});
 }
+type MinimapPosition={startLine:number;endLine:number;label:string;color:string;pending:boolean};
+export const minimapPositions=Facet.define<readonly MinimapPosition[],readonly MinimapPosition[]>({combine:values=>values.at(-1)||[]});
 function minimap(theme:AppearanceValue["theme"]) {
  return ViewPlugin.fromClass(class {
-  canvas:HTMLCanvasElement;observer:ResizeObserver;frame=0;destroyed=false;view:EditorView;
+  canvas:HTMLCanvasElement;observer:ResizeObserver;frame=0;destroyed=false;markersValid=true;view:EditorView;
   constructor(view:EditorView){
    this.view=view;this.canvas=document.createElement('canvas');this.canvas.className='rpo-code-minimap';this.canvas.tabIndex=0;this.canvas.setAttribute('role','button');this.canvas.setAttribute('aria-label','代码缩略图，点击或上下键定位');view.dom.appendChild(this.canvas);
    this.canvas.addEventListener('pointerdown',this.pointerDown);this.canvas.addEventListener('pointermove',this.pointerMove);this.canvas.addEventListener('keydown',this.keyDown);view.scrollDOM.addEventListener('scroll',this.schedule);
    this.observer=new ResizeObserver(this.schedule);this.observer.observe(view.dom);this.schedule();
   }
   schedule=()=>{if(!this.frame&&!this.destroyed)this.frame=requestAnimationFrame(()=>{this.frame=0;this.draw();});};
-  update(update:ViewUpdate){if(update.docChanged||update.viewportChanged||update.geometryChanged)this.schedule();}
+  update(update:ViewUpdate){if(update.docChanged)this.markersValid=false;else if(update.startState.facet(minimapPositions)!==update.state.facet(minimapPositions))this.markersValid=true;if(update.docChanged||update.viewportChanged||update.geometryChanged||update.startState.facet(minimapPositions)!==update.state.facet(minimapPositions))this.schedule();}
   jump=(fraction:number)=>{const line=Math.max(1,Math.min(this.view.state.doc.lines,Math.round(fraction*this.view.state.doc.lines)));this.view.dispatch({effects:EditorView.scrollIntoView(this.view.state.doc.line(line).from,{y:'center'})});};
   pointerDown=(event:PointerEvent)=>{event.preventDefault();this.canvas.setPointerCapture(event.pointerId);this.jump((event.clientY-this.canvas.getBoundingClientRect().top)/this.canvas.clientHeight);};
   pointerMove=(event:PointerEvent)=>{if(event.buttons===1)this.jump((event.clientY-this.canvas.getBoundingClientRect().top)/this.canvas.clientHeight);};
@@ -44,6 +47,9 @@ function minimap(theme:AppearanceValue["theme"]) {
     for(const char of line){const step=char==='\t'?this.view.state.tabSize-column%this.view.state.tabSize:1;if(/\s/.test(char)){if(start>=0){context.fillRect(3+start*.35,y,Math.max(1,(column-start)*.35),1);start=-1;}}else if(start<0)start=column;column+=step;}
     if(start>=0)context.fillRect(3+start*.35,y,Math.max(1,(column-start)*.35),1);
    }
+   const markers=(this.markersValid?this.view.state.facet(minimapPositions):[]).filter(p=>p.startLine<=doc.lines&&p.endLine<=doc.lines);
+   this.canvas.title=markers.map(p=>p.label).join('\n');this.canvas.dataset.agentMarkers=String(markers.length);
+   for(const marker of markers){const y=(marker.startLine-1)/doc.lines*height,h=Math.max(3,(marker.endLine-marker.startLine+1)/doc.lines*height);context.fillStyle=marker.color;context.globalAlpha=marker.pending?0.55:1;context.fillRect(72,y,5,h);context.globalAlpha=1;}
    const visible=this.view.visibleRanges;if(visible.length){const from=doc.lineAt(visible[0].from).number-1,to=doc.lineAt(visible.at(-1)!.to).number;const y=from/doc.lines*height,h=Math.max(3,(to-from)/doc.lines*height);context.fillStyle=theme==='light'?'#387da32b':'#9ee3b52b';context.fillRect(0,y,width,h);context.strokeStyle=theme==='light'?'#30678870':'#99cdaa70';context.strokeRect(.5,y+.5,width-1,h);}
   }
   destroy(){this.destroyed=true;cancelAnimationFrame(this.frame);this.observer.disconnect();this.view.scrollDOM.removeEventListener('scroll',this.schedule);this.canvas.removeEventListener('pointerdown',this.pointerDown);this.canvas.removeEventListener('pointermove',this.pointerMove);this.canvas.removeEventListener('keydown',this.keyDown);this.canvas.remove();}
@@ -58,8 +64,10 @@ export function editorSettingsExtensions(settings:EditorSettingsValue,theme:Appe
  if(settings.minimap)extensions.push(minimap(theme));
  return extensions;
 }
-export const CodeEditor=forwardRef<ReactCodeMirrorRef,ReactCodeMirrorProps>(function CodeEditor(props,ref){
- const {theme}=useAppearance();
+export const CodeEditor=forwardRef<ReactCodeMirrorRef,ReactCodeMirrorProps & {agentDocument?:AgentDocument}>(function CodeEditor({agentDocument,...props},ref){
+ const appearance=useAppearance(),{theme}=appearance;
  const settings=useEditorSettings(),key=JSON.stringify(settings),extensions=useMemo(()=>editorSettingsExtensions(settings,theme),[key,theme]);
- return <CodeMirror {...props} theme={theme} className={["rpo-code-editor",props.className].filter(Boolean).join(" ")} ref={ref} extensions={[...(props.extensions||[]),...extensions]}/>;
+ const marks=useAgentEditPositions(agentDocument,props.value||'',settings.minimap);
+ const positionExtension=minimapPositions.of(marks.map(p=>({startLine:p.startLine,endLine:p.endLine,label:`${p.owner} · ${p.phase==='pending'?'待修改':'已修改'} · ${p.startLine}–${p.endLine} 行`,color:avatarColors(p.owner,appearance).color,pending:p.phase==='pending'})));
+ return <CodeMirror {...props} theme={theme} className={["rpo-code-editor",props.className].filter(Boolean).join(" ")} ref={ref} extensions={[...(props.extensions||[]),...extensions,positionExtension]}/>;
 });

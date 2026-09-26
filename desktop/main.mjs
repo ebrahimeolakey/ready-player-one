@@ -1,3 +1,4 @@
+import { EditPositionPublisher } from "./services/edit-position-publisher.mjs";
 import { SessionNavigation } from "./services/session-navigation.mjs";
 import { DesktopNotifications } from "./services/desktop-notifications.mjs";
 import { VSCodeImportController } from "./services/vscode-import-controller.mjs";
@@ -425,11 +426,14 @@ const referenceIssues = new Map();
 const referenceRefresh = new ReferenceRefreshService({client:()=>client,onIssue:({workspaceId,sessionId,message})=>{
   const key=sessionId||workspaceId;if(message)referenceIssues.set(key,{workspaceId,sessionId,message});else referenceIssues.delete(key);emit();
 }});
+const editPositionPublisher = new EditPositionPublisher({client:()=>client,isCurrent:context=>canonicalRoot(localRoot(context))===canonicalRoot(context.root)});
 const coordinator = new RunCoordinator({
+  onProviderEvent:(event,context)=>editPositionPublisher.observe(event,context),
+  onProviderFinish:(runId,context)=>editPositionPublisher.finish(runId,context),
   runtime,
   client: () => client,
   dir: join(dir, "outbox"),
-  root: localRoot,
+  root: (a)=>canonicalRoot(localRoot(a)),
   options: async (a) => {
     const env = {
       ELECTRON_RUN_AS_NODE: "1",
@@ -547,6 +551,7 @@ const connectionSecret = (url) =>
         .digest("hex")
     : config.secret;
 async function connect(url, token) {
+  editPositionPublisher.reset();
   desktopNotifications.resetConnection();
   providerCLIService.closeAll();
   coordinationBridge.revokeAll();
@@ -890,6 +895,7 @@ async function invoke(method, a) {
     const c=client;
     await authorizeGit({method,args:a,client:c,online:()=>online,currentClient:()=>client});
     const root=localRoot(a);
+    if(method==='git.changes')return local.changes(root);
     if(method==='git.diff')return withReferenceContext(a,r=>diffPreview(r,a,gitService));
     const result=await gitService[method.slice(4)](root,a);
     if(c===client&&['git.pull','git.commit','git.switchBranch','git.createBranch'].includes(method))await referenceRefresh.refresh({root,workspaceId:a.workspaceId,sessionId:a.sessionId,reason:'Git 更新',expectedClient:c,isCurrent:()=>canonicalRoot(localRoot(a))===canonicalRoot(root)});
@@ -1344,7 +1350,6 @@ async function invoke(method, a) {
     await referenceRefresh.refresh({root,workspaceId:a.workspaceId,sessionId:a.sessionId,reason:'保存文件',paths:[a.path],expectedClient:c,isCurrent:()=>canonicalRoot(localRoot(a))===root});
     return {...result,content:prepared.content,notices:prepared.notices};
   }
-  if (method === "git.changes") return local.changes(localRoot(a));
   if (method === "diff.publish") {
     const change = await local.changes(localRoot(a));
     if (change.error) throw Error(change.error);
@@ -1726,6 +1731,7 @@ app.on("before-quit", async (event) => {
   tunnel.stop();
   for (const p of terminals) stopTerminal(p);
   try {
+    editPositionPublisher.dispose();
     await Promise.all([coordinationBridge.close(), coordinator.close(), debuggerService.closeAll()]);
     client?.close();
     await hub?.close();

@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { ProviderImage } from "./ProviderControls";
 type Snapshot = {
   text: string;
@@ -14,6 +14,7 @@ type Model = {
   snapshot: Snapshot;
   listeners: Set<() => void>;
   loaded: boolean;
+  loading?: Promise<any>;
   version: number;
   savedVersion: number;
   voiceBase: string;
@@ -49,10 +50,14 @@ function publish(model: Model, patch: Partial<Snapshot>) {
   model.snapshot = { ...model.snapshot, ...patch };
   model.listeners.forEach((fn) => fn());
 }
-export function useComposer(laneId: string) {
-  const model = modelFor(laneId);
+const disabledModel:Model={snapshot:{text:'',images:[],revision:0,ready:false,error:'',blocked:false,busy:false,conflicts:[]},listeners:new Set(),loaded:false,version:0,savedVersion:0,voiceBase:'',queue:Promise.resolve()};
+export function useComposer(laneId: string, enabled = true) {
+  const active = useRef({laneId,enabled});
+  if(active.current.laneId!==laneId || active.current.enabled!==enabled)active.current={laneId,enabled};
+  const model = enabled ? modelFor(laneId) : disabledModel;
   const state = useSyncExternalStore(
     (callback) => {
+      if(!enabled)return ()=>{};
       model.listeners.add(callback);
       return () => {
         model.listeners.delete(callback);
@@ -61,6 +66,7 @@ export function useComposer(laneId: string) {
     () => model.snapshot,
   );
   function applySaved(value: any) {
+    if(!enabled)return;
     model.version++;
     model.savedVersion = model.version;
     publish(model, {
@@ -73,15 +79,23 @@ export function useComposer(laneId: string) {
       conflicts: (value.conflicts || []).filter((draft: any) => !draft.resolvedAt),
     });
   }
-  async function load() {
+  async function load(force = false) {
+    if(!enabled || !active.current.enabled || active.current.laneId!==laneId)return;
+    const binding=active.current;
+    if(model.loaded&&!force)return;
+    const pending=model.loading||(model.loading=window.rpo.invoke("composer.read", { laneId }));
     try {
-      const saved = await window.rpo.invoke("composer.read", { laneId });
+      const saved = await pending;
+      if(active.current!==binding || (model.loaded&&!force))return;
+      model.loaded=true;
       applySaved(saved);
     } catch (e) {
+      if(active.current!==binding)return;
       publish(model, { error: e instanceof Error ? e.message : String(e) });
-    }
+    } finally { if(model.loading===pending)delete model.loading; }
   }
   function persist() {
+    if(!enabled)return Promise.resolve();
     const task = model.queue.then(async () => {
       if (
         !model.snapshot.ready ||
@@ -119,20 +133,21 @@ export function useComposer(laneId: string) {
     return task;
   }
   useEffect(() => {
-    if (!model.loaded) {
-      model.loaded = true;
-      void load();
-    }
+    if(!enabled)return;
+    const binding=active.current;
+    if (!model.loaded) void load();
     return () => {
+      if(active.current===binding)active.current={laneId,enabled};
       void persist().catch(() => {});
     };
-  }, [laneId]);
+  }, [laneId,enabled]);
   useEffect(() => {
-    if (!state.ready || state.blocked) return;
+    if (!enabled || !state.ready || state.blocked) return;
     const timer = setTimeout(() => void persist().catch(() => {}), 300);
     return () => clearTimeout(timer);
-  }, [state.text, state.images, state.ready, state.blocked]);
+  }, [state.text, state.images, state.ready, state.blocked,enabled,laneId]);
   function setText(value: React.SetStateAction<string>) {
+    if(!enabled)return;
     const text =
       typeof value === "function" ? value(model.snapshot.text) : value;
     if (text === model.snapshot.text) return;
@@ -140,6 +155,7 @@ export function useComposer(laneId: string) {
     publish(model, { text });
   }
   function setImages(images: ProviderImage[]) {
+    if(!enabled)return;
     model.version++;
     publish(model, { images });
   }
@@ -149,11 +165,11 @@ export function useComposer(laneId: string) {
     setImages,
     persist,
     applySaved,
-    reload: load,
+    reload: ()=>load(true),
     current: () => model.snapshot,
-    setBusy: (busy: boolean) => publish(model, { busy }),
+    setBusy: (busy: boolean) => {if(enabled)publish(model, { busy });},
     captureVoiceBase: () => {
-      model.voiceBase = model.snapshot.text;
+      if(enabled)model.voiceBase = model.snapshot.text;
     },
     voiceBase: () => model.voiceBase,
   };

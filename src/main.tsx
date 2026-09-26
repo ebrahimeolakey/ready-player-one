@@ -1,3 +1,4 @@
+import { AgentEditPositionsContext } from "./AgentEditPositions";
 import { VSCodeImport } from "./VSCodeImport";
 import { AppearanceProvider } from "./Appearance";
 import { GeneralSettings, GeneralSettingsContext } from "./GeneralSettings";
@@ -247,6 +248,7 @@ function App() {
     <p>{updateHealth?.message || "正在检查本机数据和界面，请稍候。"}</p>
   </div>;
   return (
+    <AgentEditPositionsContext.Provider value={state}>
     <AppearanceProvider value={state.local.generalSettings}>
     <GeneralSettingsContext.Provider value={state.local.generalSettings}>
     <EditorSettingsContext.Provider value={resolveEditorSettings(state.local.editorSettings)}>
@@ -1221,6 +1223,7 @@ function App() {
     </EditorSettingsContext.Provider>
     </GeneralSettingsContext.Provider>
     </AppearanceProvider>
+    </AgentEditPositionsContext.Provider>
   );
 }
 createRoot(document.getElementById("root")!).render(<App />);
