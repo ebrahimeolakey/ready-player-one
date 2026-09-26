@@ -1,0 +1,328 @@
+{
+  "runId": 36245576230,
+  "url": "https://github.com/ebrahimeolakey/ready-player-one/actions/runs/36245576230",
+  "headSha": "a5dbe28ecdc14c6df0e9f89694f5bd87a0164423",
+  "version": "0.4.8-beta.1",
+  "platform": "windows-2022 x64",
+  "platformTests": {
+    "passed": 28,
+    "failed": 0,
+    "skipped": 0
+  },
+  "artifactIds": {
+    "windows-test-packages": 10907571480,
+    "windows-native-evidence": 10907267511
+  },
+  "sourceAudit": {
+    "headSha": "a5dbe28ecdc14c6df0e9f89694f5bd87a0164423",
+    "version": "0.4.8-beta.1",
+    "license": "Apache-2.0",
+    "fileCount": 89,
+    "exactByteMatches": 2,
+    "normalizedCRLFFiles": [
+      "core/access-scope.mjs",
+      "core/accounts.mjs",
+      "core/acp-config.mjs",
+      "core/activity-view.d.mts",
+      "core/activity-view.mjs",
+      "core/client.mjs",
+      "core/comment-anchors.d.mts",
+      "core/comment-anchors.mjs",
+      "core/coordination-handoffs.mjs",
+      "core/coordination-paths.mjs",
+      "core/coordination-runs.mjs",
+      "core/coordination.mjs",
+      "core/edit-positions.d.mts",
+      "core/edit-positions.mjs",
+      "core/editor-settings.d.mts",
+      "core/editor-settings.mjs",
+      "core/general-settings.d.mts",
+      "core/general-settings.mjs",
+      "core/github-oauth-service.mjs",
+      "core/hub.mjs",
+      "core/installers.mjs",
+      "core/keybindings.d.mts",
+      "core/keybindings.mjs",
+      "core/local.mjs",
+      "core/mcp-coordination.mjs",
+      "core/outcomes.mjs",
+      "core/overlap.mjs",
+      "core/platform.mjs",
+      "core/prompt-limits.d.mts",
+      "core/prompt-limits.mjs",
+      "core/provider-config.mjs",
+      "core/providers/acp.mjs",
+      "core/providers/catalog.mjs",
+      "core/providers/configuration.mjs",
+      "core/providers/failure.mjs",
+      "core/providers/input.mjs",
+      "core/providers/openai-compatible.mjs",
+      "core/providers/runtime.mjs",
+      "core/providers/transport.mjs",
+      "core/providers/usage.mjs",
+      "core/providers/workspace-tools.mjs",
+      "core/run-coordinator.mjs",
+      "core/secure-store.mjs",
+      "core/snapshots.mjs",
+      "core/standalone.mjs",
+      "core/subtasks.mjs",
+      "core/team-identity-client.mjs",
+      "core/team-identity.mjs",
+      "core/tunnel.mjs",
+      "core/workspace-lifecycle.mjs",
+      "desktop/main.mjs",
+      "desktop/preload.cjs",
+      "desktop/services/agent-edit-positions.mjs",
+      "desktop/services/browser.mjs",
+      "desktop/services/build-dictation.mjs",
+      "desktop/services/comment-anchors.mjs",
+      "desktop/services/composer.mjs",
+      "desktop/services/coordination-bridge.mjs",
+      "desktop/services/data-key.mjs",
+      "desktop/services/debugger.mjs",
+      "desktop/services/desktop-notifications.mjs",
+      "desktop/services/dictation-info.plist",
+      "desktop/services/dictation.mjs",
+      "desktop/services/dictation.swift",
+      "desktop/services/drafts.mjs",
+      "desktop/services/edit-position-publisher.mjs",
+      "desktop/services/file-search.mjs",
+      "desktop/services/git-access.mjs",
+      "desktop/services/git.mjs",
+      "desktop/services/github-repository.mjs",
+      "desktop/services/language-worker.mjs",
+      "desktop/services/language.mjs",
+      "desktop/services/provider-cli.mjs",
+      "desktop/services/reference-refresh.mjs",
+      "desktop/services/references.mjs",
+      "desktop/services/session-navigation.mjs",
+      "desktop/services/subtask-agent.mjs",
+      "desktop/services/task-coordination.mjs",
+      "desktop/services/team-identity.mjs",
+      "desktop/services/terminal.mjs",
+      "desktop/services/update-health-client.mjs",
+      "desktop/services/update-health-worker.mjs",
+      "desktop/services/updater.mjs",
+      "desktop/services/vscode-import-controller.mjs",
+      "desktop/services/vscode-import.mjs",
+      "desktop/services/workspace-lifecycle.mjs",
+      "dist/index.html"
+    ],
+    "unexpectedFiles": [],
+    "asarSha256": "461340c6ffa40ad5c12c4e806ea1ae99f49d66a6b913036841d9dcc57d268e93",
+    "passed": true
+  },
+  "sourceCommitFiles": 144,
+  "assets": [
+    {
+      "file": "Ready-Player-One-0.4.8-beta.1-windows-x64-setup.exe",
+      "bytes": 104965700,
+      "sha256": "0beb7e60185c590fff7c63ede178ba7ede35f7e0de3e0fb740057e8c139c320c",
+      "matchesRunner": true
+    },
+    {
+      "file": "Ready-Player-One-0.4.8-beta.1-windows-x64.zip",
+      "bytes": 147998346,
+      "sha256": "b0d54a36c475003f5831eaf10609158d0d8205f3988c44c6d1c182654a74f73c",
+      "matchesRunner": true
+    }
+  ],
+  "zipCRC": "passed",
+  "download": "gh run download official artifact; runner asset SHA256 verified",
+  "additionalRegressions": {
+    "files": [
+      "tests/vscode-import.test.mjs",
+      "tests/vscode-import-controller.test.mjs",
+      "tests/session-navigation.test.mjs",
+      "tests/git-access.test.mjs",
+      "tests/git-review-view.test.mjs",
+      "tests/agent-edit-positions.test.mjs",
+      "tests/edit-positions.test.mjs",
+      "tests/edit-position-publisher.test.mjs",
+      "tests/edit-position-view.test.mjs",
+      "tests/chat-editor-tabs-view.test.mjs",
+      "tests/composer-hook-view.test.mjs"
+    ],
+    "tests": 51,
+    "pass": 51,
+    "fail": 0,
+    "skipped": 0
+  },
+  "checks": [
+    "actual desktop entry, local Hub, encrypted settings and React render",
+    "General preferences: actual main/preload get/save/bootstrap, safeStorage encrypted persistence, invalid-write rollback and live React layout/density/empty-editor CSS",
+    "Electron ABI loads native node-pty, real PowerShell input/output, console TTY, resize, Ctrl-C, exit code and owner process cleanup",
+    "Windows console Node regressions: VS Code import, encrypted navigation, real Hub/Git roles, Agent file-position collection/publishing and real Electron review/editor/chat/composer views; zero failures/skips",
+    "A8 Provider CLI: real Windows ConPTY, verified console node.exe fixture, exact Unicode/space/quote argv and canonical cwd, owner/lane fencing",
+    "A8 Provider CLI: Shift+Tab raw bytes, concurrent/repeated open idempotency and zero history replay",
+    "A8 Provider CLI: actual exit code, no implicit restart, explicit fresh launch and process/PTY cleanup",
+    "Appearance: two actual Electron/main/React processes, dark/light CSS, colored/monochrome avatars, encrypted settings restored after process exit and color palette restored",
+    "Navigation: five actual main/React processes, saved view restored without Agent runs, archived/disabled recovery denied, real loopback reconnect retained and revocation cleared immediately",
+    "Review preference: actual settings form saves floating location, encrypted write-failure rollback, new main process restores select value, explicit defaults reset succeeds"
+  ],
+  "generalPreferences": {
+    "saved": {
+      "autoCheckUpdates": false,
+      "restoreLastSession": true,
+      "openChatsAsEditorTabs": true,
+      "theme": "dark",
+      "collaboratorColors": true,
+      "layout": "editor",
+      "reviewControlLocation": "breadcrumb",
+      "conversationDensity": "compact",
+      "autoHideEmptyEditor": false,
+      "notificationsEnabled": false,
+      "notifyApprovals": true,
+      "notifyHandoffs": true,
+      "notifyUnknownOutcomes": true,
+      "trayIcon": false,
+      "completionSound": false
+    },
+    "encryptedStoreReopened": true,
+    "rejectedWriteUnchanged": true,
+    "editorLayout": {
+      "editor": 421.203125,
+      "dock": 163.796875
+    },
+    "liveLayoutAndDensity": true,
+    "emptyEditorHidden": true,
+    "osNotificationsTriggered": false
+  },
+  "powershellReady": {
+    "initialPromptObserved": true,
+    "sleepStartedObserved": true,
+    "newPromptAfterInterrupt": true,
+    "sleepInterruptedBeforeCompletion": true
+  },
+  "appearance": {
+    "save": {
+      "phase": "save",
+      "platform": "win32",
+      "modelCalls": 0,
+      "settings": {
+        "autoCheckUpdates": false,
+        "restoreLastSession": true,
+        "openChatsAsEditorTabs": true,
+        "theme": "light",
+        "collaboratorColors": false,
+        "layout": "agent",
+        "reviewControlLocation": "breadcrumb",
+        "conversationDensity": "detailed",
+        "autoHideEmptyEditor": true,
+        "notificationsEnabled": false,
+        "notifyApprovals": true,
+        "notifyHandoffs": true,
+        "notifyUnknownOutcomes": true,
+        "trayIcon": false,
+        "completionSound": false
+      },
+      "dark": {
+        "theme": "dark",
+        "scheme": "dark",
+        "avatar": "rgb(52, 79, 119)",
+        "name": "R"
+      },
+      "light": {
+        "theme": "light",
+        "scheme": "light",
+        "avatar": "rgb(223, 235, 251)",
+        "name": "R"
+      },
+      "monochrome": {
+        "theme": "light",
+        "scheme": "light",
+        "avatar": "rgb(226, 229, 233)",
+        "name": "R"
+      },
+      "passed": true
+    },
+    "restart": {
+      "phase": "restart",
+      "platform": "win32",
+      "modelCalls": 0,
+      "settings": {
+        "autoCheckUpdates": false,
+        "restoreLastSession": true,
+        "openChatsAsEditorTabs": true,
+        "theme": "light",
+        "collaboratorColors": false,
+        "layout": "agent",
+        "reviewControlLocation": "breadcrumb",
+        "conversationDensity": "detailed",
+        "autoHideEmptyEditor": true,
+        "notificationsEnabled": false,
+        "notifyApprovals": true,
+        "notifyHandoffs": true,
+        "notifyUnknownOutcomes": true,
+        "trayIcon": false,
+        "completionSound": false
+      },
+      "restored": {
+        "theme": "light",
+        "scheme": "light",
+        "avatar": "rgb(226, 229, 233)",
+        "name": "R"
+      },
+      "restoredColor": {
+        "theme": "light",
+        "scheme": "light",
+        "avatar": "rgb(223, 235, 251)",
+        "name": "R"
+      },
+      "restoredDark": {
+        "theme": "dark",
+        "scheme": "dark",
+        "avatar": "rgb(52, 79, 119)",
+        "name": "R"
+      },
+      "passed": true
+    }
+  },
+  "sessionNavigation": {
+    "phases": [
+      "save",
+      "restore",
+      "disabled-save",
+      "disabled",
+      "reconnect-revoke"
+    ],
+    "providerRuns": 0,
+    "passed": true
+  },
+  "reviewPreference": {
+    "phases": [
+      "save",
+      "restart"
+    ],
+    "reviewControlLocation": "floating",
+    "passed": true
+  },
+  "providerCLI": {
+    "synthetic": true,
+    "modelCalls": 0,
+    "launches": 2,
+    "argv": [
+      "中文 参数",
+      "space name",
+      "double\"quote",
+      "single'quote",
+      "trailing\\",
+      "& echo NOT_EXECUTED",
+      "$(NOT_EXECUTED)"
+    ],
+    "shiftTabHex": "1b5b5a",
+    "exitCode": 9,
+    "cleanup": true
+  },
+  "previousFailure": {
+    "runId": 36245213185,
+    "headSha": "6f932e121881cac8178e538a279b4651bab0601b",
+    "reason": "PowerShell post-Ctrl-C command sent after fixed 200ms; next marker timed out. Initial command/TTY/resize succeeded. Test now waits for actual sleep-start output and a new prompt after Ctrl-C, with no sleep-completed marker. Separate generated TSX Windows path quoting fixed before retry. Runtime unchanged."
+  },
+  "limitations": [
+    "No physical Windows first install or SmartScreen/NSIS wizard interaction",
+    "No real account GUI login or external Provider request",
+    "No real OS notifications/tray/sound or Windows self-update",
+    "No two physical machines over the public internet"
+  ]
+}

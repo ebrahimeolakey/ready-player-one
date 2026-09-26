@@ -1,0 +1,35 @@
+{
+  "version": "0.4.8-beta.1",
+  "sourceCommit": "a5dbe28ecdc14c6df0e9f89694f5bd87a0164423",
+  "runtimeFilesByteMatched": 89,
+  "committedCoreDesktopSrcAndPackageFilesMatched": 143,
+  "macAsarSha256": "f9d90550920b627114cbf7b5034f74e5d04bcada257490f7711607186152616c",
+  "artifacts": [
+    {
+      "name": "Ready-Player-One-0.4.8-beta.1-mac-arm64.zip",
+      "size": 123779946,
+      "sha256": "983f83ae3f6bd21f4bc46d59c70c33c90feb02686fae8ae85e7cb832fb5b8e14"
+    },
+    {
+      "name": "Ready-Player-One-0.4.8-beta.1-mac-x64.zip",
+      "size": 128774394,
+      "sha256": "d0e9b61bb4d78e0099db59d20e3bab9fee8b305b7d8b2fc441a3ef076733879d"
+    }
+  ],
+  "zipCRC": "passed both Mac archives",
+  "macNativeExtraction": "arm64 ZIP extracted via ditto; Chinese app name and executable present",
+  "packagedArm64UI": [
+    "version 0.4.8-beta.1 visible",
+    "chat editor tabs and restore last session controls visible",
+    "save chat editor tabs off and review controls floating via actual UI",
+    "clean exit and new process; both saved settings restored",
+    "isolated app exited cleanly"
+  ],
+  "limitations": [
+    "Intel package not physically executed",
+    "no real model calls",
+    "not an all-screen pixel fidelity audit"
+  ],
+  "buildSourceCommit": "6f932e121881cac8178e538a279b4651bab0601b",
+  "sourceAuditNote": "Only test scripts changed after build; all 143 committed runtime/frontend source files and 89 packaged files matched again at release candidate commit."
+}

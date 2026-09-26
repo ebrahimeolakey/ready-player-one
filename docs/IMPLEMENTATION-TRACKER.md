@@ -130,3 +130,5 @@ Windows 原生 CI 28/28 平台回归及真实偏好/PTY/CLI 通过，见 [平台
 隔离发行源码完整回归 **432/432 通过**，无跳过，TypeScript/Vite 构建通过。真实 main/preload/React 的通用设置保存/重启（包含 Git changes IPC）、导航五阶段、更新健康确认/拒绝通过；使用临时数据及合成 Provider 事件，没有调用模型。代码缩略图深浅主题和中性成员颜色视觉复核通过。Windows 原生及安装包验证另记，不以本机测试代替。
 
 详情见 [聊天标签](CHAT-EDITOR-TABS.md)、[位置标记](AGENT-EDIT-POSITIONS.md)、[会话恢复](SESSION-RESTORE.md)、[Git 审阅](GIT-REVIEW-CONTROLS.md)。提示抑制重置、扩展迁移、完整原版 UI 对照和实体双机验收仍未完成。
+
+Mac arm64 / x64 两包已构建，89 个包内运行文件与隔离源码逐字节一致，143 个 core/desktop/src/package 文件与候选提交一致；ZIP CRC 和 arm64 原生解压通过。Apple Silicon 实际包验证了聊天标签开关与浮动 Git 审阅偏好的保存、退出和新进程恢复。首轮 Windows 的 Ctrl+C 后继测试命令因固定等待导致未进入 PowerShell，后续测试提交改为新提示符握手；不改变产品运行文件。见 [Mac 审计](evidence/mac-package-0.4.8.json)。

@@ -147,17 +147,26 @@ ZIP 与 NSIS 同一 runner 原生构建成功。下载时直连 GitHub / blob �
 本机完整回归 401/401，并非全部 401 项都在 Windows 重跑。仍未覆盖实体 Windows 首次安装、SmartScreen / 安装向导、真实账号 GUI 登录、实际 Windows 通知 / 托盘 / 声音、Windows 自更新或两台实体机器的公网协作。
 
 
-## 下一批 Windows 验证准备（会话恢复与 Git 审阅）
 
-这一增量尚未运行 Windows CI，也没有进入 0.4.7 安装包。既有 workflow 和 PowerShell 提示符就绪判断保持不变；待功能集成与版本冻结后，由原 `windows-native.yml` 在准确提交运行。
+## 0.4.8-beta.1 原生验证
 
-`scripts/windows-native-smoke.mjs` 的额外测试清单现在包含 VS Code import 两套测试，以及 `session-navigation.test.mjs`、`git-access.test.mjs`、`git-review-view.test.mjs`。本机准备阶段 **49/49 通过、0 跳过**，不作为 Windows 结果。Git 权限测试使用真实临时 Git 仓库和真实 loopback Hub，验证 Viewer / Commenter 不写索引、Editor 可暂存 / 取消暂存、降权 / 撤销 / 跨会话 / 上下文注入拒绝；审阅测试在真实 Electron 中验证按钮位置、评论草稿保留、过期 diff fencing 和只读控件。
+[成功运行](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/36245576230)，精确提交 `a5dbe28ecdc14c6df0e9f89694f5bd87a0164423`。
 
-Windows 入口继续顺序启动现有跨平台 Electron probe 分支，复用 macOS 同一组合成数据与断言：
+Windows 2022 x64 原平台回归 **28/28**、额外回归 **51/51**，均无失败或跳过。额外清单涵盖 VS Code import、加密会话导航、真实 loopback Hub / Git 角色门、Agent 修改位置采集与发布、真实 Electron 的审阅 / CodeMirror / 聊天编辑器标签 / 共享草稿视图。路径采集包含大小写别名和符号链接 / junction 边界。
 
-- `session-navigation-desktop-smoke.mjs`：`save`、`restore`、`disabled-save`、`disabled`、`reconnect-revoke` 五进程共用独立临时数据目录，验证加密恢复、仅恢复已打开视图、不创建 Agent、归档 / 关闭恢复设置阻止恢复，以及真实 loopback 断线重连保留 / 撤权立即清除视图。
-- `general-settings-desktop-smoke.mjs`：`save` / `restart` 两进程共用另一个临时目录，通过实际设置表单保存 `reviewControlLocation=floating`，检查加密保存失败回滚、下一进程读取与控件恢复、恢复默认。
+实际 Electron 40.10.6 / Node 24.15.0 主入口、preload / React、PowerShell PTY、Provider CLI ConPTY 全部通过。另起独立进程验证会话恢复五阶段（保存、重启恢复、禁用保存、禁用重启、真实 loopback 重连与撤权），审阅位置两阶段（表单保存浮动控件、加密写入失败回滚、进程重启恢复），并保留外观两阶段主题 / 头像配色恢复。没有真实 Provider 调用或外部账号。
 
-新增阶段日志分别写入 `ci-evidence/windows-navigation-*.log` 和 `windows-review-preference-*.log`；设置截图为 `windows-review-preferences.png`。主 JSON 增加 `sessionNavigation` / `reviewPreference` 及完整额外测试清单、TAP 计数。没有真实 Provider 请求或外部协作账号。整套入口上限调整至 360 秒以容纳新增七次实际主进程启动，各阶段既有断言和单阶段时限不变。
+[首轮失败](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/36245213185) 发生在 PowerShell Ctrl-C 后的下一条命令：首条命令、TTY 和 resize 已成功，但固定等待 200ms 后输入未产生预期输出。烟测改为观察真实 sleep-start 输出、发送 Ctrl-C 后等待新的提示符，并确认 sleep-completed 未出现，再输入下一条命令；没有重发命令或削弱断言。同时修复视图测试生成 TSX 时的 Windows 路径转义。两项均为测试代码改动，产品运行时代码和 Mac 包未改；最终完整 CI 成功，不将其描述为产品 PTY 输入问题已修复。
 
-本批额外清单还加入 `agent-edit-positions.test.mjs`、`edit-positions.test.mjs`、`edit-position-publisher.test.mjs`、`edit-position-view.test.mjs`、`chat-editor-tabs-view.test.mjs` 与 `composer-hook-view.test.mjs`，覆盖落盘内容 / hash / 行范围、真实 coordinator → loopback Hub 元数据链路、CodeMirror 标记、聊天移入编辑器标签、同 lane 草稿共享和只读隔离。主进程向采集器传入 `canonicalRoot(localRoot(...))`，落盘夹具使用 `realpath(mkdtemp(...))`，避免 macOS 临时目录别名与 Windows 规范路径不一致。本轮只读审查与本机 49 项检查不代替待执行的 Windows CI。
+ZIP / NSIS 同一 runner 构建成功，经直连 `gh run download` 下载。两包 SHA256 与 runner 一致，ZIP 全部 CRC 通过。包内 **89 个 core/desktop/dist 文件**清单与隔离发行目录一致：87 个仅 CRLF/LF 不同，两个编译 JS/CSS 文件逐字节相同；隔离目录的 144 个 core/desktop/src/package 文件与精确提交逐字节一致。manifest 为 `0.4.8-beta.1` / Apache-2.0；ASAR SHA256 `461340c6ffa40ad5c12c4e806ea1ae99f49d66a6b913036841d9dcc57d268e93`。
+
+| 文件 | 字节数 | SHA256 |
+| --- | ---: | --- |
+| `Ready-Player-One-0.4.8-beta.1-windows-x64-setup.exe` | 104965700 | `0beb7e60185c590fff7c63ede178ba7ede35f7e0de3e0fb740057e8c139c320c` |
+| `Ready-Player-One-0.4.8-beta.1-windows-x64.zip` | 147998346 | `b0d54a36c475003f5831eaf10609158d0d8205f3988c44c6d1c182654a74f73c` |
+
+[结构化审计](evidence/windows-native-0.4.8.json)；[原生运行证据](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/36245576230/artifacts/10907267511)；[原生构建包](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/36245576230/artifacts/10907571480)。artifact 有保留期，最终下载请使用 Releases。
+
+![0.4.8 Windows 原生启动](evidence/windows-native-0.4.8.png)
+
+[审阅偏好实际设置截图](evidence/windows-native-0.4.8-review.png)。尚未覆盖实体 Windows 首次安装、SmartScreen / NSIS 向导交互、真实账号 GUI 登录、实际通知 / 托盘 / 声音、Windows 自更新以及两台实体机器的公网协作。

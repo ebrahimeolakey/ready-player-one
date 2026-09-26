@@ -37,3 +37,5 @@
 - `scripts/general-settings-desktop-smoke.mjs`：真实 main/preload/React，关闭此开关保存后重启保持，恢复默认后开启；只用临时加密数据与失败的 Provider 账户探测 stub。
 
 Mac 实际组件和桌面持久化验收；Windows/Linux 的标签视觉交互仍待对应平台验收。随 0.4.8 源码批次集成，安装包发布状态以 README 为准。
+
+视觉补验：真实 Electron 合成 Studio 在 1400 / 1080 宽度、深浅主题、三个聊天与文件共存时，目录选择可点击、标签和输入可见，他人聊天没有发送框。700 宽度压力场景存在工具栏换行和目录截断，但目录仍可点击；此夹具只覆盖 Studio 区域，不代表带侧栏的完整窗口最小尺寸验收。发现既有 assistant-only 转录仍显示“尚无消息”的空态提示，列为后续修正；没有将此标为原版一致性证据。见 [布局数据](evidence/chat-tabs-0.4.8.json)。

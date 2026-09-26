@@ -1,0 +1,110 @@
+[
+  {
+    "name": "dark-colors",
+    "theme": "dark",
+    "colors": true,
+    "markerCount": "2",
+    "title": "Alex · 待修改 · 10–15 行\nSam · 已修改 · 55–60 行",
+    "hash": "e82b6a09f18910ab3c82cdb269de7f7c6eaae4c195a1cf32894782d81713b6cb",
+    "unchanged": true,
+    "width": 800,
+    "documentWidth": 800,
+    "minimap": {
+      "left": 705,
+      "right": 783,
+      "top": 17,
+      "bottom": 537
+    },
+    "scrollerPaddingRight": "84px",
+    "ownerColors": [
+      "#f8f0c6",
+      "#dfebff"
+    ],
+    "markerPixels": [
+      [
+        225,
+        236,
+        194,
+        159
+      ],
+      [
+        223,
+        235,
+        255,
+        255
+      ]
+    ]
+  },
+  {
+    "name": "light-colors",
+    "theme": "light",
+    "colors": true,
+    "markerCount": "2",
+    "title": "Alex · 待修改 · 10–15 行\nSam · 已修改 · 55–60 行",
+    "hash": "e82b6a09f18910ab3c82cdb269de7f7c6eaae4c195a1cf32894782d81713b6cb",
+    "unchanged": true,
+    "width": 800,
+    "documentWidth": 800,
+    "minimap": {
+      "left": 705,
+      "right": 783,
+      "top": 17,
+      "bottom": 537
+    },
+    "scrollerPaddingRight": "84px",
+    "ownerColors": [
+      "#59551c",
+      "#284f80"
+    ],
+    "markerPixels": [
+      [
+        79,
+        96,
+        63,
+        159
+      ],
+      [
+        40,
+        79,
+        128,
+        255
+      ]
+    ]
+  },
+  {
+    "name": "light-monochrome",
+    "theme": "light",
+    "colors": false,
+    "markerCount": "2",
+    "title": "Alex · 待修改 · 10–15 行\nSam · 已修改 · 55–60 行",
+    "hash": "e82b6a09f18910ab3c82cdb269de7f7c6eaae4c195a1cf32894782d81713b6cb",
+    "unchanged": true,
+    "width": 800,
+    "documentWidth": 800,
+    "minimap": {
+      "left": 705,
+      "right": 783,
+      "top": 17,
+      "bottom": 537
+    },
+    "scrollerPaddingRight": "84px",
+    "ownerColors": [
+      "#414852",
+      "#414852"
+    ],
+    "markerPixels": [
+      [
+        61,
+        87,
+        103,
+        159
+      ],
+      [
+        65,
+        72,
+        82,
+        255
+      ]
+    ]
+  }
+]

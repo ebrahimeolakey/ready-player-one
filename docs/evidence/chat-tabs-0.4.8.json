@@ -1,0 +1,734 @@
+[
+  {
+    "name": "wide-dark-chat",
+    "viewport": {
+      "width": 1400,
+      "height": 950
+    },
+    "theme": "dark",
+    "tabs": [
+      {
+        "text": "文件",
+        "selected": "false",
+        "rect": {
+          "x": 268,
+          "y": 0,
+          "width": 71,
+          "height": 33,
+          "right": 339,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "A · Codex",
+        "selected": "true",
+        "rect": {
+          "x": 339,
+          "y": 0,
+          "width": 100.0859375,
+          "height": 33,
+          "right": 439.0859375,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "B · Claude",
+        "selected": "false",
+        "rect": {
+          "x": 466.0859375,
+          "y": 0,
+          "width": 103.796875,
+          "height": 33,
+          "right": 569.8828125,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "C · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 596.8828125,
+          "y": 0,
+          "width": 100.671875,
+          "height": 33,
+          "right": 697.5546875,
+          "bottom": 33
+        }
+      }
+    ],
+    "directory": {
+      "rect": {
+        "x": 594.921875,
+        "y": 360.25,
+        "width": 105,
+        "height": 36.5,
+        "right": 699.921875,
+        "bottom": 396.75
+      },
+      "hit": true,
+      "value": "a"
+    },
+    "chat": {
+      "x": 268,
+      "y": 34,
+      "width": 1132,
+      "height": 327,
+      "right": 1400,
+      "bottom": 361
+    },
+    "composer": {
+      "x": 282,
+      "y": 251,
+      "width": 1104,
+      "height": 98,
+      "right": 1386,
+      "bottom": 349
+    },
+    "editor": {
+      "x": 268,
+      "y": 71,
+      "width": 1132,
+      "height": 290,
+      "right": 1400,
+      "bottom": 361
+    },
+    "mutations": []
+  },
+  {
+    "name": "wide-dark-file",
+    "viewport": {
+      "width": 1400,
+      "height": 950
+    },
+    "theme": "dark",
+    "tabs": [
+      {
+        "text": "文件",
+        "selected": "true",
+        "rect": {
+          "x": 268,
+          "y": 0,
+          "width": 71,
+          "height": 33,
+          "right": 339,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "A · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 339,
+          "y": 0,
+          "width": 100.0859375,
+          "height": 33,
+          "right": 439.0859375,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "B · Claude",
+        "selected": "false",
+        "rect": {
+          "x": 466.0859375,
+          "y": 0,
+          "width": 103.796875,
+          "height": 33,
+          "right": 569.8828125,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "C · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 596.8828125,
+          "y": 0,
+          "width": 100.671875,
+          "height": 33,
+          "right": 697.5546875,
+          "bottom": 33
+        }
+      }
+    ],
+    "directory": {
+      "rect": {
+        "x": 594.921875,
+        "y": 360.25,
+        "width": 105,
+        "height": 36.5,
+        "right": 699.921875,
+        "bottom": 396.75
+      },
+      "hit": true,
+      "value": "a"
+    },
+    "chat": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "right": 0,
+      "bottom": 0
+    },
+    "composer": null,
+    "editor": {
+      "x": 268,
+      "y": 71,
+      "width": 1132,
+      "height": 290,
+      "right": 1400,
+      "bottom": 361
+    },
+    "mutations": []
+  },
+  {
+    "name": "wide-light-chat",
+    "viewport": {
+      "width": 1400,
+      "height": 950
+    },
+    "theme": "light",
+    "tabs": [
+      {
+        "text": "文件",
+        "selected": "false",
+        "rect": {
+          "x": 268,
+          "y": 0,
+          "width": 71,
+          "height": 33,
+          "right": 339,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "A · Codex",
+        "selected": "true",
+        "rect": {
+          "x": 339,
+          "y": 0,
+          "width": 100.0859375,
+          "height": 33,
+          "right": 439.0859375,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "B · Claude",
+        "selected": "false",
+        "rect": {
+          "x": 466.0859375,
+          "y": 0,
+          "width": 103.796875,
+          "height": 33,
+          "right": 569.8828125,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "C · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 596.8828125,
+          "y": 0,
+          "width": 100.671875,
+          "height": 33,
+          "right": 697.5546875,
+          "bottom": 33
+        }
+      }
+    ],
+    "directory": {
+      "rect": {
+        "x": 594.921875,
+        "y": 360.25,
+        "width": 105,
+        "height": 36.5,
+        "right": 699.921875,
+        "bottom": 396.75
+      },
+      "hit": true,
+      "value": "a"
+    },
+    "chat": {
+      "x": 268,
+      "y": 34,
+      "width": 1132,
+      "height": 327,
+      "right": 1400,
+      "bottom": 361
+    },
+    "composer": {
+      "x": 282,
+      "y": 251,
+      "width": 1104,
+      "height": 98,
+      "right": 1386,
+      "bottom": 349
+    },
+    "editor": {
+      "x": 268,
+      "y": 71,
+      "width": 1132,
+      "height": 290,
+      "right": 1400,
+      "bottom": 361
+    },
+    "mutations": []
+  },
+  {
+    "name": "narrow-light-chat",
+    "viewport": {
+      "width": 700,
+      "height": 850
+    },
+    "theme": "light",
+    "tabs": [
+      {
+        "text": "文件",
+        "selected": "false",
+        "rect": {
+          "x": 254,
+          "y": 0,
+          "width": 71,
+          "height": 26,
+          "right": 325,
+          "bottom": 26
+        }
+      },
+      {
+        "text": "A · Codex",
+        "selected": "true",
+        "rect": {
+          "x": 325,
+          "y": 0,
+          "width": 100.0859375,
+          "height": 26,
+          "right": 425.0859375,
+          "bottom": 26
+        }
+      },
+      {
+        "text": "B · Claude",
+        "selected": "false",
+        "rect": {
+          "x": 452.0859375,
+          "y": 0,
+          "width": 103.796875,
+          "height": 26,
+          "right": 555.8828125,
+          "bottom": 26
+        }
+      },
+      {
+        "text": "C · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 582.8828125,
+          "y": 0,
+          "width": 100.671875,
+          "height": 26,
+          "right": 683.5546875,
+          "bottom": 26
+        }
+      }
+    ],
+    "directory": {
+      "rect": {
+        "x": 543.625,
+        "y": 322.25,
+        "width": 77.375,
+        "height": 36.5,
+        "right": 621,
+        "bottom": 358.75
+      },
+      "hit": true,
+      "value": "a"
+    },
+    "chat": {
+      "x": 254,
+      "y": 34,
+      "width": 446,
+      "height": 289,
+      "right": 700,
+      "bottom": 323
+    },
+    "composer": {
+      "x": 268,
+      "y": 213,
+      "width": 418,
+      "height": 98,
+      "right": 686,
+      "bottom": 311
+    },
+    "editor": {
+      "x": 254,
+      "y": 71,
+      "width": 446,
+      "height": 252,
+      "right": 700,
+      "bottom": 323
+    },
+    "mutations": []
+  },
+  {
+    "name": "narrow-light-file",
+    "viewport": {
+      "width": 700,
+      "height": 850
+    },
+    "theme": "light",
+    "tabs": [
+      {
+        "text": "文件",
+        "selected": "true",
+        "rect": {
+          "x": 254,
+          "y": 0,
+          "width": 71,
+          "height": 26,
+          "right": 325,
+          "bottom": 26
+        }
+      },
+      {
+        "text": "A · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 325,
+          "y": 0,
+          "width": 100.0859375,
+          "height": 26,
+          "right": 425.0859375,
+          "bottom": 26
+        }
+      },
+      {
+        "text": "B · Claude",
+        "selected": "false",
+        "rect": {
+          "x": 452.0859375,
+          "y": 0,
+          "width": 103.796875,
+          "height": 26,
+          "right": 555.8828125,
+          "bottom": 26
+        }
+      },
+      {
+        "text": "C · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 582.8828125,
+          "y": 0,
+          "width": 100.671875,
+          "height": 26,
+          "right": 683.5546875,
+          "bottom": 26
+        }
+      }
+    ],
+    "directory": {
+      "rect": {
+        "x": 543.625,
+        "y": 322.25,
+        "width": 77.375,
+        "height": 36.5,
+        "right": 621,
+        "bottom": 358.75
+      },
+      "hit": true,
+      "value": "a"
+    },
+    "chat": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "right": 0,
+      "bottom": 0
+    },
+    "composer": null,
+    "editor": {
+      "x": 254,
+      "y": 71,
+      "width": 446,
+      "height": 252,
+      "right": 700,
+      "bottom": 323
+    },
+    "mutations": []
+  },
+  {
+    "name": "narrow-dark-readonly",
+    "viewport": {
+      "width": 700,
+      "height": 850
+    },
+    "theme": "dark",
+    "tabs": [
+      {
+        "text": "文件",
+        "selected": "false",
+        "rect": {
+          "x": 254,
+          "y": 0,
+          "width": 71,
+          "height": 26,
+          "right": 325,
+          "bottom": 26
+        }
+      },
+      {
+        "text": "A · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 325,
+          "y": 0,
+          "width": 100.0859375,
+          "height": 26,
+          "right": 425.0859375,
+          "bottom": 26
+        }
+      },
+      {
+        "text": "B · Claude",
+        "selected": "false",
+        "rect": {
+          "x": 452.0859375,
+          "y": 0,
+          "width": 103.796875,
+          "height": 26,
+          "right": 555.8828125,
+          "bottom": 26
+        }
+      },
+      {
+        "text": "C · Codex",
+        "selected": "true",
+        "rect": {
+          "x": 582.8828125,
+          "y": 0,
+          "width": 100.671875,
+          "height": 26,
+          "right": 683.5546875,
+          "bottom": 26
+        }
+      }
+    ],
+    "directory": {
+      "rect": {
+        "x": 543.625,
+        "y": 322.25,
+        "width": 77.375,
+        "height": 36.5,
+        "right": 621,
+        "bottom": 358.75
+      },
+      "hit": true,
+      "value": "a"
+    },
+    "chat": {
+      "x": 254,
+      "y": 34,
+      "width": 446,
+      "height": 289,
+      "right": 700,
+      "bottom": 323
+    },
+    "composer": null,
+    "editor": {
+      "x": 254,
+      "y": 71,
+      "width": 446,
+      "height": 252,
+      "right": 700,
+      "bottom": 323
+    },
+    "mutations": []
+  },
+  {
+    "name": "minimum-dark-chat",
+    "viewport": {
+      "width": 1080,
+      "height": 700
+    },
+    "theme": "dark",
+    "tabs": [
+      {
+        "text": "文件",
+        "selected": "false",
+        "rect": {
+          "x": 254,
+          "y": 0,
+          "width": 71,
+          "height": 33,
+          "right": 325,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "A · Codex",
+        "selected": "true",
+        "rect": {
+          "x": 325,
+          "y": 0,
+          "width": 100.0859375,
+          "height": 33,
+          "right": 425.0859375,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "B · Claude",
+        "selected": "false",
+        "rect": {
+          "x": 452.0859375,
+          "y": 0,
+          "width": 103.796875,
+          "height": 33,
+          "right": 555.8828125,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "C · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 582.8828125,
+          "y": 0,
+          "width": 100.671875,
+          "height": 33,
+          "right": 683.5546875,
+          "bottom": 33
+        }
+      }
+    ],
+    "directory": {
+      "rect": {
+        "x": 580.921875,
+        "y": 265.25,
+        "width": 105,
+        "height": 36.5,
+        "right": 685.921875,
+        "bottom": 301.75
+      },
+      "hit": true,
+      "value": "a"
+    },
+    "chat": {
+      "x": 254,
+      "y": 34,
+      "width": 826,
+      "height": 232,
+      "right": 1080,
+      "bottom": 266
+    },
+    "composer": {
+      "x": 268,
+      "y": 156,
+      "width": 798,
+      "height": 98,
+      "right": 1066,
+      "bottom": 254
+    },
+    "editor": {
+      "x": 254,
+      "y": 71,
+      "width": 826,
+      "height": 195,
+      "right": 1080,
+      "bottom": 266
+    },
+    "mutations": []
+  },
+  {
+    "name": "minimum-light-file",
+    "viewport": {
+      "width": 1080,
+      "height": 700
+    },
+    "theme": "light",
+    "tabs": [
+      {
+        "text": "文件",
+        "selected": "true",
+        "rect": {
+          "x": 254,
+          "y": 0,
+          "width": 71,
+          "height": 33,
+          "right": 325,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "A · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 325,
+          "y": 0,
+          "width": 100.0859375,
+          "height": 33,
+          "right": 425.0859375,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "B · Claude",
+        "selected": "false",
+        "rect": {
+          "x": 452.0859375,
+          "y": 0,
+          "width": 103.796875,
+          "height": 33,
+          "right": 555.8828125,
+          "bottom": 33
+        }
+      },
+      {
+        "text": "C · Codex",
+        "selected": "false",
+        "rect": {
+          "x": 582.8828125,
+          "y": 0,
+          "width": 100.671875,
+          "height": 33,
+          "right": 683.5546875,
+          "bottom": 33
+        }
+      }
+    ],
+    "directory": {
+      "rect": {
+        "x": 580.921875,
+        "y": 265.25,
+        "width": 105,
+        "height": 36.5,
+        "right": 685.921875,
+        "bottom": 301.75
+      },
+      "hit": true,
+      "value": "a"
+    },
+    "chat": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "right": 0,
+      "bottom": 0
+    },
+    "composer": null,
+    "editor": {
+      "x": 254,
+      "y": 71,
+      "width": 826,
+      "height": 195,
+      "right": 1080,
+      "bottom": 266
+    },
+    "mutations": []
+  }
+]
