@@ -39,5 +39,37 @@
       "size": 130487179,
       "sha256": "4e3372e19dfe96f09ff4b7beea4073918e1c090100544422b4009362be542793"
     }
-  ]
+  ],
+  "publicRelease": {
+    "id": 397328018,
+    "url": "https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.2",
+    "publishedAt": "2026-09-26T17:34:37Z",
+    "verified": true,
+    "assets": [
+      {
+        "name": "Ready-Player-One-0.5.0-beta.2-mac-arm64.zip",
+        "size": 122726959,
+        "sha256": "f6f041e6bf9bbe3dc2a0248e7c818b00fcd66734febc028b43241c22710a0bfc",
+        "anonymousHead": 200
+      },
+      {
+        "name": "Ready-Player-One-0.5.0-beta.2-mac-x64.zip",
+        "size": 130487179,
+        "sha256": "4e3372e19dfe96f09ff4b7beea4073918e1c090100544422b4009362be542793",
+        "anonymousHead": 200
+      },
+      {
+        "name": "SHA256SUMS-0.5.0-beta.2.txt",
+        "size": 218,
+        "sha256": "bd133af8c8eca2c5982c0cc3f73be79a8c44f17ee1986cb3e93a5e5aff611de2",
+        "anonymousHead": 200
+      },
+      {
+        "name": "updates-0.5.0-beta.2.json",
+        "size": 628,
+        "sha256": "690bb25a3f71e68188774a36abdeec472d6e81fd66ef587d6a950f6fe176badc",
+        "anonymousHead": 200
+      }
+    ]
+  }
 }
