@@ -1,4 +1,5 @@
 import { DesktopNotifications } from "./services/desktop-notifications.mjs";
+import { VSCodeImportController } from "./services/vscode-import-controller.mjs";
 import { resolveGeneralSettings, validateGeneralSettings } from "../core/general-settings.mjs";
 import { createWorkspaceLifecycle } from "./services/workspace-lifecycle.mjs";
 import { resolveEditorSettings, validateEditorSettings, prepareEditorSave } from "../core/editor-settings.mjs";
@@ -134,6 +135,17 @@ let win,
   online = false,
   providerList = [],
   shutting = false;
+const vscodeImport = new VSCodeImportController({
+  platform: process.platform,
+  getConfig: () => config,
+  getScope: () => realpathSync(dir),
+  persist: saveConfig,
+  selectFile: kind => dialog.showOpenDialog(win, {
+    title: kind === "settings" ? "选择 VS Code 设置文件" : "选择 VS Code 快捷键文件",
+    properties: ["openFile"],
+    filters: [{name:"JSON / JSONC",extensions:["json","jsonc"]}],
+  }),
+});
 const syncStates = new Map();
 const syncBusy = new Set();
 let notificationError = null;
@@ -1338,6 +1350,13 @@ async function invoke(method, a) {
     await refreshAccounts();
     return providerList;
   }
+  if (method === "settings.vscode.preview") return vscodeImport.preview(a);
+  if (method === "settings.vscode.apply") {
+    const result = vscodeImport.apply(a);
+    emit();
+    return result;
+  }
+  if (method === "settings.vscode.discard") return vscodeImport.discard(a);
   if (method === "settings.general.get") return resolveGeneralSettings(config.generalSettings);
   if (method === "settings.general.save") {
     const previous = config.generalSettings;
@@ -1690,6 +1709,7 @@ app.on("before-quit", async (event) => {
   if (shutting) return;
   event.preventDefault();
   shutting = true;
+  vscodeImport.dispose();
   desktopNotifications.dispose();
   fileSearchService.closeAll();
   languageService.dispose();

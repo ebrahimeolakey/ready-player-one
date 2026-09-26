@@ -8,7 +8,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {spawn} from 'node:child_process';
 import {DEFAULT_GENERAL_SETTINGS} from '../core/general-settings.mjs';
 const script=fileURLToPath(import.meta.url),root=dirname(dirname(script));
-const expected={...DEFAULT_GENERAL_SETTINGS,layout:'editor',conversationDensity:'compact',autoCheckUpdates:false,
+const expected={...DEFAULT_GENERAL_SETTINGS,theme:'light',collaboratorColors:false,layout:'editor',conversationDensity:'compact',autoCheckUpdates:false,
   autoHideEmptyEditor:false,notificationsEnabled:false,notifyApprovals:false,notifyHandoffs:false,notifyUnknownOutcomes:false};
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check){const deadline=Date.now()+20000;while(!await check()){if(Date.now()>deadline)throw Error('Desktop condition timed out');await sleep(30);}}
@@ -32,17 +32,18 @@ async function probe(){
       // Edit through React controls, then broadcast unchanged saved data. Drafts must survive.
       await win.webContents.executeJavaScript(`(()=>{
         const select=(label,value)=>{const row=[...document.querySelectorAll('.general-settings label')].find(row=>row.textContent.includes(label));const input=row.querySelector('select');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('change',{bubbles:true}));};
-        select('会话布局','editor');select('对话密度','compact');
+        select('主题','light');select('会话布局','editor');select('对话密度','compact');
       })()`);
       await invoke('settings.general.save',{settings:DEFAULT_GENERAL_SETTINGS});
       await sleep(80);
-      assert.deepEqual(await win.webContents.executeJavaScript('[...document.querySelectorAll(".general-settings select")].map(item=>item.value)'),['editor','compact']);
+      assert.deepEqual(await win.webContents.executeJavaScript('[...document.querySelectorAll(".general-settings select")].map(item=>item.value)'),['light','editor','compact']);
       // Turn category switches off before their master so every control is exercised.
-      for(const label of ['等待审批','任务接管','结果待确认','系统通知','隐藏空编辑器','启动时检查更新']){
+      for(const label of ['协作者颜色','等待审批','任务接管','结果待确认','系统通知','隐藏空编辑器','启动时检查更新']){
         await win.webContents.executeJavaScript(`([...document.querySelectorAll('.general-settings label')].find(row=>row.textContent===${JSON.stringify(label)})).querySelector('input').click()`);
       }
       await win.webContents.executeJavaScript('document.querySelector(".general-settings form").requestSubmit()');
       await until(async()=>JSON.stringify(await invoke('settings.general.get'))===JSON.stringify(expected));
+      await until(()=>win.webContents.executeJavaScript("document.documentElement.dataset.theme==='light'"));
       const encryptedBefore=await readFile(join(dir,'client.json.enc'));
       await assert.rejects(invoke('settings.general.save',{settings:{trayIcon:'true'}}),/通用设置值无效/);
       assert.deepEqual(await readFile(join(dir,'client.json.enc')),encryptedBefore,'invalid input must not write settings');
@@ -55,6 +56,15 @@ async function probe(){
     }else{
       assert.deepEqual(await invoke('settings.general.get'),expected,'encrypted settings must survive real process restart');
       assert.deepEqual((await invoke('bootstrap')).local.generalSettings,expected);
+      await until(()=>win.webContents.executeJavaScript("document.documentElement.dataset.theme==='light'"));
+      assert.equal(await win.webContents.executeJavaScript("getComputedStyle(document.querySelector('.avatar')).backgroundColor"), 'rgb(226, 229, 233)', 'monochrome avatars survive restart');
+      await win.webContents.executeJavaScript('document.querySelector(".profile").click()');
+      await until(()=>win.webContents.executeJavaScript('!!document.querySelector(".general-settings")'));
+      assert.deepEqual(await win.webContents.executeJavaScript('[...document.querySelectorAll(".general-settings select")].map(item=>item.value)'),['light','editor','compact']);
+      const defaultsButton = "[...document.querySelectorAll('.general-settings button')].find(button=>button.textContent==='恢复默认').click()";
+      await win.webContents.executeJavaScript(defaultsButton);
+      await until(async()=>JSON.stringify(await invoke('settings.general.get'))===JSON.stringify(DEFAULT_GENERAL_SETTINGS));
+      await until(()=>win.webContents.executeJavaScript("document.documentElement.dataset.theme==='dark'"));
     }
     clearTimeout(watchdog);console.log('GENERAL_DESKTOP_PASS '+phase);app.quit();
   }catch(error){clearTimeout(watchdog);fail(error);}

@@ -1,0 +1,50 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {spawn} from 'node:child_process';
+import {build} from 'esbuild';
+import electron from 'electron';
+
+test('VS Code import UI previews exact selections, handles dependencies and cancellation, and cleans pending plans', {skip:process.platform==='linux'&&!process.env.DISPLAY,timeout:35000}, async t=>{
+ const dir=await mkdtemp(join(tmpdir(),'rpo-import-view-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const root=fileURLToPath(new URL('../',import.meta.url));
+ const source=`import React,{useState} from 'react';import{createRoot}from'react-dom/client';import{flushSync}from'react-dom';import ${JSON.stringify(join(root,'src/style.css'))};import{VSCodeImport}from ${JSON.stringify(join(root,'src/VSCodeImport.tsx'))};
+ function App(){const[visible,setVisible]=useState(true);window.mount=v=>flushSync(()=>setVisible(v));return visible?<VSCodeImport kind="settings" call={window.bridge.invoke}/>:null;}createRoot(document.getElementById('root')).render(<App/>);`;
+ await build({stdin:{contents:source,loader:'tsx',resolveDir:root},outfile:join(dir,'ui.js'),bundle:true,format:'iife',platform:'browser',logLevel:'silent'});
+ await writeFile(join(dir,'index.html'),'<html><head><link rel="stylesheet" href="ui.css"></head><body><div id="root" style="padding:30px"></div><script src="ui.js"></script></body></html>');
+ await writeFile(join(dir,'preload.cjs'),`const{contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('bridge',{invoke:(method,args)=>ipcRenderer.invoke('fixture',method,args),control:(args)=>ipcRenderer.invoke('control',args)});`);
+ const verify=async()=>{
+  const check=(ok,message)=>{if(!ok)throw Error(message);};
+  const wait=async fn=>{const until=Date.now()+6000;while(Date.now()<until){if(await fn())return;await new Promise(r=>setTimeout(r,20));}throw Error('UI condition failed: '+fn.toString());};
+  const button=text=>Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text);
+  const toggle=text=>Array.from(document.querySelectorAll('.vscode-import-item label')).find(el=>el.querySelector('span').textContent===text)?.querySelector('input');
+  await wait(()=>button('从 VS Code 导入'));button('从 VS Code 导入').click();await wait(()=>toggle('字号'));
+  check(!toggle('字号').checked&&!toggle('行高').checked,'preview preselected changes');check(button('导入 0 项').disabled,'empty import enabled');
+  check(!document.body.textContent.includes('private-secret-fixture')&&!document.body.textContent.includes('private.token'),'unsupported content leaked');
+  check(document.body.textContent.includes('已跳过 1 项'),'skipped items not visible');
+  toggle('行高').click();await wait(()=>button('导入 1 项'));button('导入 1 项').click();await wait(()=>document.querySelector('[role=alert]')?.textContent.includes('需要同时选择'));
+  check((await window.bridge.control({action:'state'})).saves===0,'invalid dependency wrote settings');
+  toggle('字号').click();await wait(()=>button('导入 2 项'));button('导入 2 项').click();await wait(()=>document.querySelector('[role=status]')?.textContent.includes('已导入 2 项'));
+  const saved=await window.bridge.control({action:'state'});check(saved.saves===1&&saved.editorSettings.fontSize===14&&saved.editorSettings.lineHeight===2,'selection did not apply exact values');
+  check(saved.editorSettings.minimap===undefined,'unselected item was applied');
+  button('从 VS Code 导入').click();await wait(()=>button('重新选择文件'));
+  await window.bridge.control({action:'cancel'});button('重新选择文件').click();await wait(async()=> (await window.bridge.control({action:'state'})).previews===3);await wait(()=>button('重新选择文件')&&!button('重新选择文件').disabled);
+  check(document.querySelector('.vscode-import-preview'),'filepicker cancel discarded visible preview');
+  button('取消').click();await wait(()=>!document.querySelector('.vscode-import-preview'));await wait(async()=> (await window.bridge.control({action:'state'})).discards===1);
+  button('从 VS Code 导入').click();await wait(()=>button('重新选择文件'));window.mount(false);await wait(async()=> (await window.bridge.control({action:'state'})).discards===2);
+  window.mount(true);await wait(()=>button('从 VS Code 导入'));await window.bridge.control({action:'delay'});button('从 VS Code 导入').click();await wait(async()=> (await window.bridge.control({action:'state'})).pending);window.mount(false);
+  await window.bridge.control({action:'release'});await wait(async()=> (await window.bridge.control({action:'state'})).discards===3);
+  return true;
+ };
+ const serviceURL=pathToFileURL(join(root,'desktop/services/vscode-import.mjs')).href;
+ await writeFile(join(dir,'runner.cjs'),`const{app,BrowserWindow,ipcMain}=require('electron');app.disableHardwareAcceleration();let win;app.whenReady().then(async()=>{
+ const{VSCodeImportService}=await import(${JSON.stringify(serviceURL)});const service=new VSCodeImportService({platform:'darwin'});let editorSettings={},keyboard={},saves=0,discards=0,previews=0,cancel=false,delay=false,pending=null;
+ ipcMain.handle('fixture',async(_e,method,args)=>{const current={editorSettings,keyboard},scope='synthetic-import-ui';if(method==='settings.vscode.preview'){previews++;if(cancel){cancel=false;return null;}const plan=service.preview({settingsText:JSON.stringify({'editor.fontSize':14,'editor.lineHeight':28,'editor.minimap.enabled':true,'private.token':'private-secret-fixture'}),current,scope});if(delay){delay=false;await new Promise(resolve=>pending=resolve);pending=null;}return plan;}if(method==='settings.vscode.apply'){const patches=service.apply({...args,current,scope});editorSettings={...editorSettings,...patches.editorPatch};keyboard={...keyboard,...patches.keyboardPatch};saves++;return{imported:args.selectedIds.length};}if(method==='settings.vscode.discard'){service.discard(args.planId);discards++;return true;}throw Error('unexpected method');});
+ ipcMain.handle('control',(_e,{action})=>{if(action==='cancel')cancel=true;if(action==='delay')delay=true;if(action==='release')pending?.();return{editorSettings,keyboard,saves,discards,previews,pending:!!pending};});
+ win=new BrowserWindow({show:false,width:1000,height:900,webPreferences:{preload:${JSON.stringify(join(dir,'preload.cjs'))},backgroundThrottling:false}});await win.loadFile(${JSON.stringify(join(dir,'index.html'))});await win.webContents.executeJavaScript(${JSON.stringify('('+verify.toString()+')()')});service.dispose();console.log('IMPORT_VIEW_PASS');win.destroy();app.exit(0);}).catch(error=>{console.error(error);if(win)win.destroy();app.exit(1);});`);
+ const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
+ const result=await new Promise((resolve,reject)=>{const child=spawn(electron,[join(dir,'runner.cjs')],{env,stdio:['ignore','pipe','pipe']});let output='';child.stdout.on('data',v=>output+=v);child.stderr.on('data',v=>output+=v);const timer=setTimeout(()=>{child.kill('SIGKILL');reject(Error('Import UI timeout\n'+output));},30000);child.once('error',reject);child.once('exit',code=>{clearTimeout(timer);resolve({code,output});});});assert.equal(result.code,0,result.output);assert.match(result.output,/IMPORT_VIEW_PASS/);
+});

@@ -1,3 +1,5 @@
+import { VSCodeImport } from "./VSCodeImport";
+import { AppearanceProvider } from "./Appearance";
 import { GeneralSettings, GeneralSettingsContext } from "./GeneralSettings";
 import { EditorSettings, EditorSettingsContext } from "./EditorSettings";
 import { resolveEditorSettings } from "../core/editor-settings.mjs";
@@ -209,6 +211,7 @@ function App() {
     <p>{updateHealth?.message || "正在检查本机数据和界面，请稍候。"}</p>
   </div>;
   return (
+    <AppearanceProvider value={state.local.generalSettings}>
     <GeneralSettingsContext.Provider value={state.local.generalSettings}>
     <EditorSettingsContext.Provider value={resolveEditorSettings(state.local.editorSettings)}>
     <KeyboardContext.Provider value={{os:state.local.os,bindings:state.local.keyboard}}>
@@ -475,7 +478,7 @@ function App() {
                     onRepos={() => setRepoPicker(true)}
                   />
                 )}{" "}
-                {setting === "editor" && <EditorSettings settings={state.local.editorSettings} call={call}/>}
+                {setting === "editor" && <><VSCodeImport kind="settings" call={api.invoke} os={state.local.os}/><EditorSettings settings={state.local.editorSettings} call={call}/></>}
                 {setting === "general" && (
                   <>
                     <form
@@ -511,7 +514,7 @@ function App() {
                     </div>
                   </>
                 )}
-                {setting === "keyboard" && <KeyboardSettings bindings={state.local.keyboard} os={state.local.os} call={api.invoke} />}
+                {setting === "keyboard" && <><VSCodeImport kind="keybindings" call={api.invoke} os={state.local.os}/><KeyboardSettings bindings={state.local.keyboard} os={state.local.os} call={api.invoke} /></>}
                 {setting === "data" && (
                   <>
                     <div className="setting-card"><span className="grow">本机加密</span><span>{state.storage?.encrypted?"已开启":"连接中"}</span></div>
@@ -1177,6 +1180,7 @@ function App() {
     </KeyboardContext.Provider>
     </EditorSettingsContext.Provider>
     </GeneralSettingsContext.Provider>
+    </AppearanceProvider>
   );
 }
 createRoot(document.getElementById("root")!).render(<App />);

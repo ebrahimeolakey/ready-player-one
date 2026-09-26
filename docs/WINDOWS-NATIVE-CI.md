@@ -119,3 +119,14 @@ ZIP / NSIS 在同一 runner 构建成功，下载后的 SHA256 与 runner 一致
 [通用偏好合成会话截图](evidence/windows-native-0.4.6-preferences.png)。布局与隐藏状态以结构化证据中的实际 DOM / CSS 断言为准。
 
 本机完整回归 375/375，并非全部 375 项都在 Windows 重跑。仍未覆盖实体 Windows 首次安装、SmartScreen / 安装向导、真实账号 GUI 登录、实际 Windows 通知 / 托盘 / 声音、Windows 自更新或两台实体机器的公网协作。
+
+
+## 0.4.7-beta.1 验证准备（尚未运行 Windows CI）
+
+既有 workflow 保持不变。`scripts/windows-native-smoke.mjs` 保留 PowerShell 初始提示符等待和全部 PTY / Provider CLI 断言，新增以下原生验证入口：
+
+- 使用已验证为 console PE 的 runner `node.exe` 执行 `tests/vscode-import.test.mjs` 与 `tests/vscode-import-controller.test.mjs`。TAP 的总数、通过、失败和跳过数写入 `windows-native.json.additionalRegressions`；要求全部通过、无跳过。它们是原 28 项平台清单之外的新增测试，不能将本机测试结果充当 Windows 结果。
+- 顺序启动 `scripts/windows-appearance-smoke.mjs` 的 `save` 与 `restart` 两个真实 Electron 进程，使用同一个新增临时数据目录，与外层烟测数据隔离。保存阶段检查真实暗 / 亮主题 CSS 和彩色 / 单色头像；确认首进程实际退出后，第二进程在任何写入前检查主进程从加密磁盘恢复的设置及实际页面样式，再恢复彩色头像与暗色主题对照最初配色。
+- 只通过应用原有 preload / main IPC 保存设置；无 mock renderer。通知、声音与托盘关闭，不发起模型调用。日志、分阶段 JSON 和截图写入 `ci-evidence/appearance/` 及 `windows-appearance-*.log`，沿用已有 evidence artifact 上传。
+
+新增子进程分别限时 45 秒，整套烟测上限由 120 秒调整到 180 秒以容纳两次实际应用启动；PowerShell 与既有各行为断言不放宽。本机导入模块 22/22 通过及脚本语法检查仅是提交前准备；最终 Windows 结果须在精确集成提交触发 CI 后补充。

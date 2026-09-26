@@ -37,3 +37,9 @@
 `tests/editor-settings.test.mjs` 覆盖白名单/原型键及 CSS 注入拒绝、默认逐字保留、JSON 原始数值/字符串/BOM/CRLF、非法或不支持语言保留与提示、行尾空白范围，并使用真实 CodeMirror EditorState、indentMore 验证缩进/tab facet、换行扩展。
 
 `tests/editor-settings-view.test.mjs` 使用独立临时 Electron 页面、合成文件与模拟存储接口检查实际 DOM/CodeMirror：未保存设置不受同值广播重置、动态字号/连字/换行/空白/参考线、真实 canvas 绘制与定位、关闭缩略图、保存等待期间新输入及新 hash。没有调用真实模型或读写用户项目。无 DISPLAY 的 Linux 环境明确跳过这项需要图形环境的测试，其余纯逻辑测试仍执行。
+
+### 与配置导入共存的草稿规则
+
+外部设置更新（包括同页 VS Code 导入）逐字段与上一份已保存值比较：用户改过的字段保留当前草稿，未改字段同步新值。数字输入保留原始文本，包括临时清空状态；若导入同一个已编辑字段，磁盘采用明确选择的导入值，但表单保留用户草稿，并提示「设置已更新，保留未保存修改」。用户随后保存会以表单草稿覆盖该字段。本人保存或恢复默认成功则以服务端结果重置整份表单及数字输入，不把旧草稿再次带回来。
+
+`tests/editor-import-draft-view.test.mjs` 在真实 Electron 中并列挂载 VSCodeImport 与 EditorSettings，通过实际导入服务验证：字号草稿 + 仅导入缩略图、导入同一 dirty 字段、空数字草稿、本人保存后后续同步、恢复默认后后续同步。只使用合成配置，不读取用户 VS Code 文件。

@@ -1,3 +1,4 @@
+import {useAppearance, avatarColors} from "./Appearance";
 import type { ReactNode } from "react";
 import { X, Aperture } from "lucide-react";
 export type Call = (
@@ -28,8 +29,9 @@ export function Avatar({
   name: string;
   small?: boolean;
 }) {
+  const appearance=useAppearance();
   return (
-    <span className={"avatar " + (small ? "small" : "")} title={name}>
+    <span style={avatarColors(name,appearance)} className={"avatar " + (small ? "small" : "")} title={name}>
       {name.slice(0, 1).toUpperCase()}
     </span>
   );

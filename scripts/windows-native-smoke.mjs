@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { join, resolve, isAbsolute, basename } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, safeStorage } from 'electron';
 import { TerminalService } from '../desktop/services/terminal.mjs';
 import { ProviderCLIService } from '../desktop/services/provider-cli.mjs';
@@ -17,7 +18,8 @@ mkdirSync(artifacts, { recursive: true });
 const evidence = { platform: process.platform, arch: process.arch, versions: process.versions, checks: [] };
 const writeEvidence = () => writeFileSync(join(artifacts, 'windows-native.json'), JSON.stringify(evidence, null, 2));
 let terminal, providerTerminal, providerFixtureDir, output = '', providerOutput = '';
-const deadline = setTimeout(() => fail(Error('Windows desktop smoke timed out after 120 seconds')), 120000);
+const probeChildren = new Set();
+const deadline = setTimeout(() => fail(Error('Windows desktop smoke timed out after 180 seconds')), 180000);
 function fail(error) {
   evidence.error = error.stack || String(error);
   evidence.ptyOutput = output;
@@ -25,6 +27,7 @@ function fail(error) {
   evidence.providerCLIProcesses = [...(providerTerminal?.terminals.values() || [])].map(record=>({pid:record.process.pid,exited:record.exited,exitCode:record.exitCode}));
   writeEvidence(); console.error(error);
   terminal?.closeAll(); providerTerminal?.closeAll();
+  for (const child of probeChildren) child.kill();
   if (providerFixtureDir) try { rmSync(providerFixtureDir, {recursive:true,force:true,maxRetries:2,retryDelay:50}); } catch {}
   app.exit(1);
 }
@@ -39,6 +42,15 @@ const waitFor = async (predicate, timeout = 15000) => {
   }
 };
 const clean = value => value.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\r/g, '');
+const runProbe = (command,args,env,logName,timeout=45000) => new Promise((resolve,reject)=>{
+  const child=spawn(command,args,{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+  probeChildren.add(child);let text='',failure;
+  const collect=bytes=>{text+=bytes;if(text.length>2*1024*1024){failure=Error('Probe output exceeded 2 MiB');child.kill();}};
+  child.stdout.on('data',collect);child.stderr.on('data',collect);
+  const timer=setTimeout(()=>{failure=Error(`Probe timed out: ${logName}`);child.kill();},timeout);
+  child.once('error',error=>{clearTimeout(timer);probeChildren.delete(child);reject(error);});
+  child.once('close',code=>{clearTimeout(timer);probeChildren.delete(child);writeFileSync(join(artifacts,logName),text);if(failure||code!==0)reject(failure||Error(`Probe ${logName} exited ${code}\n${text}`));else resolve(text);});
+});
 async function run() {
 try {
   evidence.stage = 'import-desktop'; writeEvidence();
@@ -163,6 +175,15 @@ try {
   const subsystem=pe.readUInt16LE(peOffset+24+68);
   assert.equal(subsystem,3,'The Node fixture launcher must use the Windows console subsystem');
   evidence.providerCLIRuntime={command:cliNode,version:nodeProbe.version,peSubsystem:subsystem};writeEvidence();
+  // The existing workflow entry invokes this explicit extra Windows test list;
+  // no workflow permission change and no Electron/GUI executable as Node runner.
+  const regressionFiles=['tests/vscode-import.test.mjs','tests/vscode-import-controller.test.mjs'];
+  const regressionLog=await runProbe(cliNode,['--test','--test-reporter=tap',...regressionFiles],cliEnv,'windows-import-regressions.log');
+  const totals=Object.fromEntries([...regressionLog.matchAll(/^# (tests|pass|fail|skipped) (\d+)\r?$/gm)].map(match=>[match[1],Number(match[2])]));
+  assert.ok(totals.tests>0);assert.equal(totals.pass,totals.tests);assert.equal(totals.fail,0);assert.equal(totals.skipped,0);
+  evidence.additionalRegressions={files:regressionFiles,...totals};
+  evidence.checks.push('VS Code import service/controller regression suite on real Windows console Node, zero failures/skips');
+  writeEvidence();
   // Only this synthetic Node peer runs here: no vendor CLI, account probe,
   // prompt, server, token or paid model is used by this check.
   writeFileSync(cliFixture, `
@@ -244,6 +265,20 @@ process.stdin.on('data',data=>{
   evidence.providerCLI={synthetic:true,modelCalls:0,launches:cliLaunches,argv:cliArgs,shiftTabHex:'1b5b5a',exitCode:9,cleanup:true};
   evidence.providerCLIOutput=clean(providerOutput);
   rmSync(providerFixtureDir,{recursive:true,force:true,maxRetries:5,retryDelay:100});providerFixtureDir=null;
+  evidence.stage='appearance-restart';writeEvidence();
+  const appearanceData=mkdtempSync(join(process.env.RPO_DATA_DIR,'appearance-processes-'));
+  const appearanceEvidence=join(artifacts,'appearance');mkdirSync(appearanceEvidence,{recursive:true});
+  const appearanceEnv={...process.env,RPO_DATA_DIR:appearanceData,RPO_WINDOWS_APPEARANCE_EVIDENCE:appearanceEvidence};
+  for(const key of ['ELECTRON_RUN_AS_NODE','RPO_UPDATE_HEALTH_TICKET','RPO_IDENTITY_ISSUER','RPO_IDENTITY_PUBLIC_KEY_FILE','GH_TOKEN','GITHUB_TOKEN','OPENAI_API_KEY','ANTHROPIC_API_KEY'])delete appearanceEnv[key];
+  for(const phase of ['save','restart']){
+    const log=await runProbe(process.execPath,[fileURLToPath(new URL('./windows-appearance-smoke.mjs',import.meta.url))],
+      {...appearanceEnv,RPO_WINDOWS_APPEARANCE_PHASE:phase},`windows-appearance-${phase}.log`);
+    assert.ok(log.includes('WINDOWS_APPEARANCE_PASS '+phase),'Appearance probe must complete actual app shutdown');
+    const record=JSON.parse(readFileSync(join(appearanceEvidence,`appearance-${phase}.json`),'utf8'));
+    assert.equal(record.passed,true);assert.equal(record.platform,'win32');
+    evidence.appearance ??= {};evidence.appearance[phase]=record;
+  }
+  evidence.checks.push('Appearance: two actual Electron/main/React processes, dark/light CSS, colored/monochrome avatars, encrypted settings restored after process exit and color palette restored');
   evidence.completedAt = new Date().toISOString();
   writeEvidence();
   // Exercise the actual app before-quit async cleanup, not a synthetic app.exit success.

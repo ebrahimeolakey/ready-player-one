@@ -30,6 +30,10 @@ export function GeneralSettings({settings, call, error}: {settings?: Partial<Gen
     {error && <p role="alert" className="general-settings-error">系统通知 / 托盘不可用：{error}</p>}
     <form onSubmit={event => {event.preventDefault(); void save();}}>
       <fieldset disabled={busy}><legend>界面</legend>
+        <label><span>主题</span><select value={draft.theme} onChange={event => update('theme', event.target.value as GeneralSettingsValue['theme'])}>
+          <option value="dark">深色</option><option value="light">浅色</option>
+        </select></label>
+        {toggle('collaboratorColors', '协作者颜色')}
         <label><span>会话布局</span><select value={draft.layout} onChange={event => update('layout', event.target.value as GeneralSettingsValue['layout'])}>
           <option value="agent">对话优先</option><option value="editor">编辑器优先</option>
         </select></label>

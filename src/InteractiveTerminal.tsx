@@ -1,3 +1,4 @@
+import {useAppearance, terminalColors} from "./Appearance";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -29,6 +30,12 @@ export function InteractiveTerminal({
   mode?: "shell" | "provider";
   onClose?: () => void;
 }) {
+  const {theme}=useAppearance();
+  const palette=terminalColors(theme);
+  const liveTerminal=useRef<Terminal | null>(null);
+  const currentTheme=useRef(theme);
+  currentTheme.current=theme;
+  useEffect(()=>{if(liveTerminal.current)liveTerminal.current.options.theme=terminalColors(theme);},[theme]);
   const container = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [cli, setCLI] = useState<{displayCommand:string;resolvedCommand:string;cwd:string;account:string;accountSource:string;configDirectory:string;credentialEnvironment:string[]} | null>(null);
@@ -42,16 +49,14 @@ export function InteractiveTerminal({
     const queued: TerminalEvent[] = [];
     const terminal = new Terminal({
       cursorBlink: true,
+      minimumContrastRatio: 4.5,
       fontSize: 12,
       fontFamily: "Menlo, Consolas, monospace",
       scrollback: 5000,
-      theme: {
-        background: "#111111",
-        foreground: "#d4d4d4",
-        cursor: "#98d8c0",
-      },
+      theme: terminalColors(currentTheme.current),
       allowProposedApi: false,
     });
+    liveTerminal.current=terminal;
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(container.current);
@@ -116,17 +121,21 @@ export function InteractiveTerminal({
       unsubscribe();
       observer.disconnect();
       onData.dispose();
+      liveTerminal.current=null;
       terminal.dispose();
       if (id) void bridge.invoke("terminal.close", { id }).catch(() => {});
     };
   }, [bridge, workspaceId, sessionId, laneId, mode]);
   return (
     <div
+      className="interactive-terminal"
+      data-terminal-theme={theme}
       style={{
+        color:palette.foreground,
         height: "100%",
         minHeight: 100,
         position: "relative",
-        background: "#111",
+        background: palette.background,
         display: "flex",
         flexDirection: "column",
       }}
@@ -151,9 +160,9 @@ export function InteractiveTerminal({
           style={{
             position: "absolute",
             bottom: 0,
-            background: "#391f1f",
+            background: theme==='light'?"#fbe9e7":"#391f1f",
             padding: 8,
-            color: "#fbb",
+            color: theme==='light'?"#902d27":"#fbb",
           }}
         >
           {error}

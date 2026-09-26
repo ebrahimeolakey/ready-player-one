@@ -1,0 +1,91 @@
+/* Explicit light surfaces. Dark remains the existing application palette. */
+html[data-theme='dark'] { color-scheme: dark; }
+html[data-theme='light'] {
+  color-scheme: light;
+  color: #26323b;
+  background: #f5f6f8;
+  --bg: #fafbfc;
+  --panel: #ffffff;
+  --line: #d8dfe6;
+  --muted: #64717e;
+  --green: #246e50;
+  --mint: #246e50;
+  --appearance-text: #26323b;
+  --appearance-muted: #64717e;
+  --appearance-line: #d8dfe6;
+  --appearance-surface: #ffffff;
+  --appearance-raised: #eef2f6;
+  --appearance-hover: #e5ebf1;
+}
+html[data-theme='light'] body,
+html[data-theme='light'] main { background: #f5f6f8; color: var(--appearance-text); }
+html[data-theme='light'] :is(.titlebar,.sidebar,.settings-nav,.session-topbar,.activity-rail,.file-tree,.lane-header,.editor-file,.project-context-bar) { background:#edf1f5; border-color:var(--appearance-line); }
+html[data-theme='light'] :is(.title-brand,.brand-mark,.project-context-bar strong,.project-context-popover dd,.editor-welcome>.brand-mark) { color:var(--appearance-text); }
+html[data-theme='light'] :is(.editor-pane,.studio-diff,.agent-dock,.command-terminal,.auth-log,.conflict-columns section,.shortcut-list>button,.debugger-source) { background:var(--bg); color:var(--appearance-text); border-color:var(--appearance-line); }
+html[data-theme='light'] :is(.session-rail,.setting-card,.bordered,.session-card,.memory-card,.modal,.card-menu,.project-context-popover,.provider-model-popover) { background:var(--appearance-surface); color:var(--appearance-text); border-color:var(--appearance-line); }
+html[data-theme='light'] :is(.card-menu,.modal,.project-context-popover,.provider-model-popover,.toast) { box-shadow:0 12px 35px #25364926; }
+html[data-theme='light'] :is(.session-status,.sort-select,.workspace-filter,.provider-icon.small,.tag,.composer-controls select,.plan-controls select) { background:var(--appearance-raised); color:#49596a; border-color:var(--appearance-line); }
+html[data-theme='light'] :is(input,textarea,select) { background:var(--appearance-surface); color:var(--appearance-text); border-color:#b9c4ce; }
+html[data-theme='light'] :is(input,textarea)::placeholder { color:#6c7a88; }
+html[data-theme='light'] :is(input,textarea,select):focus { border-color:#357659; }
+html[data-theme='light'] :is(button,summary,input,textarea,select):focus-visible { outline:2px solid #286b51; outline-offset:2px; }
+html[data-theme='light'] :is(.button,.scope-toggle,.provider-model-picker,.provider-effort) { background:#f1f4f7; border-color:#c4ced8; color:var(--appearance-text); }
+html[data-theme='light'] :is(.button:hover,.icon-button:hover,.nav-item:hover,.mini-session:hover,.nav-label button:hover,.settings-nav>button:hover,.file-tree>button:hover,.card-menu button:hover,.workspace-options>button:hover,.repo-list>button:hover,.shortcut-list>button:hover) { background:var(--appearance-hover); color:var(--appearance-text); border-color:#acbac7; }
+html[data-theme='light'] :is(.button.primary,.composer>.composer-controls .send) { background:#293b4b; color:#fff; border-color:#293b4b; }
+html[data-theme='light'] .button.primary:hover { background:#3b5166; }
+html[data-theme='light'] :is(.nav-item.active,.mini-session.selected,.settings-nav>button.active,.file-tree>button.selected,.rail-tabs button.active) { background:#dfe7ee; color:#233849; border-color:#647e92; }
+html[data-theme='light'] :is(.activity-rail button.active,.dock-tabs>button.active,.scope-toggle.active) { color:#243e53; }
+html[data-theme='light'] :is(.activity-rail button.active:before,.dock-tabs>button.active:after) { background:#346587; }
+html[data-theme='light'] :is(.member-lane.selected) { border-left-color:#24815c; color:#263f32; }
+html[data-theme='light'] :is(.dock-tabs,.rail-tabs,.session-rail,.editor-file,.lane-header,.member-row,.modal-heading,.modal-footer,.profile,.interactive-terminal>div) { border-color:var(--appearance-line); }
+html[data-theme='light'] :is(.nav-item,.mini-session,.workspace-row,.settings-nav>button,.file-tree>button,.dock-tabs>button,.rail-tabs button,.member-lane,.plan-item,.environment p,.comment-list p,.comment-actions,.project-context-bar button) { color:#526171; }
+html[data-theme='light'] :is(.icon-button,.nav-label,.profile>svg,.provider-symbol,.small-note,.help-details,.text-button,.muted,.session-topbar>span,.session-topbar>svg,.activity-rail button,.file-tree header,.lane-header strong span,.lane-status,.entry-heading,.entry-heading time,.entry.system,.watching,.thinking,.rail-section,.rail-section summary,.section-toggle,.rail-section summary span,.section-toggle span,.comment-list time,.environment small,.diagnostic-log,.file-search-results,.lock-row small,.sync-toolbar span,.modal-footer small,.mission-summary,.mission-activity>summary>span,.mission-activity-path>small,.mission-activity-sources>button>small,.project-context-popover dt,.project-context-popover small,.message-link-target,.entry-actions button) { color:var(--appearance-muted); }
+html[data-theme='light'] :is(.empty,.empty>svg,.lane-intro,.rail-empty,.plan-item.completed,.session-status small,.card-providers,.tag,.member-row>span:last-child:not(.avatar)) { color:#697787; }
+html[data-theme='light'] .entry.user { background:#edf2f7; }
+html[data-theme='light'] .entry details { background:#f1f4f7; border-color:var(--appearance-line); }
+html[data-theme='light'] :is(.reasoning-entry,.reasoning-entry .message-text) { color:#69507d; }
+html[data-theme='light'] .composer { background:#fff; border-color:#408d70; }
+html[data-theme='light'] .composer-owner { background:#fff; color:#2c7156; }
+html[data-theme='light'] :is(.composer textarea,.compact-input input,.compact-input textarea,.command-terminal input) { background:transparent; }
+html[data-theme='light'] .compact-input { background:#fff; border-color:#c4ced8; }
+html[data-theme='light'] .checkbox { border-color:#748596; }
+html[data-theme='light'] :is(.attention,.approval-card,.mission-attention) { background:#fff6e5; color:#714f1f; border-color:#dec499; }
+html[data-theme='light'] :is(.approval-card small,.dock-tabs .approval-count,.overlap-hints) { color:#7a5a29; }
+html[data-theme='light'] :is(.danger,.warning,.git-error,.debugger-error,.provider-error,.general-settings-error) { color:#9e3530; }
+html[data-theme='light'] .composer .send.stop { background:#f4deda; color:#87382f; }
+html[data-theme='light'] .offline-banner { background:#f9ecd4; color:#785619; }
+html[data-theme='light'] .tag.green { background:#e1f0e6; color:#2c6c44; }
+html[data-theme='light'] .dot.mint { background:#33865f; border-color:#33865f; }
+html[data-theme='light'] .thinking i { background:#718093; }
+html[data-theme='light'] .diff-file span { color:#326e43; }
+html[data-theme='light'] .diff-code .added { background:#e0f1e5; color:#2c603c; }
+html[data-theme='light'] .diff-code .removed { background:#fae5e2; color:#883e35; }
+html[data-theme='light'] .message-link { color:#245f96; }
+html[data-theme='light'] :is(.mission-activity,.mission-activity-sources>button) { color:#526171; border-color:#c5d2cb; }
+html[data-theme='light'] .mission-activity-path { color:#324b3e; }
+html[data-theme='light'] :is(.mission-activity-sources>button:hover,.mission-activity-sources>button:focus-visible) { color:#205b3d; border-color:#50826a; }
+html[data-theme='light'] .modal-backdrop { background:#17273655; }
+html[data-theme='light'] .toast { background:#fff; color:var(--appearance-text); border-color:#c4ced8; }
+html[data-theme='light'] :is(.editor-settings,.general-settings) { color:var(--appearance-text); }
+html[data-theme='light'] :is(.editor-settings,.general-settings) fieldset { background:#fff; border-color:var(--appearance-line); }
+html[data-theme='light'] :is(.editor-settings,.general-settings) label { border-color:var(--appearance-line); }
+html[data-theme='light'] :is(.editor-settings,.general-settings) :is(legend,.editor-settings-note) { color:var(--appearance-muted); }
+html[data-theme='light'] :is(.editor-settings,.general-settings) :is(input:not([type=checkbox]),select) { background:#f8fafc; border-color:#b9c4ce; color:var(--appearance-text); }
+html[data-theme='light'] :is(.editor-settings,.general-settings) input[type=checkbox] { background:#d1d8df; border-color:#b1bdc8; }
+html[data-theme='light'] :is(.editor-settings,.general-settings) input[type=checkbox]::before { background:#637382; }
+html[data-theme='light'] :is(.editor-settings,.general-settings) input[type=checkbox]:checked { background:#345e4c; border-color:#345e4c; }
+html[data-theme='light'] :is(.editor-settings,.general-settings) input[type=checkbox]:checked::before { background:#fff; }
+html[data-theme='light'] :is(.editor-settings,.general-settings) footer>span { color:#2a714b; }
+html[data-theme='light'] .provider-choices .setting-card { background:#f8fafc; }
+/* Existing global CodeMirror backgrounds use !important. Restrict matching
+   overrides to these exact surfaces; syntax colors come from its light theme. */
+html[data-theme='light'] .cm-editor { background:#fafbfc !important; color:#26323b; }
+html[data-theme='light'] .cm-gutters { background:#f0f3f6 !important; border-color:#d8dfe6 !important; color:#64717e !important; }
+html[data-theme='light'] :is(.cm-activeLine,.cm-activeLineGutter) { background:#eaf0f6 !important; }
+html[data-theme='light'] :is(.reference-selected,.entry.reference-selected) { background:#dbefdf; outline-color:#3a8a55; }
+html[data-theme='light'] ::-webkit-scrollbar-thumb { background:#b1bdc8; }
+html[data-theme='light'] :is(.provider-model-picker summary,.provider-model-list button,.provider-reload,.provider-effort,.provider-search) { color:#526171; }
+html[data-theme='light'] :is(.provider-model-picker summary:hover,.provider-model-list button:hover,.provider-model-list button[aria-selected='true']) { background:#e4ebf2; color:#26323b; }
+html[data-theme='light'] :is(.git-toolbar,.git-network,.git-file-list,.git-commit,.debugger-controls,.debugger-content aside) { border-color:var(--appearance-line); }
+html[data-theme='light'] :is(.git-toolbar select,.git-network select,.git-create-branch input,.git-commit textarea) { color:var(--appearance-text); background:#fff; border-color:#b9c4ce; }
+html[data-theme='light'] :is(.rail-section,.comment-list article,.composer-controls,.watching,.sync-panel,.panel-heading,.diff-file,.terminal-toolbar,.share-drawer .member-row) { border-color:var(--appearance-line); }

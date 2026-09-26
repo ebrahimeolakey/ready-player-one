@@ -1,0 +1,17 @@
+.vscode-import{margin:0 0 24px;color:inherit;font-size:12px}
+.vscode-import>header,.vscode-import footer{display:flex;align-items:center;gap:12px}
+.vscode-import-preview{margin-top:14px;border:1px solid var(--appearance-line,#333);border-radius:8px;padding:16px;background:var(--appearance-surface,#1c1c1c)}
+.vscode-import-preview>p{margin:0 0 12px}
+.vscode-import fieldset{border:0;margin:0;padding:0;min-width:0}
+.vscode-import-item{border-top:1px solid var(--appearance-line,#333);padding:10px 0}
+.vscode-import-item>label{display:flex;align-items:center;gap:10px;cursor:pointer}
+.vscode-import-item input{flex-shrink:0;accent-color:var(--appearance-text,#ddd)}
+.vscode-import-item strong{margin-left:auto;font-weight:500;overflow-wrap:anywhere;max-width:60%;text-align:right}
+.vscode-import-item small,.vscode-import-preview>small{display:block;line-height:1.6;color:var(--appearance-muted,#aaa)}
+.vscode-import details{margin-top:6px;color:var(--appearance-muted,#aaa)}
+.vscode-import summary{cursor:pointer}
+.vscode-import-skipped{margin-bottom:14px}
+.vscode-import-skipped ul{padding-left:20px;line-height:1.7;max-height:200px;overflow:auto}
+.vscode-import footer{justify-content:flex-end;margin-top:16px}
+.vscode-import>[role=alert]{color:var(--appearance-text,#efb795);overflow-wrap:anywhere}
+.vscode-import>[role=status]{color:var(--mint,#a4cdb2)}

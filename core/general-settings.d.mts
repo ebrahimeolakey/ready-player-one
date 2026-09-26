@@ -1,5 +1,7 @@
 export type GeneralSettingsValue = {
   autoCheckUpdates: boolean;
+  theme: 'dark' | 'light';
+  collaboratorColors: boolean;
   layout: 'agent' | 'editor';
   conversationDensity: 'detailed' | 'compact';
   autoHideEmptyEditor: boolean;
