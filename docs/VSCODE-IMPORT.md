@@ -1,6 +1,6 @@
 # VS Code 设置导入
 
-当前工作树通过 `desktop/services/vscode-import-controller.mjs` 接入真实主进程 IPC；这些修改不属于 0.4.6。纯计划服务 `vscode-import.mjs` 不扫描目录、不读文件、不写配置；controller 只读取原生对话框选中的单个合成或用户文件，apply 后由主进程单次写入加密配置。不会安装扩展、调用 VS Code 或 Provider。
+0.4.7 源码通过 `desktop/services/vscode-import-controller.mjs` 接入真实主进程 IPC；这些修改不属于 0.4.6。纯计划服务 `vscode-import.mjs` 不扫描目录、不读文件、不写配置；controller 只读取原生对话框选中的单个合成或用户文件，apply 后由主进程单次写入加密配置。不会安装扩展、调用 VS Code 或 Provider。
 
 ## API 合同
 
@@ -120,3 +120,6 @@ controller 对合并后的编辑器与快捷键再次校验，不覆盖未选择
 - `node scripts/vscode-import-desktop-smoke.mjs --run`：Mac 实际 Electron main/preload/React 启动，2 个真实进程阶段通过。通过编辑器/快捷键页面的真实“从 VS Code 导入”入口、checkbox 和 apply 按钮导入；验证预览默认不勾选、无选择不能应用、bootstrap 状态与 client.json.enc，第二进程验证恢复。额外真实 IPC 覆盖取消、discard、任意路径拒绝、修改设置后的 stale preview、以目录占据加密目标文件造成真实 rename 失败后的内存回滚。
 - 文件选择结果由 Electron `dialog.showOpenDialog` stub 返回测试创建的文件，同时核对真实 BrowserWindow、单文件 properties 与过滤器。**没有声称手动操作了原生文件选择窗口**；实际用户选择交互需后续人工验收。
 - 未读取真实 VS Code 配置、模型调用 0、未修改已安装应用。退出后删除隔离应用数据，仅保留 PNG/日志/证据。截图：`/var/folders/x9/znxmzx5x7b56cwz_dzsb54ch0000gn/T/rpo-import-desktop-51sjlv/settings-preview.png` 及同目录 `keybindings-preview.png`；综合日志 `/tmp/rpo-vscode-import-desktop-smoke.log`。
+
+
+0.4.7 Apple Silicon 安装包另经原生文件选择器实际选择合成 JSONC，默认未勾选两项；明确勾选并导入后，界面显示“已导入 2 项”、字号 16 和关闭缩略图。该检查没有替换文件对话框实现，和上述自动化 stub 测试是不同证据。见 [包内审计](evidence/mac-package-0.4.7.json)。

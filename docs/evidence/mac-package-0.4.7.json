@@ -1,0 +1,36 @@
+{
+  "version": "0.4.7-beta.1",
+  "sourceCommit": "a372a68db340f6e4c36fba03ac16bf3d70cb0180",
+  "runtimeFilesByteMatched": 83,
+  "committedCoreDesktopSrcAndPackageFilesMatched": 133,
+  "macAsarSha256": "5ecbaa0e4a9d6bd774dfffa2912a19ade5508d8cec04dabcc4959599efa43d4b",
+  "artifacts": [
+    {
+      "name": "Ready-Player-One-0.4.7-beta.1-mac-arm64.zip",
+      "size": 123767130,
+      "sha256": "a4df82d3235cc5399451f6883e858b4765b34989f0edd4d6ba04c14263a94cd8"
+    },
+    {
+      "name": "Ready-Player-One-0.4.7-beta.1-mac-x64.zip",
+      "size": 128761578,
+      "sha256": "e9d6f2f9ec0cd0fda1c661cf038713cbdd8e4c39fb6c8b32f4bcc3c266623179"
+    }
+  ],
+  "zipCRC": "passed both Mac archives",
+  "macNativeExtraction": "arm64 ZIP extracted via ditto; Chinese app name and executable present",
+  "packagedArm64UI": [
+    "version 0.4.7-beta.1 visible",
+    "save light theme and inspect rendered settings",
+    "native Open dialog selected synthetic JSONC",
+    "two unchecked candidates shown",
+    "explicitly select both; import reports 2 items",
+    "editor font size 16 and minimap disabled visible",
+    "isolated app exited cleanly"
+  ],
+  "limitations": [
+    "Intel package not physically executed",
+    "native chooser used synthetic configuration",
+    "no real model calls or user VS Code data",
+    "not an all-screen pixel fidelity audit"
+  ]
+}

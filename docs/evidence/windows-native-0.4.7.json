@@ -1,0 +1,252 @@
+{
+  "runId": 36227388246,
+  "url": "https://github.com/ebrahimeolakey/ready-player-one/actions/runs/36227388246",
+  "headSha": "a372a68db340f6e4c36fba03ac16bf3d70cb0180",
+  "version": "0.4.7-beta.1",
+  "platform": "windows-2022 x64",
+  "platformTests": {
+    "passed": 28,
+    "failed": 0
+  },
+  "additionalRegressions": {
+    "files": [
+      "tests/vscode-import.test.mjs",
+      "tests/vscode-import-controller.test.mjs"
+    ],
+    "tests": 22,
+    "pass": 22,
+    "fail": 0,
+    "skipped": 0
+  },
+  "artifactIds": {
+    "windows-test-packages": 10901430675,
+    "windows-native-evidence": 10900809924
+  },
+  "assets": [
+    {
+      "file": "Ready-Player-One-0.4.7-beta.1-windows-x64-setup.exe",
+      "bytes": 104956121,
+      "sha256": "710a7044f6e7b5a18129272766faf279a8e780d2cb4d7e33a1e4fca392b9560b",
+      "matchesRunner": true
+    },
+    {
+      "file": "Ready-Player-One-0.4.7-beta.1-windows-x64.zip",
+      "bytes": 147985439,
+      "sha256": "b014736c16158ef38fd8f91a044577765d7a8e1bb80cb638d51d3ee6201384aa",
+      "matchesRunner": true
+    }
+  ],
+  "zipCRC": "passed",
+  "outerArtifactSHA256": "3438396d7a9a4d57519a61649112a597dbb6f21570a8795bdd405b00633d4011",
+  "sourceAudit": {
+    "headSha": "a372a68db340f6e4c36fba03ac16bf3d70cb0180",
+    "version": "0.4.7-beta.1",
+    "license": "Apache-2.0",
+    "fileCount": 83,
+    "exactByteMatches": 2,
+    "normalizedCRLFFiles": [
+      "core/access-scope.mjs",
+      "core/accounts.mjs",
+      "core/acp-config.mjs",
+      "core/activity-view.d.mts",
+      "core/activity-view.mjs",
+      "core/client.mjs",
+      "core/comment-anchors.d.mts",
+      "core/comment-anchors.mjs",
+      "core/coordination-handoffs.mjs",
+      "core/coordination-paths.mjs",
+      "core/coordination-runs.mjs",
+      "core/coordination.mjs",
+      "core/editor-settings.d.mts",
+      "core/editor-settings.mjs",
+      "core/general-settings.d.mts",
+      "core/general-settings.mjs",
+      "core/github-oauth-service.mjs",
+      "core/hub.mjs",
+      "core/installers.mjs",
+      "core/keybindings.d.mts",
+      "core/keybindings.mjs",
+      "core/local.mjs",
+      "core/mcp-coordination.mjs",
+      "core/outcomes.mjs",
+      "core/overlap.mjs",
+      "core/platform.mjs",
+      "core/prompt-limits.d.mts",
+      "core/prompt-limits.mjs",
+      "core/provider-config.mjs",
+      "core/providers/acp.mjs",
+      "core/providers/catalog.mjs",
+      "core/providers/configuration.mjs",
+      "core/providers/failure.mjs",
+      "core/providers/input.mjs",
+      "core/providers/openai-compatible.mjs",
+      "core/providers/runtime.mjs",
+      "core/providers/transport.mjs",
+      "core/providers/usage.mjs",
+      "core/providers/workspace-tools.mjs",
+      "core/run-coordinator.mjs",
+      "core/secure-store.mjs",
+      "core/snapshots.mjs",
+      "core/standalone.mjs",
+      "core/subtasks.mjs",
+      "core/team-identity-client.mjs",
+      "core/team-identity.mjs",
+      "core/tunnel.mjs",
+      "core/workspace-lifecycle.mjs",
+      "desktop/main.mjs",
+      "desktop/preload.cjs",
+      "desktop/services/browser.mjs",
+      "desktop/services/build-dictation.mjs",
+      "desktop/services/comment-anchors.mjs",
+      "desktop/services/composer.mjs",
+      "desktop/services/coordination-bridge.mjs",
+      "desktop/services/data-key.mjs",
+      "desktop/services/debugger.mjs",
+      "desktop/services/desktop-notifications.mjs",
+      "desktop/services/dictation-info.plist",
+      "desktop/services/dictation.mjs",
+      "desktop/services/dictation.swift",
+      "desktop/services/drafts.mjs",
+      "desktop/services/file-search.mjs",
+      "desktop/services/git.mjs",
+      "desktop/services/github-repository.mjs",
+      "desktop/services/language-worker.mjs",
+      "desktop/services/language.mjs",
+      "desktop/services/provider-cli.mjs",
+      "desktop/services/reference-refresh.mjs",
+      "desktop/services/references.mjs",
+      "desktop/services/subtask-agent.mjs",
+      "desktop/services/task-coordination.mjs",
+      "desktop/services/team-identity.mjs",
+      "desktop/services/terminal.mjs",
+      "desktop/services/update-health-client.mjs",
+      "desktop/services/update-health-worker.mjs",
+      "desktop/services/updater.mjs",
+      "desktop/services/vscode-import-controller.mjs",
+      "desktop/services/vscode-import.mjs",
+      "desktop/services/workspace-lifecycle.mjs",
+      "dist/index.html"
+    ],
+    "unexpectedFiles": [],
+    "asarSha256": "888092d56b92e43cad0e437cf569d797064e8bae5eac412a03f14f08f1785e24",
+    "passed": true,
+    "isolatedSourceFilesMatchingCommit": 134
+  },
+  "nativeChecks": [
+    "actual desktop entry, local Hub, encrypted settings and React render",
+    "General preferences: actual main/preload get/save/bootstrap, safeStorage encrypted persistence, invalid-write rollback and live React layout/density/empty-editor CSS",
+    "Electron ABI loads native node-pty, real PowerShell input/output, console TTY, resize, Ctrl-C, exit code and owner process cleanup",
+    "VS Code import service/controller regression suite on real Windows console Node, zero failures/skips",
+    "A8 Provider CLI: real Windows ConPTY, verified console node.exe fixture, exact Unicode/space/quote argv and canonical cwd, owner/lane fencing",
+    "A8 Provider CLI: Shift+Tab raw bytes, concurrent/repeated open idempotency and zero history replay",
+    "A8 Provider CLI: actual exit code, no implicit restart, explicit fresh launch and process/PTY cleanup",
+    "Appearance: two actual Electron/main/React processes, dark/light CSS, colored/monochrome avatars, encrypted settings restored after process exit and color palette restored"
+  ],
+  "generalPreferences": {
+    "saved": {
+      "autoCheckUpdates": false,
+      "theme": "dark",
+      "collaboratorColors": true,
+      "layout": "editor",
+      "conversationDensity": "compact",
+      "autoHideEmptyEditor": false,
+      "notificationsEnabled": false,
+      "notifyApprovals": true,
+      "notifyHandoffs": true,
+      "notifyUnknownOutcomes": true,
+      "trayIcon": false,
+      "completionSound": false
+    },
+    "encryptedStoreReopened": true,
+    "rejectedWriteUnchanged": true,
+    "editorLayout": {
+      "editor": 421.203125,
+      "dock": 163.796875
+    },
+    "liveLayoutAndDensity": true,
+    "emptyEditorHidden": true,
+    "osNotificationsTriggered": false
+  },
+  "powershellReady": {
+    "initialPromptObserved": true
+  },
+  "appearance": {
+    "save": {
+      "phase": "save",
+      "platform": "win32",
+      "modelCalls": 0,
+      "settings": {
+        "autoCheckUpdates": false,
+        "theme": "light",
+        "collaboratorColors": false,
+        "layout": "agent",
+        "conversationDensity": "detailed",
+        "autoHideEmptyEditor": true,
+        "notificationsEnabled": false,
+        "notifyApprovals": true,
+        "notifyHandoffs": true,
+        "notifyUnknownOutcomes": true,
+        "trayIcon": false,
+        "completionSound": false
+      },
+      "dark": {
+        "theme": "dark",
+        "scheme": "dark",
+        "avatar": "rgb(52, 79, 119)",
+        "name": "R"
+      },
+      "light": {
+        "theme": "light",
+        "scheme": "light",
+        "avatar": "rgb(223, 235, 251)",
+        "name": "R"
+      },
+      "monochrome": {
+        "theme": "light",
+        "scheme": "light",
+        "avatar": "rgb(226, 229, 233)",
+        "name": "R"
+      },
+      "passed": true
+    },
+    "restart": {
+      "phase": "restart",
+      "platform": "win32",
+      "modelCalls": 0,
+      "settings": {
+        "autoCheckUpdates": false,
+        "theme": "light",
+        "collaboratorColors": false,
+        "layout": "agent",
+        "conversationDensity": "detailed",
+        "autoHideEmptyEditor": true,
+        "notificationsEnabled": false,
+        "notifyApprovals": true,
+        "notifyHandoffs": true,
+        "notifyUnknownOutcomes": true,
+        "trayIcon": false,
+        "completionSound": false
+      },
+      "restored": {
+        "theme": "light",
+        "scheme": "light",
+        "avatar": "rgb(226, 229, 233)",
+        "name": "R"
+      },
+      "restoredColor": {
+        "theme": "light",
+        "scheme": "light",
+        "avatar": "rgb(223, 235, 251)",
+        "name": "R"
+      },
+      "restoredDark": {
+        "theme": "dark",
+        "scheme": "dark",
+        "avatar": "rgb(52, 79, 119)",
+        "name": "R"
+      },
+      "passed": true
+    }
+  },
+  "downloadNote": "GitHub direct transport intermittently failed with TLS/EOF. Final official artifact download used the existing macOS HTTPS proxy, resumed once, and matched the API artifact digest plus runner asset hashes. CI did not require a retry or source change."
+}

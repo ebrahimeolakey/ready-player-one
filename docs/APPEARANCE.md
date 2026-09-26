@@ -46,4 +46,4 @@ node --test tests/appearance-view.test.mjs tests/editor-settings-view.test.mjs t
 
 实际桌面验证：`node scripts/general-settings-desktop-smoke.mjs` 使用隔离临时 RPO_DATA_DIR 启动真实 main / preload / React，通过控件选择浅色、关闭头像多色，验证广播不重置草稿、保存写入加密配置。第二个全新进程确认主题/中性头像恢复，再通过「恢复默认」切回 dark / true。两个阶段通过，且真实磁盘保存失败仍回滚原设置。`node scripts/update-health-desktop-smoke.mjs` 的通过/拒绝两条路径均通过；正常应用仅在健康检查成功后出现。未调用真实模型或修改已安装应用。
 
-边界：验证的是源码桌面入口的实际进程重启，并未重新打包或发布安装包；不是原版浅色界面的像素级复刻。系统原生菜单/窗口装饰、系统登录对话框及嵌入的外部网页不由本 CSS 重新着色。已查看实际 Mac 通用设置浅色页面；仍需更多实际页面巡检及 Windows 视觉确认。Linux 无 DISPLAY 时真实 Electron 视图测试明确跳过。
+0.4.7 的 Apple Silicon 安装包已实际打开，保存浅色主题并检查设置页面；与源码桌面重启测试分别记录，见 [包内审计](evidence/mac-package-0.4.7.json)。这不是原版浅色界面的像素级复刻。系统原生菜单/窗口装饰、系统登录对话框及嵌入的外部网页不由本 CSS 重新着色。已查看实际 Mac 通用设置浅色页面；Windows 原生 CI 已验证深浅主题、头像颜色及进程重启恢复，见 [平台记录](WINDOWS-NATIVE-CI.md)。更多实际页面及实体设备视觉验收仍待进行。Linux 无 DISPLAY 时真实 Electron 视图测试明确跳过。

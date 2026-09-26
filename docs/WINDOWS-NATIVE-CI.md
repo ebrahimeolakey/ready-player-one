@@ -121,12 +121,27 @@ ZIP / NSIS 在同一 runner 构建成功，下载后的 SHA256 与 runner 一致
 本机完整回归 375/375，并非全部 375 项都在 Windows 重跑。仍未覆盖实体 Windows 首次安装、SmartScreen / 安装向导、真实账号 GUI 登录、实际 Windows 通知 / 托盘 / 声音、Windows 自更新或两台实体机器的公网协作。
 
 
-## 0.4.7-beta.1 验证准备（尚未运行 Windows CI）
+## 0.4.7-beta.1 原生验证
 
-既有 workflow 保持不变。`scripts/windows-native-smoke.mjs` 保留 PowerShell 初始提示符等待和全部 PTY / Provider CLI 断言，新增以下原生验证入口：
+[成功运行](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/36227388246)，精确提交 `a372a68db340f6e4c36fba03ac16bf3d70cb0180`。本轮一次 CI 成功，无需修改测试或重跑。
 
-- 使用已验证为 console PE 的 runner `node.exe` 执行 `tests/vscode-import.test.mjs` 与 `tests/vscode-import-controller.test.mjs`。TAP 的总数、通过、失败和跳过数写入 `windows-native.json.additionalRegressions`；要求全部通过、无跳过。它们是原 28 项平台清单之外的新增测试，不能将本机测试结果充当 Windows 结果。
-- 顺序启动 `scripts/windows-appearance-smoke.mjs` 的 `save` 与 `restart` 两个真实 Electron 进程，使用同一个新增临时数据目录，与外层烟测数据隔离。保存阶段检查真实暗 / 亮主题 CSS 和彩色 / 单色头像；确认首进程实际退出后，第二进程在任何写入前检查主进程从加密磁盘恢复的设置及实际页面样式，再恢复彩色头像与暗色主题对照最初配色。
-- 只通过应用原有 preload / main IPC 保存设置；无 mock renderer。通知、声音与托盘关闭，不发起模型调用。日志、分阶段 JSON 和截图写入 `ci-evidence/appearance/` 及 `windows-appearance-*.log`，沿用已有 evidence artifact 上传。
+Windows 2022 x64：原平台清单 **28/28 通过**；同一 runner 的 console Node 22.23.2 另跑 VS Code import service / controller **22/22 通过，0 跳过**。实际 Electron 40.10.6 / Node 24.15.0 主入口、Hub、加密通用设置、preload / React、PowerShell PTY 与 Provider CLI ConPTY 检查通过，保留初始 PowerShell 提示符等待及原有 TTY、resize、Ctrl-C、参数 / 权限 / 退出清理断言。
 
-新增子进程分别限时 45 秒，整套烟测上限由 120 秒调整到 180 秒以容纳两次实际应用启动；PowerShell 与既有各行为断言不放宽。本机导入模块 22/22 通过及脚本语法检查仅是提交前准备；最终 Windows 结果须在精确集成提交触发 CI 后补充。
+外观验证实际启动两个 Electron / main / React 进程，共用独立临时数据目录。第一进程验证暗 / 亮主题与彩色 / 单色头像并保存；正常退出后，第二进程在任何写入前检查加密设置恢复及实际亮主题 / 单色头像，再恢复原有亮主题彩色头像和暗主题彩色头像。Windows 实际配色分别为 `rgb(52,79,119)`、`rgb(223,235,251)` 与 `rgb(226,229,233)`；两阶段均通过。测试没有通知、声音、托盘或模型调用。
+
+ZIP 与 NSIS 同一 runner 原生构建成功。下载时直连 GitHub / blob 服务出现 TLS / EOF，最终使用电脑现有 HTTPS 代理和断点续传完成；没有更改系统设置。下载 artifact 的 API digest、两资产 runner SHA256、外层及便携 ZIP 全部 CRC 均通过。
+
+包内 **83 个 core/desktop/dist 文件**与隔离发行目录清单完全一致：81 个仅 CRLF/LF 差异，编译 JS/CSS 两个文件逐字节相同。隔离目录另外核对 134 个 core/desktop/src/package 文件与精确提交逐字节一致，未混入其它未提交开发。manifest 为 `0.4.7-beta.1` / Apache-2.0；ASAR SHA256 `888092d56b92e43cad0e437cf569d797064e8bae5eac412a03f14f08f1785e24`。
+
+| 文件 | 字节数 | SHA256 |
+| --- | ---: | --- |
+| `Ready-Player-One-0.4.7-beta.1-windows-x64-setup.exe` | 104956121 | `710a7044f6e7b5a18129272766faf279a8e780d2cb4d7e33a1e4fca392b9560b` |
+| `Ready-Player-One-0.4.7-beta.1-windows-x64.zip` | 147985439 | `b014736c16158ef38fd8f91a044577765d7a8e1bb80cb638d51d3ee6201384aa` |
+
+[结构化审计](evidence/windows-native-0.4.7.json)；[运行证据 artifact](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/36227388246/artifacts/10900809924)；[原生构建包 artifact](https://github.com/ebrahimeolakey/ready-player-one/actions/runs/36227388246/artifacts/10901430675)。artifact 有保留期，最终下载请使用项目 Releases。
+
+![0.4.7 Windows 原生启动](evidence/windows-native-0.4.7.png)
+
+![0.4.7 Windows 重启后恢复亮主题与单色头像](evidence/windows-native-0.4.7-appearance.png)
+
+本机完整回归 401/401，并非全部 401 项都在 Windows 重跑。仍未覆盖实体 Windows 首次安装、SmartScreen / 安装向导、真实账号 GUI 登录、实际 Windows 通知 / 托盘 / 声音、Windows 自更新或两台实体机器的公网协作。
