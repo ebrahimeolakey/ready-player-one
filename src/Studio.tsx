@@ -287,6 +287,7 @@ export function Studio({
             <SyncPanel state={state} session={s} call={call} />
             {mapped && (
               <GitPanel
+                canWrite={["owner","editor"].includes(state.me?.roles?.[s.workspaceId]||(state.me?.host?"owner":"viewer"))}
                   canComment={(state.me?.roles?.[s.workspaceId]||(state.me?.host?"owner":"viewer"))!=="viewer"}
                 call={window.rpo.invoke}
                 context={params}

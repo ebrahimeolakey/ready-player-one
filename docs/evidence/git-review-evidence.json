@@ -1,0 +1,178 @@
+[
+  {
+    "name": "wide-dark-breadcrumb",
+    "width": 900,
+    "theme": "dark",
+    "location": "breadcrumb",
+    "scroll": 0,
+    "viewport": {
+      "width": 900,
+      "height": 720
+    },
+    "controls": {
+      "x": 831,
+      "y": 257.5,
+      "width": 69,
+      "height": 41,
+      "right": 900,
+      "bottom": 298.5
+    },
+    "header": {
+      "x": 0,
+      "y": 257.5,
+      "width": 831,
+      "height": 41,
+      "right": 831,
+      "bottom": 298.5
+    },
+    "scroller": {
+      "x": 0,
+      "y": 53,
+      "width": 900,
+      "height": 537.609375,
+      "right": 900,
+      "bottom": 590.609375
+    },
+    "scrollWidth": 900,
+    "diffScrollTop": 0,
+    "controlsCount": 1,
+    "selectedFileActions": 1,
+    "requests": [
+      "git.status",
+      "git.branches",
+      "git.diff"
+    ]
+  },
+  {
+    "name": "narrow-dark-breadcrumb",
+    "width": 380,
+    "theme": "dark",
+    "location": "breadcrumb",
+    "scroll": 0,
+    "viewport": {
+      "width": 380,
+      "height": 720
+    },
+    "controls": {
+      "x": 321,
+      "y": 257.5,
+      "width": 59,
+      "height": 56,
+      "right": 380,
+      "bottom": 313.5
+    },
+    "header": {
+      "x": 0,
+      "y": 257.5,
+      "width": 321,
+      "height": 56,
+      "right": 321,
+      "bottom": 313.5
+    },
+    "scroller": {
+      "x": 0,
+      "y": 53,
+      "width": 380,
+      "height": 537.609375,
+      "right": 380,
+      "bottom": 590.609375
+    },
+    "scrollWidth": 380,
+    "diffScrollTop": 0,
+    "controlsCount": 1,
+    "selectedFileActions": 1,
+    "requests": [
+      "git.status",
+      "git.branches",
+      "git.diff"
+    ]
+  },
+  {
+    "name": "narrow-light-floating",
+    "width": 380,
+    "theme": "light",
+    "location": "floating",
+    "scroll": 240,
+    "viewport": {
+      "width": 380,
+      "height": 720
+    },
+    "controls": {
+      "x": 157.5,
+      "y": 537.609375,
+      "width": 65,
+      "height": 43,
+      "right": 222.5,
+      "bottom": 580.609375
+    },
+    "header": {
+      "x": 0,
+      "y": 257.5,
+      "width": 380,
+      "height": 31,
+      "right": 380,
+      "bottom": 288.5
+    },
+    "scroller": {
+      "x": 0,
+      "y": 53,
+      "width": 380,
+      "height": 537.609375,
+      "right": 380,
+      "bottom": 590.609375
+    },
+    "scrollWidth": 380,
+    "diffScrollTop": 240,
+    "controlsCount": 1,
+    "selectedFileActions": 1,
+    "requests": [
+      "git.status",
+      "git.branches",
+      "git.diff"
+    ]
+  },
+  {
+    "name": "narrow-dark-floating",
+    "width": 380,
+    "theme": "dark",
+    "location": "floating",
+    "scroll": 900,
+    "viewport": {
+      "width": 380,
+      "height": 720
+    },
+    "controls": {
+      "x": 157.5,
+      "y": 537.609375,
+      "width": 65,
+      "height": 43,
+      "right": 222.5,
+      "bottom": 580.609375
+    },
+    "header": {
+      "x": 0,
+      "y": 257.5,
+      "width": 380,
+      "height": 31,
+      "right": 380,
+      "bottom": 288.5
+    },
+    "scroller": {
+      "x": 0,
+      "y": 53,
+      "width": 380,
+      "height": 537.609375,
+      "right": 380,
+      "bottom": 590.609375
+    },
+    "scrollWidth": 380,
+    "diffScrollTop": 900,
+    "controlsCount": 1,
+    "selectedFileActions": 1,
+    "requests": [
+      "git.status",
+      "git.branches",
+      "git.diff"
+    ]
+  }
+]

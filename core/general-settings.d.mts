@@ -4,6 +4,7 @@ export type GeneralSettingsValue = {
   theme: 'dark' | 'light';
   collaboratorColors: boolean;
   layout: 'agent' | 'editor';
+  reviewControlLocation: 'breadcrumb' | 'floating';
   conversationDensity: 'detailed' | 'compact';
   autoHideEmptyEditor: boolean;
   notificationsEnabled: boolean;

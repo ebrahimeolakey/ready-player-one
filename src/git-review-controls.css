@@ -1,0 +1,10 @@
+.git-diff.review-breadcrumb,.git-diff.review-floating { display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-rows:auto 1fr auto; align-content:start; min-width:0; }
+.git-diff>header { grid-column:1 / -1; grid-row:1; align-items:center; min-width:0; }
+.git-diff>header strong { min-width:0; font-weight:400; overflow-wrap:anywhere; }
+.git-diff.review-breadcrumb:has(.git-review-controls)>header { grid-column:1; flex-wrap:wrap; }
+.git-diff-content { grid-column:1 / -1; grid-row:2; min-width:0; overflow:auto; }
+.git-review-controls { display:flex; align-items:center; justify-content:center; gap:4px; z-index:2; }
+.review-breadcrumb>.git-review-controls { grid-column:2; grid-row:1; padding:4px 8px 4px 0; }
+.git-review-controls .button { white-space:nowrap; font-size:11px; padding:5px 8px; }
+.review-floating>.git-review-controls { grid-column:1 / -1; grid-row:3; position:sticky; bottom:10px; justify-self:center; align-self:end; width:max-content; max-width:calc(100% - 16px); margin:10px 8px; padding:4px; border:1px solid var(--appearance-line,#454545); border-radius:10px; background:var(--appearance-surface,#202020); box-shadow:0 3px 12px #0003; }
+@media(max-width:600px) { .review-breadcrumb>.git-review-controls {padding-right:4px;} .git-review-controls .button {padding:5px;} }

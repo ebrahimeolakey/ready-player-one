@@ -40,6 +40,9 @@ export function GeneralSettings({settings, call, error}: {settings?: Partial<Gen
         <label><span>对话密度</span><select value={draft.conversationDensity} onChange={event => update('conversationDensity', event.target.value as GeneralSettingsValue['conversationDensity'])}>
           <option value="detailed">详细</option><option value="compact">紧凑</option>
         </select></label>
+        <label><span>Git 审阅按钮</span><select value={draft.reviewControlLocation} onChange={event => update('reviewControlLocation', event.target.value as GeneralSettingsValue['reviewControlLocation'])}>
+          <option value="breadcrumb">路径栏</option><option value="floating">浮动条</option>
+        </select></label>
         {toggle('autoHideEmptyEditor', '隐藏空编辑器')}
         {toggle('restoreLastSession', '启动时打开上次会话')}
       </fieldset>

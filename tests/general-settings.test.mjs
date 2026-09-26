@@ -7,10 +7,11 @@ test('general settings keep explicit opt-ins off and reject malformed or prototy
   assert.equal(DEFAULT_GENERAL_SETTINGS.trayIcon, false);
   assert.equal(DEFAULT_GENERAL_SETTINGS.restoreLastSession, true);
   assert.equal(DEFAULT_GENERAL_SETTINGS.theme, 'dark');
+  assert.equal(DEFAULT_GENERAL_SETTINGS.reviewControlLocation, 'breadcrumb');
   assert.equal(DEFAULT_GENERAL_SETTINGS.collaboratorColors, true);
   assert.deepEqual(validateGeneralSettings({}), {...DEFAULT_GENERAL_SETTINGS});
   for (const value of [null, [], false, {layout:'vscode'}, {conversationDensity:'hidden'}, {notificationsEnabled:'false'},
-    {restoreLastSession:'true'}, {theme:'system'}, {theme:null}, {collaboratorColors:'false'}, {autoCheckUpdates:0}, {completionSound:null}, {constructor:true}, {toString:true}, JSON.parse('{"__proto__":{}}')]) {
+    {restoreLastSession:'true'}, {reviewControlLocation:'island'}, {reviewControlLocation:true}, {theme:'system'}, {theme:null}, {collaboratorColors:'false'}, {autoCheckUpdates:0}, {completionSound:null}, {constructor:true}, {toString:true}, JSON.parse('{"__proto__":{}}')]) {
     assert.throws(() => validateGeneralSettings(value));
   }
   const saved = validateGeneralSettings({notificationsEnabled:false, notifyApprovals:true, layout:'editor', conversationDensity:'compact'});
@@ -31,3 +32,5 @@ test('previous saved preferences gain appearance defaults without losing user ch
   const selected = validateGeneralSettings({...migrated, theme:'light', collaboratorColors:false});
   assert.deepEqual(resolveGeneralSettings(JSON.parse(JSON.stringify(selected))), selected);
 });
+
+test('Git review location survives serialization and older settings gain the breadcrumb default',()=>{assert.equal(resolveGeneralSettings({layout:'editor'}).reviewControlLocation,'breadcrumb');const value=validateGeneralSettings({reviewControlLocation:'floating'});assert.equal(resolveGeneralSettings(JSON.parse(JSON.stringify(value))).reviewControlLocation,'floating');});

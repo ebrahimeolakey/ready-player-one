@@ -70,6 +70,7 @@ import { LanguageService } from "./services/language.mjs";
 import { DraftStore } from "./services/drafts.mjs";
 import { diffPreview, captureDiffReference, openReference } from "./services/comment-anchors.mjs";
 import { ReferenceRefreshService } from "./services/reference-refresh.mjs";
+import { authorizeGit } from "./services/git-access.mjs";
 import { GitService } from "./services/git.mjs";
 import {
   captureReference,
@@ -321,19 +322,6 @@ const githubRepository = new GithubRepositoryService({
 });
 const gitService = new GitService({ env: local.localEnv(), isBusy: rootBusy });
 gitService.locks = repoLocks;
-const gitMethods = new Set([
-  "status",
-  "diff",
-  "stage",
-  "unstage",
-  "commit",
-  "fetch",
-  "pull",
-  "push",
-  "branches",
-  "createBranch",
-  "switchBranch",
-]);
 const sessionNavigation = new SessionNavigation({client:()=>client,online:()=>online,config,saveConfig});
 let stateRevision = 0;
 const state = () => ({
@@ -898,8 +886,10 @@ async function invoke(method, a) {
   if (method === "draft.read") return drafts.read(a.key);
   if (method === "draft.set") return drafts.set(a.key, a.value);
   if (method === "draft.remove") return drafts.remove(a.key);
-  if (method.startsWith("git.") && gitMethods.has(method.slice(4))) {
-    const root=localRoot(a),c=client;
+  if (method.startsWith("git.")) {
+    const c=client;
+    await authorizeGit({method,args:a,client:c,online:()=>online,currentClient:()=>client});
+    const root=localRoot(a);
     if(method==='git.diff')return withReferenceContext(a,r=>diffPreview(r,a,gitService));
     const result=await gitService[method.slice(4)](root,a);
     if(c===client&&['git.pull','git.commit','git.switchBranch','git.createBranch'].includes(method))await referenceRefresh.refresh({root,workspaceId:a.workspaceId,sessionId:a.sessionId,reason:'Git 更新',expectedClient:c,isCurrent:()=>canonicalRoot(localRoot(a))===canonicalRoot(root)});

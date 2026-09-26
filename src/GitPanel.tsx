@@ -9,6 +9,8 @@ import {
   Plus,
   RefreshCw,
 } from "lucide-react";
+import {useGeneralSettings} from "./GeneralSettings";
+import "./git-review-controls.css";
 import {DiffReview} from "./DiffReview";
 import type { Call } from "./ui";
 import "./git-panel.css";
@@ -40,13 +42,16 @@ export function GitPanel({
   rootRevision = "",
   busy = false,
   canComment = false,
+  canWrite = false,
 }: {
   call: Call;
   context: Record<string, unknown>;
   rootRevision?: string;
   busy?: boolean;
   canComment?: boolean;
+  canWrite?: boolean;
 }) {
+  const {reviewControlLocation}=useGeneralSettings();
   const [status, setStatus] = useState<GitState | null>(null),
     [branches, setBranches] = useState<Branch[]>([]),
     [remotes, setRemotes] = useState<string[]>([]),
@@ -61,10 +66,12 @@ export function GitPanel({
       staged: boolean;
     } | null>(null),
     [diff, setDiff] = useState("");
+  const [reviewReady,setReviewReady]=useState(false);
   const [diffPreview,setDiffPreview]=useState<{diffHash:string;canonicalRoot:string}|null>(null);
   const contextKey = JSON.stringify([context, rootRevision]);
   const activeContext = useRef(contextKey);
   const previewVersion = useRef(0);
+  const mutationActive = useRef(false);
   activeContext.current = contextKey;
   async function refresh() {
     const [state, refs] = await Promise.all([
@@ -94,6 +101,7 @@ export function GitPanel({
     setStatus(null);
     setBranches([]);
     setSelected(null);
+    setReviewReady(false);
     setDiff("");
     void load();
   }, [contextKey]);
@@ -102,6 +110,7 @@ export function GitPanel({
     setSelected({ path: file.path, staged });
     setDiff("加载中…");
     setDiffPreview(null);
+    setReviewReady(false);
     setError("");
     try {
       const result = await call("git.diff", {
@@ -113,7 +122,7 @@ export function GitPanel({
         version === previewVersion.current &&
         activeContext.current === contextKey
       )
-        {setDiff(result.text || "没有文本差异");setDiffPreview(result.binary?null:result);}
+        {setReviewReady(!!result.text||!!result.binary);setDiff(result.text || "没有文本差异");setDiffPreview(result.binary?null:result);}
     } catch (e) {
       if (
         version === previewVersion.current &&
@@ -123,6 +132,8 @@ export function GitPanel({
     }
   }
   async function action(method: string, args: Record<string, unknown> = {}) {
+    if(disabled || mutationActive.current)return;
+    mutationActive.current=true;
     previewVersion.current++;
     setWorking(true);
     setError("");
@@ -134,15 +145,17 @@ export function GitPanel({
         setCreating(false);
       }
       await refresh();
+      if(activeContext.current!==contextKey)return;
       setSelected(null);
       setDiff("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Git 操作失败");
     } finally {
+      mutationActive.current=false;
       setWorking(false);
     }
   }
-  const disabled = working || busy;
+  const disabled = working || busy || !canWrite;
   const staged = status?.files.filter((file) => file.staged) || [],
     unstaged = status?.files.filter((file) => file.unstaged) || [];
   function list(files: GitFile[], isStaged: boolean) {
@@ -165,6 +178,7 @@ export function GitPanel({
                   ? `${file.originalPath} → ${file.path}`
                   : file.path
               }
+              disabled={working}
               onClick={() => void preview(file, isStaged)}
             >
               <span className={file.conflict ? "git-conflict-code" : ""}>
@@ -178,7 +192,7 @@ export function GitPanel({
               </span>
               {file.path}
             </button>
-            <button
+            {canWrite && !(reviewReady && selected?.path===file.path && selected.staged===isStaged) && <button
               type="button"
               className="icon-button"
               title={isStaged ? "取消暂存" : "暂存"}
@@ -191,7 +205,7 @@ export function GitPanel({
               }
             >
               {isStaged ? <Minus size={13} /> : <Plus size={13} />}
-            </button>
+            </button>}
           </div>
         ))}
       </div>
@@ -317,7 +331,7 @@ export function GitPanel({
         </div>
       )}
       {busy && <small className="git-notice">Agent 运行中 · 可审阅</small>}
-      {(status?.operation || status?.conflicts.length) && (
+      {status && Boolean(status.operation || status.conflicts.length) && (
         <small className="git-notice">
           {status.conflicts.length
             ? "存在冲突，请在编辑器中解决后暂存"
@@ -341,12 +355,15 @@ export function GitPanel({
           )}
         </div>
         {selected && (
-          <div className="git-diff">
+          <div className={`git-diff review-${reviewControlLocation}`}>
             <header>
-              {selected.path}
+              <strong title={selected.path}>{selected.path}</strong>
               <span>{selected.staged ? "已暂存" : "未暂存"}</span>
             </header>
-            <DiffReview text={diff} preview={diffPreview} context={context} path={selected.path} staged={selected.staged} call={call} canComment={canComment}/>
+            <div className="git-diff-content"><DiffReview text={diff} preview={diffPreview} context={context} path={selected.path} staged={selected.staged} call={call} canComment={canComment}/></div>
+            {canWrite && reviewReady && status?.files.some(file=>file.path===selected.path && (selected.staged?file.staged:file.unstaged)) && <div className="git-review-controls" role="toolbar" aria-label="当前文件 Git 审阅按钮">
+              <button type="button" className="button" disabled={disabled} aria-label={`${selected.staged?"取消暂存":"暂存"} ${selected.path}`} title={selected.path} onClick={()=>void action(selected.staged?"unstage":"stage",{paths:[selected.path]})}>{selected.staged?<Minus size={13}/>:<Plus size={13}/>} {selected.staged?"取消暂存":"暂存"}</button>
+            </div>}
           </div>
         )}
       </div>

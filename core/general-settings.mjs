@@ -4,6 +4,7 @@ export const DEFAULT_GENERAL_SETTINGS = Object.freeze({
   theme: 'dark',
   collaboratorColors: true,
   layout: 'agent',
+  reviewControlLocation: 'breadcrumb',
   conversationDensity: 'detailed',
   autoHideEmptyEditor: true,
   notificationsEnabled: true,
@@ -13,7 +14,7 @@ export const DEFAULT_GENERAL_SETTINGS = Object.freeze({
   trayIcon: false,
   completionSound: false,
 });
-const choices = {theme: ['dark', 'light'], layout: ['agent', 'editor'], conversationDensity: ['detailed', 'compact']};
+const choices = {reviewControlLocation: ['breadcrumb', 'floating'], theme: ['dark', 'light'], layout: ['agent', 'editor'], conversationDensity: ['detailed', 'compact']};
 export function validateGeneralSettings(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
       Object.keys(value).some(key => !Object.hasOwn(DEFAULT_GENERAL_SETTINGS, key))) {

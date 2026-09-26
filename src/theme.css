@@ -89,3 +89,10 @@ html[data-theme='light'] :is(.provider-model-picker summary:hover,.provider-mode
 html[data-theme='light'] :is(.git-toolbar,.git-network,.git-file-list,.git-commit,.debugger-controls,.debugger-content aside) { border-color:var(--appearance-line); }
 html[data-theme='light'] :is(.git-toolbar select,.git-network select,.git-create-branch input,.git-commit textarea) { color:var(--appearance-text); background:#fff; border-color:#b9c4ce; }
 html[data-theme='light'] :is(.rail-section,.comment-list article,.composer-controls,.watching,.sync-panel,.panel-heading,.diff-file,.terminal-toolbar,.share-drawer .member-row) { border-color:var(--appearance-line); }
+
+html[data-theme="light"] :is(.git-file-name,.git-diff header) { color:var(--appearance-text); }
+html[data-theme="light"] :is(.git-group-label,.git-group-label span,.git-diff header span,.git-clean) { color:var(--appearance-muted); }
+html[data-theme="light"] :is(.git-file-row:hover,.git-file-row.selected) { background:var(--appearance-hover); }
+html[data-theme="light"] .git-file-name>span { color:#246e50; }
+html[data-theme="light"] .git-file-name>.git-conflict-code { color:#9e382e; }
+html[data-theme="light"] .git-diff { border-color:var(--appearance-line); }
