@@ -6,9 +6,27 @@
 
 <a id="english"></a>
 
-Bring your team, your AI accounts, and your work into one shared space. Discuss ideas, delegate tasks, share live agent sessions, and review the results together—with conversations and deliverables side by side.
+Build a team around a project, bring agents into the conversation, and carry the work through to a result everyone can review. Ready Player One connects shared context, clear ownership, and agent execution in one workspace.
 
-Local-first. Open source. Built for planning, research, writing, operations, and building software.
+Local-first and open source. Bring your own Codex / Claude accounts. Work on plans, research, writing, operations, or software.
+
+[Download for Mac / Windows](#download)
+
+## What makes it different
+
+### Agent Session Share
+
+**Make an agent session a place your team can work together.** Share a live Codex or Claude session, follow its output, and contribute context as the work unfolds. Authorized collaborators can guide the same task, request changes, and review what the agent produces. The conversation and execution history stay with the work.
+
+### Task claiming, inside the group chat
+
+**Turn “we should do this” into work an agent can take on.** Discuss a project with your team, ask a lead agent to organize the conversation into task proposals, and choose an execution agent to claim a task. Once a teammate starts the run, the agent works with the captured discussion context in a dedicated session. Deliverables come back for comments, iteration, and acceptance beside the group chat.
+
+### Projects built around DRI + IC collaboration
+
+**Give every project a home and every outcome an owner.** Projects bring together the conversation, tasks, agents, and deliverables. A **DRI (Directly Responsible Individual)** owns the outcome; **ICs (Individual Contributors)** contribute their expertise and work alongside agents to move it forward.
+
+Responsibility and control are separate: being the DRI does not automatically grant execution rights. Explicit **Controllers** permissions let authorized teammates steer a task together, regardless of their position in the company. DRI + IC describes the collaboration model; the beta implements DRI ownership and controller grants.
 
 ## Download
 
@@ -28,16 +46,11 @@ On Mac, unzip and drag `头号玩家.app` into Applications. On Windows, run the
 
 If an earlier Mac download says “damaged,” install this repair release. See [first-launch help](docs/BETA-TESTING.md#mac-first-launch) for the system approval steps.
 
-## Work together, with AI
+## From conversation to delivery
 
-| Workflow | What happens in the space |
-| --- | --- |
-| Discuss | Keep people and agents in a persistent project conversation. |
-| Delegate | Turn discussions into tasks, assign ownership, and choose who can control execution. |
-| Collaborate | Share live Codex / Claude sessions, follow progress, and guide the work together. |
-| Review | Preview HTML / Markdown deliverables, leave comments on a version, and accept the result. |
+**Project → Team discussion → Task proposal → Agent claim → Shared session → Deliverable → Review**
 
-A plan, a research brief, a written draft, or a working page can all start in the same space. The shared workflow connects the conversation, the agent's work, and the team's review.
+A plan, a research brief, a written draft, or a working page can follow the same workflow. Keep the reason for the work, the people responsible, the agent's progress, and the result connected to the project.
 
 ## Get started
 
@@ -60,6 +73,7 @@ A plan, a research brief, a written draft, or a working page can all start in th
 
 - **The host must keep the app open and the computer online.** Internet sharing uses a temporary tunnel; restarting it requires a new invitation. An always-on collaboration hub and cloud execution are not deployed.
 - GitHub repository authorization is available. Team identity sign-in still requires your own GitHub OAuth app and a fixed HTTPS service; this beta does not include that hosted service.
+- Task proposals are agent-assisted; a person initiates task claiming and execution. Autonomous task pickup from incoming group messages is not yet available. IC describes contribution to the project, not a separate permission role in this beta.
 - The new project workflow is in the Mac preview. Windows remains on 0.4.7-beta.1. The Mac preview enforces member roles for local Git write operations.
 - Deliverables currently support static HTML / Markdown with scripts and external network access disabled by default. Dynamic localhost sharing, arbitrary attachment sync, dedicated workflow templates, Kanban boards, deadlines, and office-app integrations are not included.
 - Language services cover JS/TS, and debugging covers Node.js JavaScript. General VS Code extension compatibility is not included.
@@ -80,9 +94,27 @@ The current main branch uses [Apache-2.0](LICENSE). Releases v0.3.0-beta.1 and e
 
 **人与 Agent 一起工作的 AI 原生协作空间。**
 
-把团队、自己的 AI 账号和正在做的事放进同一个空间。一起讨论、分配任务、共享 Agent 实时会话，并排查看对话与产物，共同完成验收。
+围绕项目组成团队，让 Agent 参与讨论，把共同的想法推进到大家可以验收的结果。头号玩家把共享上下文、明确分工与 Agent 执行连接在同一个工作空间里。
 
-本地优先，开源。用于策划、研究、写作、运营，也用于开发软件。
+本地优先，开源。使用自己的 Codex / Claude 账号，一起做策划、研究、写作、运营或软件开发。
+
+[下载 Mac / Windows 版](#直接下载)
+
+## 项目亮点
+
+### Agent Session Share · 共享 Agent 会话
+
+**让 Agent 会话成为团队可以一起工作的地方。** 共享一个实时 Codex 或 Claude 会话，跟进输出，在执行过程中补充上下文。获得授权的同事可以共同指导同一项任务、提出修改、查看产物；讨论和执行历史持续留在工作中。
+
+### 在群聊里认领任务
+
+**把一句“我们应该做这件事”，变成 Agent 可以接手的任务。** 团队在项目群里讨论，由负责人 Agent 将讨论整理成任务提案，再选择执行 Agent 认领任务。成员确认开始后，Agent 带着已记录的讨论上下文，在专属会话中执行。产物回到群聊旁，团队可以评论、迭代并验收。
+
+### 以项目为中心，围绕 DRI + IC 协作
+
+**每个项目都有归属，每个结果都有负责人。** 项目集中承载群聊、任务、Agent 与产物。**DRI（Directly Responsible Individual，直接负责人）**对结果负责；**IC（Individual Contributor，贡献者）**发挥各自专长，与 Agent 一起推进具体工作。
+
+责任与控制权分开：成为 DRI 不会自动获得执行权限。通过明确的 **Controllers（控制者）**授权，同事可以共同指导任务，不受公司职位高低影响。DRI + IC 是协作模型；当前测试版已实现 DRI 归属与控制者授权。
 
 ## 直接下载
 
@@ -102,16 +134,11 @@ Mac 解压后将「头号玩家.app」拖入「应用程序」。Windows 运行�
 
 如果旧 Mac 安装包提示“已损坏”，请改用本次修复版。首次启动的系统放行步骤见 [安装帮助](docs/BETA-TESTING.md#mac-first-launch)。
 
-## 和 AI 一起协作
+## 从讨论到交付
 
-| 工作方式 | 在空间里做什么 |
-| --- | --- |
-| 讨论 | 人与 Agent 在持续的项目群聊里共享上下文。 |
-| 分工 | 把讨论变成任务，明确负责人，决定谁能控制执行。 |
-| 协作 | 共享 Codex / Claude 实时会话，跟进进展，共同指导工作。 |
-| 验收 | 预览 HTML / Markdown 产物，针对具体版本评论，确认结果。 |
+**项目 → 团队讨论 → 任务提案 → Agent 认领 → 共享会话 → 产物 → 验收**
 
-一份方案、一篇调研、一版文稿，或者一个能用的页面，都可以从这里开始。讨论、Agent 执行和团队验收连在同一个工作流程里。
+一份方案、一篇调研、一版文稿，或者一个能用的页面，都可以沿着同一条流程推进。为什么做、谁负责、Agent 做到哪一步、最终交付了什么，都围绕项目保留下来。
 
 ## 三步开始
 
@@ -134,6 +161,7 @@ Mac 解压后将「头号玩家.app」拖入「应用程序」。Windows 运行�
 
 - **房主需保持应用打开、电脑在线。** 公网共享使用临时通道，重启后需重新邀请。常驻协作服务与云端执行尚未部署。
 - GitHub 仓库授权可以使用；团队身份登录还需要自己的 GitHub OAuth 应用与固定 HTTPS 服务，本测试版不预置这项外部服务。
+- Agent 可辅助生成任务提案；认领和执行仍由人发起，尚未实现根据新群消息自主接单。IC 表示项目贡献方式，当前测试版没有独立的 IC 权限角色。
 - 新项目协作流程在 Mac 预览版中提供，Windows 保持 0.4.7-beta.1。Mac 预览版已限制本机 Git 写操作的成员角色。
 - 产物仅支持静态 HTML / Markdown，默认禁用脚本和外部网络。尚不支持动态 localhost 共享、任意附件同步、专用工作流模板、看板、截止日期和办公软件集成。
 - 语言服务限 JS/TS，调试器限 Node.js JavaScript；不包含通用 VS Code 扩展兼容。
