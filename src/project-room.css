@@ -1,0 +1,372 @@
+.studio-mode {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--line, #333);
+  flex-shrink: 0;
+}
+.studio-mode button {
+  padding: 5px 12px;
+  border-radius: 6px;
+}
+.studio-mode .active {
+  background: var(--appearance-hover, #303332);
+}
+.project-room {
+  display: grid;
+  grid-template-columns: 170px minmax(280px, 1fr) minmax(320px, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg, #111);
+  color: var(--appearance-text, #ddd);
+}
+.project-room button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+.project-room button:hover {
+  background: var(--appearance-hover, #303332);
+}
+.project-room button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.project-room header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--line, #333);
+}
+.project-room header strong {
+  font-size: 13px;
+}
+.project-room small {
+  color: var(--muted, #999);
+  font-size: 11px;
+}
+.project-room input,
+.project-room textarea,
+.project-room select,
+.room-form input,
+.room-form textarea,
+.room-form select {
+  font: inherit;
+  background: var(--panel, #191c1b);
+  color: inherit;
+  border: 1px solid var(--line, #333);
+  border-radius: 6px;
+  padding: 7px;
+  min-width: 0;
+}
+.project-room textarea {
+  resize: vertical;
+}
+.project-tree {
+  border-right: 1px solid var(--line, #333);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.project-tree > button {
+  justify-content: flex-start;
+  margin: 3px 7px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.project-tree .active,
+.project-task-list .active {
+  background: var(--appearance-hover, #303332);
+}
+.project-agent {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+}
+.project-agent span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.project-tree .checkout-button {
+  margin-top: auto;
+  margin-bottom: 12px;
+  font-size: 11px;
+}
+.project-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.room-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.room-actions input {
+  flex: 1;
+  width: 100px;
+}
+.room-actions select {
+  max-width: 120px;
+  font-size: 11px;
+}
+.project-chat > header {
+  flex-wrap: wrap;
+}
+.project-messages {
+  flex: 1;
+  min-height: 100px;
+  overflow: auto;
+  padding: 18px;
+}
+.project-message {
+  margin-bottom: 22px;
+}
+.project-message > div {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.project-message strong {
+  font-size: 12px;
+}
+.project-message time {
+  font-size: 10px;
+  color: var(--muted, #999);
+}
+.project-message p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 6px 0;
+}
+.project-message.system {
+  color: var(--muted, #999);
+}
+.project-message button {
+  font-size: 11px;
+}
+.project-task-list {
+  max-height: 155px;
+  overflow: auto;
+  border-top: 1px solid var(--line, #333);
+  padding: 6px 10px;
+}
+.project-task-list button {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+}
+.project-task-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  flex: 1;
+}
+.project-task-list small {
+  flex-shrink: 0;
+}
+.project-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 12px;
+  border-top: 1px solid var(--line, #333);
+}
+.project-composer textarea {
+  flex: 1;
+  min-height: 60px;
+  font-size: 13px;
+}
+.project-composer button {
+  height: 36px;
+  background: var(--appearance-hover, #303332);
+}
+.project-artifact {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line, #333);
+  min-width: 0;
+  min-height: 0;
+}
+.project-artifact > header > span {
+  font-size: 11px;
+  color: var(--muted, #999);
+}
+.task-controls {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-bottom: 1px solid var(--line, #333);
+  max-height: 260px;
+  overflow: auto;
+}
+.task-controls > strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.task-controls summary,
+.task-transcript summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted, #999);
+}
+.controller-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  padding: 5px;
+}
+.artifact-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100px;
+  position: relative;
+}
+.artifact-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+}
+.artifact-toolbar select {
+  margin-right: auto;
+  font-size: 11px;
+}
+.artifact-frame {
+  border: 0;
+  background: white;
+  flex: 1;
+  min-height: 150px;
+  width: 100%;
+}
+.artifact-source {
+  flex: 1;
+  overflow: auto;
+  white-space: pre-wrap;
+  padding: 15px;
+  font-size: 12px;
+}
+.artifact-check {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.artifact-comments {
+  padding: 10px 12px;
+  max-height: 180px;
+  overflow: auto;
+  border-top: 1px solid var(--line, #333);
+}
+.artifact-comments p {
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.artifact-comments small {
+  display: block;
+}
+.artifact-comments form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.task-transcript {
+  padding: 10px 14px;
+  max-height: 240px;
+  overflow: auto;
+  border-top: 1px solid var(--line, #333);
+}
+.task-transcript p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.task-transcript small {
+  display: block;
+}
+.room-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted, #999);
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+}
+.room-empty h3 {
+  font-size: 15px;
+  font-weight: 500;
+}
+.room-error {
+  margin: 8px 12px;
+  padding: 9px;
+  border: 1px solid #8d5540;
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.room-error button {
+  float: right;
+}
+.room-hint {
+  color: var(--muted, #999);
+  font-size: 12px;
+}
+.room-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 300px;
+}
+.room-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.room-form textarea {
+  min-height: 70px;
+}
+.room-form > button {
+  align-self: flex-end;
+}
+@media (max-width: 1100px) {
+  .project-room {
+    grid-template-columns: 130px minmax(250px, 1fr) minmax(290px, 1fr);
+  }
+  .project-room header {
+    padding: 10px;
+  }
+  .project-chat header .room-actions {
+    gap: 2px;
+  }
+  .project-room button {
+    padding: 5px 6px;
+  }
+}

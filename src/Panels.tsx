@@ -99,7 +99,7 @@ export function AgentLane({
   const [commentEntry,setCommentEntry]=useState<{id:string;text:string}|null>(null),[entryComment,setEntryComment]=useState(''),[entryCommentBusy,setEntryCommentBusy]=useState(false),[entryNotice,setEntryNotice]=useState('');
   const [focusedId,setFocusedId]=useState('');
   const workspaceRole=state.me?.roles?.[s.workspaceId]||(state.me?.host?'owner':'viewer');
-  const canComment=workspaceRole!=='viewer',canExecute=['owner','editor'].includes(workspaceRole);
+  const canComment=workspaceRole!=='viewer',canExecute=['owner','editor'].includes(workspaceRole)&&!s.taskId;
   const hashText=async(text:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(b=>b.toString(16).padStart(2,'0')).join('');
   async function addEntryComment(){if(!commentEntry||!entryComment.trim())return;setEntryCommentBusy(true);try{const expectedHash=await hashText(commentEntry.text);if(await call('comment.add',{sessionId:s.id,workspaceId:s.workspaceId,text:entryComment,transcript:{laneId:l.id,entryId:commentEntry.id,expectedHash}})){setCommentEntry(null);setEntryComment('');}}finally{setEntryCommentBusy(false);}}
   const keyboard = useKeyboard();

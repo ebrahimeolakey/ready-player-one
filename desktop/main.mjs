@@ -1,3 +1,4 @@
+import { withinProject, verifyProjectCheckout, publishProjectArtifact } from "./services/project-artifacts.mjs";
 import { EditPositionPublisher } from "./services/edit-position-publisher.mjs";
 import { SessionNavigation } from "./services/session-navigation.mjs";
 import { DesktopNotifications } from "./services/desktop-notifications.mjs";
@@ -66,6 +67,7 @@ import {
 } from "./services/team-identity.mjs";
 import { createIdentityVerifier } from "../core/team-identity.mjs";
 import { DebuggerService, handlesDebugger } from "./services/debugger.mjs";
+import { projectContext } from "./services/project-context.mjs";
 import { ComposerStore } from "./services/composer.mjs";
 import { LanguageService } from "./services/language.mjs";
 import { DraftStore } from "./services/drafts.mjs";
@@ -347,6 +349,7 @@ const state = () => ({
     modelCatalogs: config.modelCatalogs,
     sync: Object.fromEntries(syncStates),
     syncSessions: config.syncSessions,
+    projectCheckouts: Object.fromEntries((client?.state?.collaboration?.projects||[]).map(p=>[p.id,Boolean(config.projectCheckouts?.[projectCheckoutKey(p.id)])])),
     paths: config.paths,
     sessionPaths: config.sessionPaths,
     providers: allProviders(),
@@ -387,7 +390,19 @@ async function refreshAccounts() {
     emit();
   }
 }
+const projectCheckoutKey = (projectId) => `${client?.state?.identity?.audience}:${client?.state?.me?.id}:${projectId}`;
+const projectCheckout = (projectId) => {
+  const mapping = config.projectCheckouts?.[projectCheckoutKey(projectId)];
+  if (!mapping) throw Error("请先关联此项目的本机目录");
+  return mapping;
+};
 const localRoot = (a) => {
+  const projectId = client?.state?.sessions.find(s => s.id === a.sessionId)?.projectId;
+  if (projectId) {
+    const project = client.state.collaboration?.projects.find(p => p.id === projectId);
+    if (!project) throw Error("项目不可访问");
+    return withinProject(projectCheckout(projectId), project.subPath);
+  }
   const p =
     (a.laneId && config.lanePaths[a.laneId]) ||
     (a.sessionId && config.sessionPaths[a.sessionId]) ||
@@ -429,12 +444,18 @@ const referenceRefresh = new ReferenceRefreshService({client:()=>client,onIssue:
 const editPositionPublisher = new EditPositionPublisher({client:()=>client,isCurrent:context=>canonicalRoot(localRoot(context))===canonicalRoot(context.root)});
 const coordinator = new RunCoordinator({
   onProviderEvent:(event,context)=>editPositionPublisher.observe(event,context),
-  onProviderFinish:(runId,context)=>editPositionPublisher.finish(runId,context),
+  onProviderFinish:async(runId,context,result)=>{
+    await editPositionPublisher.finish(runId,context);
+    if(result?.status !== 'done' || context.connection !== client)return;
+    const task=client.state.collaboration?.tasks.find(t=>t.runId===runId);
+    if(task && task.kind !== 'planning')try { await publishProjectArtifact(context.connection,task,context.root); } catch(error) { console.warn('Artifact:',error.message); }
+  },
   runtime,
   client: () => client,
   dir: join(dir, "outbox"),
   root: (a)=>canonicalRoot(localRoot(a)),
   options: async (a) => {
+    if (a.projectId) await verifyProjectCheckout(projectCheckout(a.projectId), a.projectBinding);
     const env = {
       ELECTRON_RUN_AS_NODE: "1",
       RPO_HUB_URL: client.url,
@@ -789,6 +810,25 @@ async function invoke(method, a) {
     return true;
   }
   if (updateBlocked()) throw Error(updateVerification.message || "正在验证更新，请稍候");
+  if (method === "collab.checkout.map") {
+    const c=client, project=c.state.collaboration?.projects.find(p=>p.id===a.projectId);
+    if(!project || !['owner','editor'].includes(c.state.me.roles?.[project.teamId]))throw Error('项目不可访问');
+    const selected=await dialog.showOpenDialog(win,{title:'关联项目目录',properties:['openDirectory']});
+    if(selected.canceled)return null;
+    const root=realpathSync(selected.filePaths[0]);
+    await verifyProjectCheckout(root,project);
+    if(c!==client)throw Error('协作连接已切换');
+    const busy=c.state.collaboration.tasks.some(t=>t.projectId===project.id && t.workerId===c.state.me.id && t.status==='running');
+    if(busy)throw Error('请先停止项目任务');
+    config.projectCheckouts??={};config.projectCheckouts[projectCheckoutKey(project.id)]=root;saveConfig();emit();return {mapped:true};
+  }
+  if (method === "collab.artifact.capture") {
+    const c=client,task=c.state.collaboration?.tasks.find(t=>t.id===a.taskId && t.workerId===c.state.me.id);
+    if(!task)throw Error('只能发布本机执行的产物');
+    return publishProjectArtifact(c,task,localRoot({workspaceId:task.teamId,sessionId:task.sessionId,laneId:task.laneId}));
+  }
+  if (method.startsWith("collab.")) return client.call(method,a);
+
   if (method === "navigation.open") return sessionNavigation.open(a);
   if (method === "navigation.restore") return sessionNavigation.restore(a);
   if (["workspace.delete.preview","workspace.delete"].includes(method)) { const result=await workspaceLifecycle.invoke(method,a); emit(); return result; }
@@ -796,6 +836,27 @@ async function invoke(method, a) {
     await shell.openExternal(browserURL(a.url));
     return true;
   }
+  if (["project.context", "project.repository.open"].includes(method)) {
+    const session = client.state.sessions.find(
+      (s) => s.id === a.sessionId && s.workspaceId === a.workspaceId,
+    );
+    if (!session) throw Error("会话不存在");
+    if (
+      a.laneId &&
+      !session.lanes.some(
+        (l) => l.id === a.laneId && l.ownerId === client.state.me.id,
+      )
+    )
+      throw Error("只能查看本机 Agent 的工作目录");
+    const context = await projectContext(localRoot(a), { git: gitService });
+    if (method === "project.repository.open") {
+      if (!context.repositoryUrl) throw Error("尚未关联 GitHub 仓库");
+      await shell.openExternal(context.repositoryUrl);
+      return true;
+    }
+    return context;
+  }
+
   if (handlesDebugger(method))
     return debuggerService.invoke(win.webContents.id, method, a);
   if (

@@ -13,6 +13,7 @@ const related = (db, workspaceId) => Object.fromEntries(tables.map(key => [key, 
 export function recoverWorkspaceDeletions(hub) {
   for (const deletion of hub.db.workspaceDeletions || []) {
     for (const name of deletion.transcripts) hub.store.removeFile(name);
+    for (const name of deletion.artifacts || []) hub.store.removeFile(name);
     for (const key of hub.rawEntries.keys()) if (deletion.laneIds.some(id => key.startsWith(`${id}:`))) hub.rawEntries.delete(key);
   }
   if (hub.db.workspaceDeletions?.length) { hub.db.workspaceDeletions = []; hub.save(); }
@@ -25,10 +26,12 @@ export function workspaceLifecycle(hub, peer, method, a) {
   const workspace = hub.workspace(peer, a.workspaceId);
   hub.deletionPreviews ??= new Map();
   const records = related(hub.db, workspace.id);
+  const collaboration = hub.db.collaboration && Object.fromEntries(Object.entries(hub.db.collaboration).map(([key, rows]) => [key, rows.filter(v => v.teamId === workspace.id)]));
   const lanes = records.sessions.flatMap(s => s.lanes);
   const blockers = lanes.filter(l => ["running", "awaiting"].includes(l.status) || records.approvals.some(ap => ap.laneId === l.id && ap.status === "claimed"));
-  const fingerprint = digest({ workspace, records });
+  const fingerprint = digest({ workspace, records, ...(collaboration ? { collaboration } : {}) });
   const counts = Object.fromEntries(tables.map(key => [key, records[key].length]));
+  if (collaboration) for (const [key, rows] of Object.entries(collaboration)) counts[key] = rows.length;
   const transcripts = lanes.map(l => hub.logName(l));
   const inventory = { workspaceId:workspace.id, name:workspace.name, counts, sessions:records.sessions.map(s => ({id:s.id,title:s.title})), transcripts, blocked:blockers.map(l => ({laneId:l.id,owner:l.owner,status:l.status})), preservesLocalProject:true, retained:["本机项目与 Git 工作树", "Provider 自身历史与外部导出", "其他成员本机副本", "缺少身份范围索引的输入与文件草稿"] };
   if (method === "workspace.delete.preview") {
@@ -48,8 +51,10 @@ export function workspaceLifecycle(hub, peer, method, a) {
   const affectedIds = new Set([...records.members,...records.sessionMembers].filter(m => !m.host).map(m => m.id));
   const retainedIds = new Set([...remaining.members,...remaining.sessionMembers].map(m => m.id));
   const orphanIds = new Set([...affectedIds].filter(id => !retainedIds.has(id)));
-  const journal = { id:randomUUID(),workspaceId:workspace.id,laneIds:lanes.map(l => l.id),transcripts };
-  hub.db = {...hub.db,...remaining,workspaces:hub.db.workspaces.filter(w => w.id !== workspace.id),identities:hub.db.identities.filter(v => !orphanIds.has(v.peerId)),workspaceDeletions:[...(hub.db.workspaceDeletions || []),journal],workspaceDeletionReceipts:[...(hub.db.workspaceDeletionReceipts || []).slice(-499),{workspaceId:workspace.id,previewId:a.previewId,ownerId:peer.id,at:Date.now()}]};
+  const journal = { id:randomUUID(),workspaceId:workspace.id,laneIds:lanes.map(l => l.id),transcripts,
+    artifacts: (collaboration?.artifactVersions || []).filter(v => v.contentRef).map(v => `artifacts/${v.id}.json`) };
+  const remainingCollaboration = collaboration ? { collaboration: Object.fromEntries(Object.entries(hub.db.collaboration).map(([key, rows]) => [key, rows.filter(v => v.teamId !== workspace.id)])) } : {};
+  hub.db = {...hub.db,...remaining,...remainingCollaboration,workspaces:hub.db.workspaces.filter(w => w.id !== workspace.id),identities:hub.db.identities.filter(v => !orphanIds.has(v.peerId)),workspaceDeletions:[...(hub.db.workspaceDeletions || []),journal],workspaceDeletionReceipts:[...(hub.db.workspaceDeletionReceipts || []).slice(-499),{workspaceId:workspace.id,previewId:a.previewId,ownerId:peer.id,at:Date.now()}]};
   try { hub.save(); } catch (error) { hub.db=previous; throw error; }
   // Commit metadata removal before deleting files. A restart completes this exact
   // logical-name journal and cannot recreate deleted transcripts from cached lanes.

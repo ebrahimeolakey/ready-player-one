@@ -1,3 +1,4 @@
+import { ProjectHub } from "./ProjectHub";
 import { AgentEditPositionsContext } from "./AgentEditPositions";
 import { VSCodeImport } from "./VSCodeImport";
 import { AppearanceProvider } from "./Appearance";
@@ -78,7 +79,7 @@ function App() {
   const [state, setState] = useState<State>(empty),
     [workspace, setWorkspace] = useState(""),
     [selected, setSelected] = useState(""),
-    [view, setView] = useState("sessions"),
+    [view, setView] = useState("projects"),
     [modal, setModal] = useState(""),
     [toast, setToast] = useState(""),
     [search, setSearch] = useState(""),
@@ -127,6 +128,9 @@ function App() {
     return unsubscribe;
   }, []);
   const updateHealth = state.local.updateVerification;
+  useEffect(() => {
+    if (state.me?.sessionId && view === "projects") setView("sessions");
+  }, [state.me?.sessionId, view]);
   const updateLocked = updateHealth?.status === "checking" || updateHealth?.status === "error";
   useEffect(() => {
     const marker = updateHealth?.bootstrapMarker;
@@ -275,6 +279,7 @@ function App() {
           </div>
           <nav>
             {[
+              ...(!state.me?.sessionId ? [[Layers, "projects", "项目群"]] : []),
               [LayoutGrid, "sessions", "会话"],
               [Users, "team", "成员"],
             ].map(([Icon, id, label]: any) => (
@@ -456,6 +461,8 @@ function App() {
                 </div>
               )}
             </div>
+          ) : view === "projects" && !state.me?.sessionId ? (
+            <ProjectHub state={state} workspace={workspace} onWorkspace={setWorkspace} call={window.rpo.invoke}/>
           ) : view === "settings" ? (
             <div className="settings-layout">
               <aside className="settings-nav">

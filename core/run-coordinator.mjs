@@ -132,7 +132,7 @@ export class RunCoordinator {
      if(e.type==='error')this.enqueue(r,'run.entry',{eventId:randomUUID(),role:'system',text:e.text||'执行错误'});
      if(e.type==='approval')this.enqueue(r,'tool.request',{providerRequestId:e.approvalId,action:e.request.tool||e.request.kind||'工具操作',input:e.request});
     },
-    onEnd:result=>{if(c===this.client()&&epoch===this.epoch){try{void Promise.resolve(this.onProviderFinish(r.runId,positionContext)).catch(()=>{});}catch{}}r.ended=true;if(result.status!=='done')this.reportOutcome?.(r,result.message||'执行中断');this.enqueue(r,'run.finish',{status:result.status,message:result.message||'执行结束',...(result.failure?{failure:result.failure}:{})});this.onFinish({...result,sessionId:r.sessionId});},
+    onEnd:result=>{if(c===this.client()&&epoch===this.epoch){try{void Promise.resolve(this.onProviderFinish(r.runId,positionContext,result)).catch(()=>{});}catch{}}r.ended=true;if(result.status!=='done')this.reportOutcome?.(r,result.message||'执行中断');this.enqueue(r,'run.finish',{status:result.status,message:result.message||'执行结束',...(result.failure?{failure:result.failure}:{})});this.onFinish({...result,sessionId:r.sessionId});},
    });
   } catch(e) {
    if(r?.phase==='prepared'){

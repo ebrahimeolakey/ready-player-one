@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import type {Call} from './ui';
-const labels:Record<string,string>={sessions:'会话',members:'工作区成员',sessionMembers:'会话成员',memories:'共享记忆',memoryHistory:'记忆修订',approvals:'执行审批',outcomes:'执行结果',toolApprovals:'工具审批',handoffs:'接管',subtasks:'子任务',locks:'文件占用',messages:'协作消息',groupMessages:'群聊消息',groupTasks:'群聊任务',invites:'邀请'};
+const labels:Record<string,string>={projects:"项目",channels:"项目群",channelMessages:"项目消息",agents:"团队 Agent",tasks:"项目任务",artifactVersions:"产物版本",artifactComments:"产物评论",sessions:'会话',members:'工作区成员',sessionMembers:'会话成员',memories:'共享记忆',memoryHistory:'记忆修订',approvals:'执行审批',outcomes:'执行结果',toolApprovals:'工具审批',handoffs:'接管',subtasks:'子任务',locks:'文件占用',messages:'协作消息',groupMessages:'群聊消息',groupTasks:'群聊任务',invites:'邀请'};
 export function WorkspaceDeletion({workspaceId,call,onDeleted}:{workspaceId:string;call:Call;onDeleted:()=>void}) {
  const [preview,setPreview]=useState<any>(null),[confirmation,setConfirmation]=useState(''),[busy,setBusy]=useState(false);
  async function load(){setBusy(true);try{setPreview(await call('workspace.delete.preview',{workspaceId}));setConfirmation('');}finally{setBusy(false);}}

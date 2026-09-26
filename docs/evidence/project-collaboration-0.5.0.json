@@ -1,0 +1,66 @@
+{
+  "version": "0.5.0-beta.1",
+  "date": "2026-09-26",
+  "scope": "macOS project collaboration preview",
+  "tests": {
+    "fullRegression": {
+      "passed": 442,
+      "failed": 0,
+      "skipped": 0
+    },
+    "finalNavigationAndPermissionChecks": {
+      "passed": 17,
+      "failed": 0
+    },
+    "projectDomainCases": 10
+  },
+  "desktop": {
+    "passed": true,
+    "modelCalls": 0,
+    "syntheticProvider": true,
+    "realDesktop": true,
+    "physicalMachines": 1,
+    "teamId": "673dd532-da7d-41e8-929f-98ad9dce38d2",
+    "taskId": "acaed4c5-88fa-41f7-9f59-8f146cc406ac",
+    "versions": 2
+  },
+  "packaged": {
+    "passed": true,
+    "actualPackagedExecutable": true,
+    "architecture": "arm64",
+    "phases": 2,
+    "modelCalls": 0,
+    "installedApplicationModified": false,
+    "firstLaunchQuarantineTested": false
+  },
+  "packages": [
+    {
+      "arch": "arm64",
+      "runtimeFilesByteMatched": 97,
+      "packageMetadataMatched": true,
+      "zipAsarMatched": true,
+      "sha256": "5e8c0af7b83f2b19c5c17c762b803734ccb76741c3901bd0fdd194b922d8e2be"
+    },
+    {
+      "arch": "x64",
+      "runtimeFilesByteMatched": 97,
+      "packageMetadataMatched": true,
+      "zipAsarMatched": true,
+      "sha256": "5e8c0af7b83f2b19c5c17c762b803734ccb76741c3901bd0fdd194b922d8e2be"
+    }
+  ],
+  "screenshots": [
+    "project-collaboration-dark-0.5.0.png",
+    "project-collaboration-light-0.5.0.png"
+  ],
+  "limitations": [
+    "No real model calls in this feature validation",
+    "No two-physical-Mac cross-internet test",
+    "No Intel Mac runtime test",
+    "Unsigned and not notarized",
+    "No always-on Hub deployed",
+    "External GitHub team OAuth not configured"
+  ],
+  "windowsUpdated": false,
+  "publicReleaseVerified": false
+}

@@ -14,8 +14,8 @@ const value = (v, max = 2000) => {
 };
 const methods = new Set(["run.session", "run.reconcile", "run.steer", "run.steer.read", "run.steer.ack", "run.steer.restore", "run.queue", "run.queue.cancel", "run.queue.next", "tool.request", "tool.decide", "tool.claim"]);
 export const handlesRunCoordination = method => methods.has(method);
-function current(hub, peer, a) {
-  const { s, l } = hub.lane(peer, a);
+function current(hub, peer, a, control = false) {
+  const { s, l } = control ? hub.controlledLane(peer, a) : hub.lane(peer, a);
   if (l.activeRunId !== a.runId || l.status !== "running" || l.stopRequested || l.fencedRunId === a.runId) throw Error("执行已结束或已撤销");
   return { s, l };
 }
@@ -36,7 +36,7 @@ export function runCoordination(hub, peer, method, a) {
     return { runId: a.runId, acceptedEventIds: l.acceptedEventIds || [], pendingTools: hub.db.toolApprovals.filter(t => t.runId === a.runId), stopRequested: false };
   }
   if (method === "run.steer") {
-    const { l } = current(hub, peer, a);
+    const { l } = current(hub, peer, a, true);
     l.steering ??= [];
     const eventId = a.eventId ? value(a.eventId, 200) : randomUUID();
     const existing = l.steering.find(v => v.id === eventId);
@@ -47,7 +47,7 @@ export function runCoordination(hub, peer, method, a) {
   }
   if (method === "run.steer.read") {
     const { l } = a.restore === true ? hub.lane(peer, a) : current(hub, peer, a);
-    const instruction = l.steering?.find(v => v.id === a.id && v.runId === a.runId && v.ownerId === peer.id);
+    const instruction = l.steering?.find(v => v.id === a.id && v.runId === a.runId);
     const allowed = a.restore === true ? ["failed", "unsupported", "restored"] : ["pending"];
     if (!instruction || !allowed.includes(instruction.status)) throw Error("指导已结束或不属于当前执行");
     return { id: instruction.id, runId: instruction.runId, text: instruction.text };

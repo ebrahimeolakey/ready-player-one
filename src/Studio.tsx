@@ -1,3 +1,4 @@
+import { ProjectRoom } from "./ProjectRoom";
 import {ChatEditorTabs,ChatViewPortal} from "./ChatEditorTabs";
 import { useGeneralSettings } from "./GeneralSettings";
 import "./studio-preferences.css";
@@ -31,6 +32,7 @@ import { AgentLane, Editor, CommandTerminal } from "./Panels";
 import { SyncPanel } from "./SyncPanel";
 import { InteractiveTerminal } from "./InteractiveTerminal";
 import { BrowserPanel } from "./BrowserPanel";
+import { ProjectContext } from "./ProjectContext";
 import { DebuggerPanel } from "./DebuggerPanel";
 import {ReferenceViewer} from "./ReferenceViewer";
 import { GitPanel } from "./GitPanel";
@@ -61,6 +63,7 @@ export function Studio({
   onShare: () => void;
   onRepos: () => void;
 }) {
+  const [workspaceView,setWorkspaceView]=useState("ide");
   const keyboard = useKeyboard();
   const general = useGeneralSettings();
   const chatScope=JSON.stringify([state.local.navigation?.scope ?? state.identity?.audience ?? '',state.me?.id,s.workspaceId,s.id]);
@@ -100,7 +103,7 @@ export function Studio({
   useEffect(() => { setRevealEmptyEditor(false); }, [general.autoHideEmptyEditor, s.id]);
   const own = s.lanes.filter((l) => l.ownerId === state.me?.id),
     lane = laneId==="__session__" ? undefined : s.lanes.find((l) => l.id === laneId) || own[0] || s.lanes[0],
-    mapped = !!state.local.paths[s.workspaceId],
+    mapped = s.projectId ? !!state.local.projectCheckouts?.[s.projectId] : !!state.local.paths[s.workspaceId],
     params = {
       workspaceId: s.workspaceId,
       sessionId: s.id,
@@ -197,6 +200,15 @@ export function Studio({
     </div>
   );
   return (
+    <div className="studio-shell">
+      {!state.me?.sessionId&&<nav className="studio-mode" aria-label="工作视图"><button className={workspaceView==='project'?'active':''} onClick={()=>setWorkspaceView('project')}>项目群</button><button className={workspaceView==='ide'?'active':''} onClick={()=>setWorkspaceView('ide')}>开发工具</button></nav>}
+      {workspaceView==='project'&&!state.me?.sessionId ? <ProjectRoom key={`${state.identity?.audience}:${state.me?.id}:${s.workspaceId}`} state={state} session={s} call={window.rpo.invoke}/> : <>
+      <ProjectContext
+        params={params}
+        mapped={mapped}
+        call={window.rpo.invoke}
+        onMap={() => void call(s.projectId ? "collab.checkout.map" : "project.map", s.projectId ? { projectId:s.projectId } : params)}
+      />
       <div
         ref={root}
         className={
@@ -251,7 +263,7 @@ export function Studio({
           <>
             <aside className="file-tree">
               <header>文件</header>
-              <button onClick={() => call("project.map", params)}>
+              <button onClick={() => call(s.projectId ? "collab.checkout.map" : "project.map", s.projectId ? { projectId:s.projectId } : params)}>
                 <FolderOpen size={14} />
                 关联文件夹
               </button>
@@ -661,7 +673,7 @@ export function Studio({
                         </p>
                         <button
                           className="button full"
-                          onClick={() => call("project.map", params)}
+                          onClick={() => call(s.projectId ? "collab.checkout.map" : "project.map", s.projectId ? { projectId:s.projectId } : params)}
                         >
                           <FolderOpen size={13} />
                           关联文件夹
@@ -719,5 +731,7 @@ export function Studio({
           </button>
         )}
       </div>
+      </>}
+    </div>
   );
 }

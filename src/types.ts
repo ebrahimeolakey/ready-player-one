@@ -37,6 +37,8 @@ export type Lane = {
   changedFiles?: { path: string; status: string }[];
 };
 export type Session = {
+  projectId?:string;
+  taskId?:string;
   id: string;
   workspaceId: string;
   title: string;
@@ -88,6 +90,7 @@ export type Outcome = {
   history:{requestId:string;version:number;status:'unknown'|'succeeded'|'failed';evidence:string;ownerId:string;owner:string;at:string}[];
 };
 export type State = {
+  collaboration?: import('./project-types').CollaborationState;
   outcomes?: Outcome[];
   workspaces: { id: string; name: string; branch: string; remote: string }[];
   sessions: Session[];
@@ -109,6 +112,7 @@ export type State = {
   identity?:{configured:boolean;issuer?:string|null;audience:string};
   shared?: boolean;
   local: {
+    projectCheckouts?: Record<string, boolean>;
     navigation?:{scope:string|null;ready:boolean;epoch:number;revision:number};
     referenceIssues?:{workspaceId:string;sessionId?:string;message:string}[];
     notificationError?:string|null;

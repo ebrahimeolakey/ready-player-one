@@ -1,3 +1,4 @@
+import { initCollaboration, projectCollaboration, collaborationSnapshot, taskForLane, assertTaskController, finishCollaborationRun } from "./project-collaboration.mjs";
 import { validateEditPositions } from "./edit-positions.mjs";
 import { workspaceLifecycle, recoverWorkspaceDeletions } from "./workspace-lifecycle.mjs";
 import { assertSessionScope, scopedResult, grantMembers } from "./access-scope.mjs";
@@ -23,6 +24,7 @@ import { join } from "node:path";
 import { ROLES, role, filePath, overlaps, handlesCoordination, coordination } from "./coordination.mjs";
 import { handlesRunCoordination, runCoordination, claimKeyHash } from "./coordination-runs.mjs";
 import { handlesHandoffs, handoffs } from "./coordination-handoffs.mjs";
+import { handlesGroupChat, groupChat, groupChatSnapshot, completeGroupRun } from "./group-chat.mjs";
 import { SecureStore, redactRecord, redactText, retainedTranscriptEntries } from "./secure-store.mjs";
 import { TeamIdentity, githubLogin } from "./team-identity.mjs";
 const id = () => randomUUID();
@@ -68,11 +70,14 @@ export class Hub extends EventEmitter {
         approvals: [],
       };
     }
+    initCollaboration(this);
     this.db.members ??= [];
     this.db.sessionMembers ??= [];
     this.db.memoryHistory ??= [];
     this.db.locks ??= [];
     this.db.messages ??= [];
+    this.db.groupMessages ??= [];
+    this.db.groupTasks ??= [];
     this.db.outcomes ??= [];
     this.db.toolApprovals ??= [];
     this.db.handoffs ??= [];
@@ -140,6 +145,8 @@ export class Hub extends EventEmitter {
     const ids = new Set(workspaces.map((w) => w.id));
     return scopedResult(redactRecord({
       workspaces,
+      ...groupChatSnapshot(this, ids),
+      collaboration: collaborationSnapshot(this, peer, ids),
       sessions: this.db.sessions.filter((s) => ids.has(s.workspaceId) && (!peer.sessionId || s.id === peer.sessionId)),
       memories: this.db.memories.filter((m) => ids.has(m.workspaceId)),
       approvals: this.db.approvals.filter((a) => ids.has(a.workspaceId)),
@@ -361,8 +368,8 @@ export class Hub extends EventEmitter {
     if (!workspaceId) return; // The target handler supplies its specific missing-resource error.
     this.workspace(peer, workspaceId);
     const required = ["invite.create", "invite.revoke"].includes(method) && a.sessionId ? "editor" : ["invite.create", "invite.revoke", "member.role", "member.remove", "workspace.delete.preview", "workspace.delete"].includes(method) ? "owner"
-      : ["session.export", "coordination.context", "memory.list", "memory.history"].includes(method) ? "viewer"
-      : ["comment.add", "comment.resolve", "plan.add", "plan.claim", "plan.release", "plan.status", "plan.toggle", "plan.transfer", "plan.transfer.accept", "plan.transfer.decline"].includes(method) ? "commenter" : "editor";
+      : ["session.export", "coordination.context", "memory.list", "memory.history", "chat.read"].includes(method) ? "viewer"
+      : ["chat.send", "chat.task.request", "chat.task.cancel", "comment.add", "comment.resolve", "plan.add", "plan.claim", "plan.release", "plan.status", "plan.toggle", "plan.transfer", "plan.transfer.accept", "plan.transfer.decline"].includes(method) ? "commenter" : "editor";
     if (ROLES.indexOf(this.role(peer, workspaceId)) < ROLES.indexOf(required)) throw Error(`此操作需要 ${required} 权限`);
   }
   workspace(peer, workspaceId) {
@@ -387,6 +394,13 @@ export class Hub extends EventEmitter {
       throw Error("只能操作自己的 Agent 通道");
     return { s, l };
   }
+  controlledLane(peer, a) {
+    const pair = this.lane(peer, a, false);
+    const task = taskForLane(this, pair.s.id, pair.l.id);
+    if (task) assertTaskController(this, peer, task);
+    else if (pair.l.ownerId !== peer.id) throw Error("只能操作自己的 Agent 通道");
+    return pair;
+  }
   entry(l, role, value, metadata = {}) {
     const entry = {
       id: id(),
@@ -410,7 +424,16 @@ export class Hub extends EventEmitter {
   }
   perform(peer, method, a) {
     this.authorize(peer, method, a);
+    if (method.startsWith("collab.")) return projectCollaboration(this, peer, method, a);
+    const taskLane = a.sessionId && a.laneId && taskForLane(this, a.sessionId, a.laneId);
+    if (taskLane && ["run.request", "run.queue", "run.queue.next", "lane.stop"].includes(method) && !this.collaborationDispatch) throw Error("请通过项目任务控制执行");
+    if (method === "approval.decide" || method === "tool.decide") {
+      const target = (method === "approval.decide" ? this.db.approvals : this.db.toolApprovals).find(v => v.id === a.id);
+      const task = target && taskForLane(this, target.sessionId, target.laneId);
+      if (task) assertTaskController(this, peer, task);
+    }
     if (["workspace.delete.preview","workspace.delete","workspace.delete.status"].includes(method)) return workspaceLifecycle(this,peer,method,a);
+    if (handlesGroupChat(method)) return groupChat(this, peer, method, a);
     if (handlesOutcomes(method)) return outcomes(this, peer, method, a);
     if (handlesCoordination(method)) return coordination(this, peer, method, a);
     if (handlesRunCoordination(method)) return runCoordination(this, peer, method, a);
@@ -546,7 +569,7 @@ export class Hub extends EventEmitter {
       return l;
     }
     if (method === "run.request") {
-      const { s, l } = this.lane(peer, a);
+      const { s, l } = this.controlledLane(peer, a);
       if (s.status !== "active") throw Error("会话已归档");
       if (this.db.handoffs.some(h => h.laneId === l.id && h.status === "ready")) throw Error("此通道正在等待确认接管");
       if (["running", "awaiting"].includes(l.status))
@@ -564,8 +587,10 @@ export class Hub extends EventEmitter {
         workspaceId: s.workspaceId,
         sessionId: s.id,
         laneId: l.id,
-        ownerId: peer.id,
-        owner: peer.name,
+        ownerId: l.ownerId,
+        owner: l.owner,
+        requestedBy: peer.id,
+        requester: peer.name,
         provider: l.provider,
         prompt,
         mode: a.mode,
@@ -742,6 +767,8 @@ export class Hub extends EventEmitter {
       if (approval) approval.status = "finished";
       for (const t of this.db.toolApprovals) if (t.runId === a.runId && t.status === "pending") t.status = "cancelled";
       this.entry(l, "system", a.message || "执行结束");
+      completeGroupRun(this, l, a.runId);
+      finishCollaborationRun(this, l, a.runId);
       return true;
     }
     if (method === "lane.stop") {
