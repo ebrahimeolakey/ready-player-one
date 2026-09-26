@@ -41,6 +41,7 @@ export function GeneralSettings({settings, call, error}: {settings?: Partial<Gen
           <option value="detailed">详细</option><option value="compact">紧凑</option>
         </select></label>
         {toggle('autoHideEmptyEditor', '隐藏空编辑器')}
+        {toggle('restoreLastSession', '启动时打开上次会话')}
       </fieldset>
       <fieldset disabled={busy}><legend>通知</legend>
         {toggle('notificationsEnabled', '系统通知')}

@@ -1,3 +1,4 @@
+import { SessionNavigation } from "./services/session-navigation.mjs";
 import { DesktopNotifications } from "./services/desktop-notifications.mjs";
 import { VSCodeImportController } from "./services/vscode-import-controller.mjs";
 import { resolveGeneralSettings, validateGeneralSettings } from "../core/general-settings.mjs";
@@ -333,6 +334,8 @@ const gitMethods = new Set([
   "createBranch",
   "switchBranch",
 ]);
+const sessionNavigation = new SessionNavigation({client:()=>client,online:()=>online,config,saveConfig});
+let stateRevision = 0;
 const state = () => ({
   ...(client?.state || {
     workspaces: [],
@@ -342,6 +345,7 @@ const state = () => ({
     members: [],
   }),
   local: {
+    navigation: {...sessionNavigation.metadata(),revision:++stateRevision},
     generalSettings: resolveGeneralSettings(config.generalSettings),
     notificationError,
     editorSettings: resolveEditorSettings(config.editorSettings),
@@ -565,13 +569,20 @@ async function connect(url, token) {
   next.on("state", () => {
     if (client !== next) return;
     online = true;
+    try { sessionNavigation.observe(); } catch(error) { console.error("无法清理失效会话导航",error); }
     desktopNotifications.observeSnapshot(next.state, { connection: next });
     emit();
     processRuns().catch(console.error);
   });
-  next.on("offline", () => {
+  next.on("offline", (code) => {
     if (client !== next) return;
     online = false;
+    if(!shutting && (next.closed || code===1008) && next.state){
+      // Policy rejection and failed reauthentication invalidate cached access,
+      // including sockets created by HubClient's automatic reconnect.
+      try { sessionNavigation.clear(); } catch(error) { console.error("无法清理失效身份的会话导航",error); }
+      next.state=null;
+    }
     emit();
   });
   const auth = {
@@ -785,6 +796,8 @@ async function invoke(method, a) {
     return true;
   }
   if (updateBlocked()) throw Error(updateVerification.message || "正在验证更新，请稍候");
+  if (method === "navigation.open") return sessionNavigation.open(a);
+  if (method === "navigation.restore") return sessionNavigation.restore(a);
   if (["workspace.delete.preview","workspace.delete"].includes(method)) { const result=await workspaceLifecycle.invoke(method,a); emit(); return result; }
   if (method === "link.open") {
     await shell.openExternal(browserURL(a.url));
@@ -813,6 +826,7 @@ async function invoke(method, a) {
       };
     if (method === "team.begin" && pendingTeamConnection)
       return teamIdentity.beginJoin(pendingTeamConnection);
+    if (method === "team.revoke") { sessionNavigation.clear(); emit(); }
     const result = await teamIdentity.invoke(method, a);
     if (method === "team.poll" && result.status === "verified") {
       if (pendingTeamConnection) {
@@ -1445,6 +1459,7 @@ async function invoke(method, a) {
     };
   }
   if (method === "share.leave") {
+    sessionNavigation.clear();
     remote = false;
     await connect(`ws://127.0.0.1:${hub.port}`, hub.db.hostToken);
     return true;

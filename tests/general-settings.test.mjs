@@ -5,11 +5,12 @@ import {DEFAULT_GENERAL_SETTINGS, resolveGeneralSettings, validateGeneralSetting
 test('general settings keep explicit opt-ins off and reject malformed or prototype keys', () => {
   assert.equal(DEFAULT_GENERAL_SETTINGS.completionSound, false);
   assert.equal(DEFAULT_GENERAL_SETTINGS.trayIcon, false);
+  assert.equal(DEFAULT_GENERAL_SETTINGS.restoreLastSession, true);
   assert.equal(DEFAULT_GENERAL_SETTINGS.theme, 'dark');
   assert.equal(DEFAULT_GENERAL_SETTINGS.collaboratorColors, true);
   assert.deepEqual(validateGeneralSettings({}), {...DEFAULT_GENERAL_SETTINGS});
   for (const value of [null, [], false, {layout:'vscode'}, {conversationDensity:'hidden'}, {notificationsEnabled:'false'},
-    {theme:'system'}, {theme:null}, {collaboratorColors:'false'}, {autoCheckUpdates:0}, {completionSound:null}, {constructor:true}, {toString:true}, JSON.parse('{"__proto__":{}}')]) {
+    {restoreLastSession:'true'}, {theme:'system'}, {theme:null}, {collaboratorColors:'false'}, {autoCheckUpdates:0}, {completionSound:null}, {constructor:true}, {toString:true}, JSON.parse('{"__proto__":{}}')]) {
     assert.throws(() => validateGeneralSettings(value));
   }
   const saved = validateGeneralSettings({notificationsEnabled:false, notifyApprovals:true, layout:'editor', conversationDensity:'compact'});

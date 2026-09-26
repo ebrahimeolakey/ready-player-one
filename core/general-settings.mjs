@@ -1,5 +1,6 @@
 export const DEFAULT_GENERAL_SETTINGS = Object.freeze({
   autoCheckUpdates: true,
+  restoreLastSession: true,
   theme: 'dark',
   collaboratorColors: true,
   layout: 'agent',

@@ -41,14 +41,14 @@ export class HubClient extends EventEmitter {
         }
       }
     });
-    socket.on("close", () => {
+    socket.on("close", (code) => {
       if (this.ws !== socket) return;
       for (const p of this.pending.values()) {
         clearTimeout(p.timer);
         p.reject(Error("协作连接已断开"));
       }
       this.pending.clear();
-      this.emit("offline");
+      this.emit("offline", code);
       if (!this.closed)
         this.retry = setTimeout(
           () => this.connect(this.url, this.auth).catch(() => {}),

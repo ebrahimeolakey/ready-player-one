@@ -94,6 +94,10 @@ function App() {
     [loading, setLoading] = useState(false),
     [sessionMenu, setSessionMenu] = useState(""),
     [paneSession, setPaneSession] = useState("");
+  const navigationTouched = useRef(false), restoreAttempted = useRef(false), navigationRequest = useRef(0);
+  const navigationContext = useRef<string | null>(null), selectedWasActive = useRef(false);
+  const latestState = useRef(state); latestState.current = state;
+  const touchNavigation = () => { navigationTouched.current = true; navigationRequest.current++; };
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -115,8 +119,10 @@ function App() {
     }
   };
   useEffect(() => {
-    const unsubscribe = api.subscribe(setState);
-    void api.invoke<State>("bootstrap").then(setState).catch(e=>notify(e.message));
+    const accept = (incoming: State) => setState(current =>
+      (incoming.local.navigation?.revision ?? 0) < (current.local.navigation?.revision ?? 0) ? current : incoming);
+    const unsubscribe = api.subscribe(accept);
+    void api.invoke<State>("bootstrap").then(accept).catch(e=>notify(e.message));
     return unsubscribe;
   }, []);
   const updateHealth = state.local.updateVerification;
@@ -145,6 +151,33 @@ function App() {
     }
   }, [state.workspaces, workspace]);
   useEffect(() => {
+    const nav=state.local.navigation;
+    if(!nav || updateLocked)return;
+    const context=nav.scope ? `${nav.scope}:${nav.epoch}` : null;
+    if(navigationContext.current && context!==navigationContext.current){
+      touchNavigation();setSelected("");setPaneSession("");setModal("");setWorkspace(state.workspaces[0]?.id||"");
+    }
+    navigationContext.current=context;
+    if(nav.ready && selected){
+      const visible=state.sessions.find(s=>s.id===selected&&state.workspaces.some(w=>w.id===s.workspaceId));
+      if(!visible || (selectedWasActive.current&&visible.status!=="active")){setSelected("");setPaneSession("");}
+    }
+    if(nav.ready && paneSession && !state.sessions.some(s=>s.id===paneSession&&s.status==="active"))setPaneSession("");
+  },[state.local.navigation,state.sessions,state.workspaces,selected,paneSession,updateLocked]);
+  useEffect(() => {
+    const nav=state.local.navigation;
+    if(updateLocked || !nav?.ready || !nav.scope || restoreAttempted.current)return;
+    restoreAttempted.current=true;
+    if(navigationTouched.current || state.local.generalSettings?.restoreLastSession===false)return;
+    const request=++navigationRequest.current,scope=nav.scope,epoch=nav.epoch;
+    void api.invoke<{scope:string;sessionId:string;workspaceId:string}|null>("navigation.restore",{scope}).then(target=>{
+      const current=latestState.current;
+      if(!target || navigationTouched.current || request!==navigationRequest.current || current.local.navigation?.scope!==target.scope || current.local.navigation.epoch!==epoch || !current.local.navigation.ready || current.local.generalSettings?.restoreLastSession===false)return;
+      if(!current.sessions.some(s=>s.id===target.sessionId&&s.workspaceId===target.workspaceId&&s.status==="active")||!current.workspaces.some(w=>w.id===target.workspaceId))return;
+      selectedWasActive.current=true;setWorkspace(target.workspaceId);setSelected(target.sessionId);setView("sessions");
+    }).catch(()=>{});
+  },[state.local.navigation,state.local.generalSettings?.restoreLastSession,updateLocked]);
+  useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !(e.target instanceof Element && e.target.closest("[data-shortcut-capture]"))) {
         setModal("");
@@ -167,6 +200,9 @@ function App() {
     active = sessions.filter((s) => s.status === "active"),
     github = state.local.accounts?.find((a) => a.id === "github");
   const openSession = (s: Session) => {
+    touchNavigation();selectedWasActive.current=s.status==="active";
+    const nav=state.local.navigation;
+    if(nav?.ready&&nav.scope&&s.status==="active")void api.invoke("navigation.open",{scope:nav.scope,workspaceId:s.workspaceId,sessionId:s.id}).catch(e=>notify(e.message));
     setWorkspace(s.workspaceId);
     setSelected(s.id);
     setView("sessions");
@@ -215,7 +251,7 @@ function App() {
     <GeneralSettingsContext.Provider value={state.local.generalSettings}>
     <EditorSettingsContext.Provider value={resolveEditorSettings(state.local.editorSettings)}>
     <KeyboardContext.Provider value={{os:state.local.os,bindings:state.local.keyboard}}>
-    <div className={"app-shell " + (!sidebar ? "sidebar-collapsed" : "")}>
+    <div onPointerDownCapture={touchNavigation} onKeyDownCapture={touchNavigation} className={"app-shell " + (!sidebar ? "sidebar-collapsed" : "")}>
       <div className="titlebar">
         <div className="drag-region" />
         <div className="title-brand">
@@ -982,6 +1018,10 @@ function App() {
                   if(r.needsIdentity){openSettings("github");notify("请先完成 GitHub 团队身份验证");return;}
                   if (r.workspaceId) setWorkspace(r.workspaceId);
                   setSelected(r.sessionId || "");
+                  touchNavigation();selectedWasActive.current=true;
+                  const snapshot=await api.invoke<State>("bootstrap");
+                  const joined=snapshot.sessions.find(s=>s.id===r.sessionId&&s.status==="active"),nav=snapshot.local.navigation;
+                  if(joined&&nav?.ready&&nav.scope)void api.invoke("navigation.open",{scope:nav.scope,workspaceId:joined.workspaceId,sessionId:joined.id}).catch(e=>notify(e.message));
                   setView("sessions");
                 }
               }}

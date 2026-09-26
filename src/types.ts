@@ -108,6 +108,7 @@ export type State = {
   identity?:{configured:boolean;issuer?:string|null;audience:string};
   shared?: boolean;
   local: {
+    navigation?:{scope:string|null;ready:boolean;epoch:number;revision:number};
     referenceIssues?:{workspaceId:string;sessionId?:string;message:string}[];
     notificationError?:string|null;
     generalSettings?:import("../core/general-settings.mjs").GeneralSettingsValue;
