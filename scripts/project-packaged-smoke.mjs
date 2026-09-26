@@ -16,7 +16,7 @@ for(const phase of ['create','restart']){
  const child=spawn(executable,[`--remote-debugging-port=${port}`],{env,stdio:['ignore','pipe','pipe']});let log='';child.stdout.on('data',b=>log+=b);child.stderr.on('data',b=>log+=b);let ws;
  try {
   const deadline=Date.now()+30000;let target;
-  while(Date.now()<deadline&&!target){try{target=(await(await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t=>t.type==='page'&&t.url.includes('dist/index.html'));}catch{}if(!target)await sleep(100);}
+  while(Date.now()<deadline&&!target){try{target=(await(await fetch(`http://127.0.0.1:${port}/json/list`,{signal:AbortSignal.timeout(1500)})).json()).find(t=>t.type==='page'&&t.url.includes('dist/index.html'));}catch{}if(!target)await sleep(100);}
   assert.ok(target,'packaged renderer available');ws=new WebSocket(target.webSocketDebuggerUrl);await new Promise((r,j)=>{ws.once('open',r);ws.once('error',j);});let seq=0;const pending=new Map();ws.on('message',b=>{const v=JSON.parse(b);if(pending.has(v.id)){pending.get(v.id)(v);pending.delete(v.id);}});
   const rpc=(method,params)=>new Promise((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>{pending.delete(id);reject(Error('CDP timed out'));},15000);pending.set(id,v=>{clearTimeout(timer);if(v.error)reject(Error(JSON.stringify(v.error)));else resolve(v.result);});ws.send(JSON.stringify({id,method,params}));});
   const js=async expression=>{const r=await rpc('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value;};

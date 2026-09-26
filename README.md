@@ -12,19 +12,21 @@ Local-first. Open source. Built for planning, research, writing, operations, and
 
 ## Download
 
-Mac collaboration preview: **0.5.0-beta.1** · Windows: **0.4.7-beta.1** · Apache-2.0 · No sign-in required to download
+Mac collaboration preview: **0.5.0-beta.2** · Windows: **0.4.7-beta.1** · Apache-2.0 · No sign-in required to download
 
 | Platform | Download |
 | --- | --- |
-| Mac · Apple Silicon (M series) | **[↓ Download for Apple Silicon](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/Ready-Player-One-0.5.0-beta.1-mac-arm64.zip)** |
-| Mac · Intel | **[↓ Download for Intel Mac](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/Ready-Player-One-0.5.0-beta.1-mac-x64.zip)** |
+| Mac · Apple Silicon (M series) | **[↓ Download for Apple Silicon](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.2/Ready-Player-One-0.5.0-beta.2-mac-arm64.zip)** |
+| Mac · Intel | **[↓ Download for Intel Mac](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.2/Ready-Player-One-0.5.0-beta.2-mac-x64.zip)** |
 | Windows 10 / 11 · x64 | **[↓ Windows installer](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.7-beta.1/Ready-Player-One-0.4.7-beta.1-windows-x64-setup.exe)** · [Portable ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.7-beta.1/Ready-Player-One-0.4.7-beta.1-windows-x64.zip) |
 
 On Mac, unzip and drag `头号玩家.app` into Applications. On Windows, run the installer or fully extract the ZIP and launch `头号玩家.exe`. No separate Node.js installation is required.
 
-**Unsigned beta; the Mac app is not notarized.** Your system may block the first launch. See the [Mac installation guide](docs/BETA-TESTING.md#1-安装) or [Windows guide](docs/WINDOWS.md) (Chinese). The current desktop UI is Chinese. Bring your own AI accounts and credits; Git operations require Git installed locally. Regular Codex conversations can run in folders without a Git repository.
+**Mac beta uses ad-hoc signing; it has no Apple Developer ID signature or notarization.** Your system may block the first launch. See the [Mac installation guide](docs/BETA-TESTING.md#1-安装) or [Windows guide](docs/WINDOWS.md) (Chinese). The current desktop UI is Chinese. Bring your own AI accounts and credits; Git operations require Git installed locally. Regular Codex conversations can run in folders without a Git repository.
 
-[Release notes](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.1) · [Mac SHA256 checksums](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/SHA256SUMS-0.5.0-beta.1.txt) · [Report an issue](https://github.com/ebrahimeolakey/ready-player-one/issues)
+[Release notes](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.2) · [Mac SHA256 checksums](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.2/SHA256SUMS-0.5.0-beta.2.txt) · [Report an issue](https://github.com/ebrahimeolakey/ready-player-one/issues)
+
+If an earlier Mac download says “damaged,” install this repair release. See [first-launch help](docs/BETA-TESTING.md#mac-first-launch) for the system approval steps.
 
 ## Work together, with AI
 
@@ -84,19 +86,21 @@ The current main branch uses [Apache-2.0](LICENSE). Releases v0.3.0-beta.1 and e
 
 ## 直接下载
 
-Mac 协作预览版：**0.5.0-beta.1** · Windows：**0.4.7-beta.1** · Apache-2.0 · 下载无需登录
+Mac 协作预览版：**0.5.0-beta.2** · Windows：**0.4.7-beta.1** · Apache-2.0 · 下载无需登录
 
 | 系统 | 安装包 |
 | --- | --- |
-| Mac · Apple Silicon（M 系列） | **[↓ 下载 Mac M 系列版](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/Ready-Player-One-0.5.0-beta.1-mac-arm64.zip)** |
-| Mac · Intel | **[↓ 下载 Mac Intel 版](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/Ready-Player-One-0.5.0-beta.1-mac-x64.zip)** |
+| Mac · Apple Silicon（M 系列） | **[↓ 下载 Mac M 系列版](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.2/Ready-Player-One-0.5.0-beta.2-mac-arm64.zip)** |
+| Mac · Intel | **[↓ 下载 Mac Intel 版](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.2/Ready-Player-One-0.5.0-beta.2-mac-x64.zip)** |
 | Windows 10 / 11 · x64 | **[↓ 下载 Windows 安装器](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.7-beta.1/Ready-Player-One-0.4.7-beta.1-windows-x64-setup.exe)** · [免安装 ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.4.7-beta.1/Ready-Player-One-0.4.7-beta.1-windows-x64.zip) |
 
 Mac 解压后将「头号玩家.app」拖入「应用程序」。Windows 运行安装器，或完整解压 ZIP 后运行「头号玩家.exe」。无需另装 Node.js。
 
-**未签名测试版，Mac 尚未公证。** 系统可能拦截首次启动，见 [Mac 安装指南](docs/BETA-TESTING.md#1-安装) / [Windows 安装指南](docs/WINDOWS.md)。当前桌面界面为中文。AI 需要自己的账号及额度；Git 功能需要本机 Git。Codex 普通对话可在非 Git 文件夹运行。
+**Mac 测试版使用临时签名，尚无 Apple Developer ID 签名与公证。** 系统可能拦截首次启动，见 [Mac 安装指南](docs/BETA-TESTING.md#1-安装) / [Windows 安装指南](docs/WINDOWS.md)。当前桌面界面为中文。AI 需要自己的账号及额度；Git 功能需要本机 Git。Codex 普通对话可在非 Git 文件夹运行。
 
-[版本说明](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.1) · [Mac SHA256 校验](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.1/SHA256SUMS-0.5.0-beta.1.txt) · [反馈问题](https://github.com/ebrahimeolakey/ready-player-one/issues)
+[版本说明](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.2) · [Mac SHA256 校验](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.2/SHA256SUMS-0.5.0-beta.2.txt) · [反馈问题](https://github.com/ebrahimeolakey/ready-player-one/issues)
+
+如果旧 Mac 安装包提示“已损坏”，请改用本次修复版。首次启动的系统放行步骤见 [安装帮助](docs/BETA-TESTING.md#mac-first-launch)。
 
 ## 和 AI 一起协作
 
