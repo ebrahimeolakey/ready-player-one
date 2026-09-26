@@ -1,0 +1,43 @@
+{
+  "version": "0.5.0-beta.2",
+  "sourceCommit": "baf557d31c53ed7f80a766e6d8edc2730f56fec7",
+  "problem": "Incomplete Electron ad-hoc signature with missing resource seal; downloaded beta.1 ZIP matched published SHA256.",
+  "fix": {
+    "macIdentity": "-",
+    "nestedSigning": true,
+    "postSignStrictDeepVerification": true,
+    "extractedZipVerification": true,
+    "developerIdSigned": false,
+    "notarized": false
+  },
+  "validation": {
+    "productionBuildPassed": true,
+    "brokenBeta1ArchiveRejected": true,
+    "extractedArm64SignaturePassed": true,
+    "extractedX64SignaturePassed": true,
+    "arm64PackagedCreateRestartPassed": true,
+    "smokeTestMockKeychain": true,
+    "modelCalls": 0,
+    "freshBrowserDownloadGatekeeperFlowTested": false,
+    "intelRuntimeTested": false,
+    "normalUserDataLaunchVerified": false
+  },
+  "artifacts": [
+    {
+      "name": "Ready-Player-One-0.5.0-beta.2-mac-arm64.zip",
+      "platform": "mac",
+      "arch": "arm64",
+      "format": "zip",
+      "size": 122726959,
+      "sha256": "f6f041e6bf9bbe3dc2a0248e7c818b00fcd66734febc028b43241c22710a0bfc"
+    },
+    {
+      "name": "Ready-Player-One-0.5.0-beta.2-mac-x64.zip",
+      "platform": "mac",
+      "arch": "x64",
+      "format": "zip",
+      "size": 130487179,
+      "sha256": "4e3372e19dfe96f09ff4b7beea4073918e1c090100544422b4009362be542793"
+    }
+  ]
+}

@@ -13,7 +13,8 @@ let ids;
 for(const phase of ['create','restart']){
  const listener=createServer();await new Promise(r=>listener.listen(0,'127.0.0.1',r));const port=listener.address().port;await new Promise(r=>listener.close(r));
  const env={...process.env,RPO_DATA_DIR:dir};for(const k of ['ELECTRON_RUN_AS_NODE','RPO_UPDATE_HEALTH_TICKET','RPO_IDENTITY_ISSUER','RPO_IDENTITY_PUBLIC_KEY_FILE','GH_TOKEN','GITHUB_TOKEN','OPENAI_API_KEY','ANTHROPIC_API_KEY'])delete env[k];
- const child=spawn(executable,[`--remote-debugging-port=${port}`],{env,stdio:['ignore','pipe','pipe']});let log='';child.stdout.on('data',b=>log+=b);child.stderr.on('data',b=>log+=b);let ws;
+ // Mock keychain is restricted to this disposable-data test process, never normal app startup.
+ const child=spawn(executable,[`--remote-debugging-port=${port}`,...(process.platform==='darwin'?['--use-mock-keychain']:[])],{env,stdio:['ignore','pipe','pipe']});let log='';child.stdout.on('data',b=>log+=b);child.stderr.on('data',b=>log+=b);let ws;
  try {
   const deadline=Date.now()+30000;let target;
   while(Date.now()<deadline&&!target){try{target=(await(await fetch(`http://127.0.0.1:${port}/json/list`,{signal:AbortSignal.timeout(1500)})).json()).find(t=>t.type==='page'&&t.url.includes('dist/index.html'));}catch{}if(!target)await sleep(100);}
@@ -33,4 +34,4 @@ for(const phase of ['create','restart']){
   const shot=await rpc('Page.captureScreenshot',{format:'png'});await writeFile(join(dir,phase+'.png'),Buffer.from(shot.data,'base64'));
  }finally{ws?.close();child.kill('SIGTERM');await Promise.race([new Promise(r=>child.once('exit',r)),sleep(5000).then(()=>child.kill('SIGKILL'))]);await writeFile(join(dir,phase+'.log'),log);}
 }
-const evidence={passed:true,actualPackagedExecutable:true,architecture:process.arch,phases:2,modelCalls:0,installedApplicationModified:false,firstLaunchQuarantineTested:false};await writeFile(join(dir,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify({directory:dir,...evidence}));
+const evidence={passed:true,actualPackagedExecutable:true,architecture:process.arch,phases:2,modelCalls:0,installedApplicationModified:false,firstLaunchQuarantineTested:false,mockKeychain:process.platform==='darwin'};await writeFile(join(dir,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify({directory:dir,...evidence}));
