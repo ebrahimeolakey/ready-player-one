@@ -1,3 +1,5 @@
+import { AccessSummary } from "./TeamSpace";
+import { TaskSession } from "./TaskSession";
 import { ProjectHub } from "./ProjectHub";
 import { AgentEditPositionsContext } from "./AgentEditPositions";
 import { VSCodeImport } from "./VSCodeImport";
@@ -78,6 +80,10 @@ const api: RPO = window.rpo || {
 function App() {
   const [state, setState] = useState<State>(empty),
     [workspace, setWorkspace] = useState(""),
+    [sessionTeam, setSessionTeam] = useState(""),
+    [sessionScope, setSessionScope] = useState("mine"),
+    [projectFocus, setProjectFocus] = useState(""),
+    [taskFocus, setTaskFocus] = useState(""),
     [selected, setSelected] = useState(""),
     [view, setView] = useState("projects"),
     [modal, setModal] = useState(""),
@@ -234,8 +240,25 @@ function App() {
     setSelected("");
     setModal("");
   };
+  const taskForSession = state.collaboration?.tasks.find(t => t.sessionId === session?.id);
+  const openTask = async (id: string) => {
+    try {
+      const task = await api.invoke("collab.task.open", { taskId: id });
+      const latest = await api.invoke("bootstrap");
+      const s = latest.sessions.find((s:Session)=>s.id===task.sessionId);
+      setTaskFocus(id);
+      if(s) openSession(s);
+      setPaneSession(""); setProjectFocus(task.projectId);
+    } catch (e) { notify(e instanceof Error ? e.message : String(e)); }
+  };
+  const backToProject = () => {
+    if (!session?.projectId) return;
+    setProjectFocus(session.projectId);setWorkspace(session.workspaceId);setSelected("");setView("projects");setPaneSession("");
+  };
   const second = state.sessions.find((s) => s.id === paneSession);
-  const shown = sessions
+  const shown = state.sessions
+    .filter(s => !sessionTeam || s.workspaceId === sessionTeam)
+    .filter(s => sessionScope === "all" || !!state.me?.sessionId || s.ownerId === state.me?.id || s.lanes.some(l=>l.ownerId===state.me?.id) || state.collaboration?.tasks.some(t=>t.sessionId===s.id && (t.driUserId===state.me?.id || t.controllers.some(c=>c.userId===state.me?.id&&!c.revokedAt))))
     .filter(
       (s) =>
         s.status === (view === "history" ? "archived" : "active") &&
@@ -279,7 +302,7 @@ function App() {
           </div>
           <nav>
             {[
-              ...(!state.me?.sessionId ? [[Layers, "projects", "项目群"]] : []),
+              ...(!state.me?.sessionId ? [[Layers, "projects", "项目"]] : []),
               [LayoutGrid, "sessions", "会话"],
               [Users, "team", "成员"],
             ].map(([Icon, id, label]: any) => (
@@ -290,6 +313,7 @@ function App() {
                 }
                 onClick={() => {
                   setView(id);
+                  if (id === "sessions") setSessionTeam("");
                   setSelected("");
                 }}
               >
@@ -299,7 +323,7 @@ function App() {
             ))}
           </nav>
           <div className="nav-label">
-            工作区
+            {"团队"}
             <button
               title="管理工作区"
               aria-label="管理工作区"
@@ -316,8 +340,9 @@ function App() {
                     title={w.remote || w.name}
                     onClick={() => {
                       setWorkspace(w.id);
+                      setSessionTeam(w.id);
                       setSelected("");
-                      setView("sessions");
+                      setView(view === "projects" ? "projects" : "sessions");
                     }}
                   >
                     <Folder size={13} />
@@ -335,7 +360,7 @@ function App() {
                     <MoreHorizontal size={14} />
                   </button>
                 </div>
-                {state.sessions
+                {(session ? state.sessions : [])
                   .filter(
                     (s) => s.workspaceId === w.id && s.status === "active",
                   )
@@ -395,6 +420,7 @@ function App() {
             <div className="split-workspace">
               <div className="session-pane">
                 <header className="session-topbar">
+                  {session.projectId && !state.me?.sessionId && <button className="button" onClick={backToProject}>返回项目</button>}
                   <GitBranch size={14} />
                   <strong>{session.title}</strong>
                   <span>/ {ws?.name}</span>
@@ -412,7 +438,7 @@ function App() {
                     分享
                   </button>
                 </header>
-                <Studio
+                {taskForSession ? <TaskSession key={taskForSession.id} initialTaskId={taskFocus} task={taskForSession} state={state} call={api.invoke} ide={<Studio key={session.id} session={session} state={state} call={call} notify={notify} onAddLane={()=>notify("请通过共享会话顶部的「添加 Agent 分工」接入协作者")} onShare={beginShare} onRepos={()=>setRepoPicker(true)} compact={!!second}/>} /> : <Studio
                   key={session.id}
                   session={session}
                   state={state}
@@ -422,7 +448,7 @@ function App() {
                   onShare={beginShare}
                   onRepos={() => setRepoPicker(true)}
                   compact={!!second}
-                />
+                />}
               </div>
               {second && (
                 <div className="session-pane">
@@ -439,7 +465,7 @@ function App() {
                       <X size={14} />
                     </button>
                   </header>
-                  <Studio
+                  {state.collaboration?.tasks.find(t=>t.sessionId===second.id) ? <TaskSession key={second.id} task={state.collaboration!.tasks.find(t=>t.sessionId===second.id)!} state={state} call={api.invoke} ide={<Studio key={second.id} secondary compact session={second} state={state} call={call} notify={notify} onAddLane={()=>notify("请通过共享会话顶部的「添加 Agent 分工」接入协作者")} onShare={()=>{openSession(second);beginShare();}} onRepos={()=>setRepoPicker(true)}/>}/> : <Studio
                     key={"pane-" + second.id}
                     secondary
                     session={second}
@@ -457,12 +483,14 @@ function App() {
                       beginShare();
                     }}
                     onRepos={() => setRepoPicker(true)}
-                  />
+                  />}
                 </div>
               )}
             </div>
           ) : view === "projects" && !state.me?.sessionId ? (
-            <ProjectHub state={state} workspace={workspace} onWorkspace={setWorkspace} call={window.rpo.invoke}/>
+            <ProjectHub state={state} workspace={workspace} onWorkspace={setWorkspace} call={window.rpo.invoke}
+              onInvite={id => { setWorkspace(id); setInviteScope("workspace"); setInviteRole("editor"); setShare(null); setModal("share"); }}
+              onProviders={() => openSettings("providers")} onOpenTask={id => void openTask(id)} onOpenSession={id => { const s=state.sessions.find(s=>s.id===id); if(s)openSession(s); }} initialProjectId={projectFocus} />
           ) : view === "settings" ? (
             <div className="settings-layout">
               <aside className="settings-nav">
@@ -604,6 +632,11 @@ function App() {
                 <>
                   <header className="page-heading">
                     <h1>{view === "history" ? "归档会话" : "会话"}</h1>
+                    <select aria-label="会话范围" className="sort-select" value={sessionScope} onChange={e=>setSessionScope(e.target.value)}><option value="mine">我的会话</option><option value="all">团队全部</option></select>
+                    <select aria-label="筛选团队" className="sort-select" value={sessionTeam} onChange={e=>{setSessionTeam(e.target.value);if(e.target.value)setWorkspace(e.target.value);}}>
+                      <option value="">全部团队</option>
+                      {state.workspaces.map(w=><option value={w.id} key={w.id}>{w.name}</option>)}
+                    </select>
                     <div className="grow" />
                     {searchOpen && (
                       <input
@@ -644,6 +677,8 @@ function App() {
                   <MissionControl state={state} sessions={shown} onOpen={openSession}/>
                   <div className="session-grid">
                     {shown.map((s) => {
+                      const linkedTask = state.collaboration?.tasks.find(t=>t.sessionId===s.id);
+                      const taskStatus:Record<string,string> = {proposed:"待认领",ready:"待开始",running:"执行中",review:"待验收",accepted:"已验收",failed:"执行失败",interrupted:"已中断"};
                       const busy = s.lanes.some((l) => l.status === "running"),
                         awaiting = s.lanes.some((l) => l.status === "awaiting");
                       return (
@@ -698,7 +733,7 @@ function App() {
                           >
                             <div className="session-status">
                               <span className={"dot " + (busy ? "mint" : "")} />
-                              {busy ? "执行中" : awaiting ? "待审批" : "待命"}
+                              {linkedTask ? taskStatus[linkedTask.status] || linkedTask.status : busy ? "执行中" : awaiting ? "待审批" : "待命"}
                               <small>
                                 {new Date(s.at).toLocaleDateString("zh-CN", {
                                   month: "short",
@@ -706,6 +741,7 @@ function App() {
                                 })}
                               </small>
                             </div>
+                            <div className="session-card-project">{state.workspaces.find(w=>w.id===s.workspaceId)?.name}{s.projectId && ` / ${state.collaboration?.projects.find(p=>p.id===s.projectId)?.name || "项目"}`}</div>
                             <div className="card-providers">
                               {[...new Set(s.lanes.map((l) => l.provider))].map(
                                 (p) => (
@@ -864,8 +900,10 @@ function App() {
                   workspaceId: workspace,
                   title: f.get("title"),
                   description: "",
+                  projectId: f.get("projectId") || undefined,
                 });
                 if (s) {
+                  await call("lane.create", {sessionId:s.id,provider:f.get("provider") || "codex"});
                   openSession(s);
                   setModal("");
                 }
@@ -878,7 +916,7 @@ function App() {
               </p>
               <select
                 className="full"
-                aria-label="仓库"
+                aria-label="会话所属团队"
                 value={workspace}
                 onChange={(e) => setWorkspace(e.target.value)}
               >
@@ -888,6 +926,11 @@ function App() {
                   </option>
                 ))}
               </select>
+              <select className="full" aria-label="会话所属项目" name="projectId" key={workspace} defaultValue="">
+                <option value="">独立会话</option>
+                {state.collaboration?.projects.filter(p=>p.teamId===workspace).map(p=><option value={p.id} key={p.id}>{p.name} · 共享项目上下文</option>)}
+              </select>
+              <select className="full" aria-label="会话 Agent" name="provider" defaultValue="codex"><option value="codex">Codex</option><option value="claude">Claude Code</option></select>
               <input
                 className="full"
                 autoFocus
@@ -1031,7 +1074,7 @@ function App() {
                   const snapshot=await api.invoke<State>("bootstrap");
                   const joined=snapshot.sessions.find(s=>s.id===r.sessionId&&s.status==="active"),nav=snapshot.local.navigation;
                   if(joined&&nav?.ready&&nav.scope)void api.invoke("navigation.open",{scope:nav.scope,workspaceId:joined.workspaceId,sessionId:joined.id}).catch(e=>notify(e.message));
-                  setView("sessions");
+                  setView(r.sessionId ? "sessions" : "projects");
                 }
               }}
             >
@@ -1074,6 +1117,8 @@ function App() {
                   <select className="full" aria-label="邀请权限" value={inviteRole} disabled={loading||!!share} onChange={e=>setInviteRole(e.target.value)}>
                     {Object.entries(roleNames).filter(([value])=>inviteScope==="workspace"||value!=="owner").map(([value,label])=><option key={value} value={value}>{label}</option>)}
                   </select>
+                  <AccessSummary scope={inviteScope}/>
+                  <p className="small-note">{inviteRole==="editor"?"协作者可接入自己的 Agent、参与分工；不会自动获得你的执行控制权。":inviteRole==="viewer"?"查看者只能观看共享内容。":inviteRole==="commenter"?"评论者可以参与讨论，不能执行 Agent。":"管理员可以管理团队成员与权限。"}</p>
                   {state.identity?.configured&&<input className="full" aria-label="受邀 GitHub 用户名" placeholder="GitHub 用户名（可选）" value={inviteGithub} disabled={loading||!!share} onChange={e=>setInviteGithub(e.target.value)}/>}
                   {!state.local.remote && internet && !state.local.tunnel?.installed ? (
                     <button

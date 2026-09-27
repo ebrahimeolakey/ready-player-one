@@ -17,6 +17,7 @@ export type ProjectMessage = {
   at: string;
   taskId?: string;
   versionId?: string;
+  outputId?: string;
   anchor?: string;
 };
 export type ProjectTask = {
@@ -31,6 +32,8 @@ export type ProjectTask = {
   status: string;
   revision: number;
   generation: number;
+  parentTaskId?: string | null;
+  requestedAgentId?: string | null;
   workerId?: string;
   workerOnline?: boolean;
   execution?: string;
@@ -47,16 +50,28 @@ export type ProjectTask = {
 export type ArtifactVersion = {
   id: string;
   teamId: string;
-  taskId: string;
+  taskId?: string;
+  outputId?: string;
   number: number;
   runId: string;
   generation: number;
   hash: string;
-  kind: "html" | "markdown";
+  kind: "html" | "markdown" | "text" | "image" | "pdf" | "file";
+  mime?: string;
+  size?: number;
+  encoding?: "base64";
+  approval?: {by:string;at:string;hash:string};
   previewStatus: string;
   content?: string;
 };
+export type AgentPolicy={trigger:'manual'|'mentions'|'discussion';projectIds:string[];autoTasks:boolean;maxTurnsPerHour:number};
 export type CollaborationState = {
+  roleTemplates?:{id:string;teamId?:string;name:string;role:string}[];
+  teamSettings?:{id:string;teamId:string;onboardingEnabled:boolean;welcomeAgents:boolean;guideAgentId?:string}[];
+  computers?:{id:string;teamId:string;ownerId:string;name:string;online:boolean;providers:string[]}[];
+  agentEvents?:{id:string;agentId:string;status:string;text:string;at:string;sessionId?:string;error?:string}[];
+  agentReminders?:{id:string;agentId:string;projectId:string;title:string;dueAt:string;status:string;intervalMinutes:number}[];
+  onboarding?: {id:string;teamId:string;projectId:string;userId:string;agentId?:string;dismissed:boolean;guideStep?:number;guideComplete?:boolean;drafts?:{id:string;runId:string;type:string;label:string;name?:string;role?:string;goal?:string;acceptance?:string;artifactPath?:string;agentId?:string}[];turns:{id:string;text:string;runId:string;sessionId:string;laneId:string;at:string}[]}[];
   projects: Project[];
   channels: {
     id: string;
@@ -73,7 +88,15 @@ export type CollaborationState = {
     role: string;
     provider: string;
     workerId: string;
+    sessionId?: string;
+    sourceLaneId?: string;
+    projectId?: string | null;
+    taskId?: string;
+    parentAgentId?: string;
+    online?: boolean;
+    paused?:boolean;avatar?:string;memory?:string;revision?:number;computerId?:string;policy?:AgentPolicy;projectSessions?:Record<string,string>;runtimeHistory?:{sessionId:string;provider:string}[];
   }[];
+  outputs?: {id:string;teamId:string;projectId:string;sessionId:string;laneId:string;workerId:string;path:string;name:string;previewVersionId?:string;acceptedVersionId?:string}[];
   tasks: ProjectTask[];
   artifactVersions: ArtifactVersion[];
   artifactComments: {

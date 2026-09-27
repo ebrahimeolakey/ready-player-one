@@ -1,0 +1,72 @@
+{
+  "version": "0.5.0-beta.3",
+  "validatedAt": "2026-09-27T14:05:08.979560+00:00",
+  "platforms": [
+    "mac-arm64",
+    "mac-x64"
+  ],
+  "windowsBuilt": false,
+  "regression": {
+    "tests": 465,
+    "passed": 465,
+    "sourceChangesAfterTests": "Version metadata and release documentation only; final UI refinements also passed the Electron workflow."
+  },
+  "desktop": {
+    "eightStepModal": true,
+    "savedProgress": true,
+    "cindyDraftToAgent": true,
+    "sharedMultiAgentTasks": true,
+    "artifactFilesAndApproval": true,
+    "closeWindowAndDockReopen": true,
+    "syntheticProvider": true
+  },
+  "realModel": {
+    "provider": "codex",
+    "physicalMachines": 1,
+    "independentAgents": 2,
+    "completedAgentEvents": 2,
+    "originalTasksUnchanged": true,
+    "verifiedAt": "2026-09-27T13:45:34.187Z"
+  },
+  "packagedLaunch": {
+    "passed": true,
+    "actualPackagedExecutable": true,
+    "architecture": "arm64",
+    "phases": 2,
+    "modelCalls": 0,
+    "installedApplicationModified": false,
+    "firstLaunchQuarantineTested": false,
+    "mockKeychain": true
+  },
+  "archiveSignatures": {
+    "arm64": "passed after ZIP extraction",
+    "x64": "passed after ZIP extraction"
+  },
+  "artifacts": [
+    {
+      "name": "Ready-Player-One-0.5.0-beta.3-mac-arm64.zip",
+      "platform": "mac",
+      "arch": "arm64",
+      "format": "zip",
+      "size": 146125777,
+      "sha256": "c1c36e2be6511d0b6510cc7ad5f90c9b8d8240cfe43a7942c7d8bcd426b3324e"
+    },
+    {
+      "name": "Ready-Player-One-0.5.0-beta.3-mac-x64.zip",
+      "platform": "mac",
+      "arch": "x64",
+      "format": "zip",
+      "size": 153885995,
+      "sha256": "07692c92d513e39c76358da23be1e5ed0550cf4053879f09e94be004b4220b0b"
+    }
+  ],
+  "notVerified": [
+    "Two physical Macs collaborating over the Internet",
+    "Intel hardware execution",
+    "Fresh-account login",
+    "Real Claude Code execution",
+    "Every external MCP host",
+    "First launch with download quarantine and production keychain",
+    "Real GitHub publication through the in-app DRI flow"
+  ]
+}

@@ -9,6 +9,8 @@ const ref = { type: "object", properties: { path: string, commit: string, hash: 
 const scope = {type:"object",properties:{path:string,kind:{enum:["file","directory"]}},required:["path","kind"],additionalProperties:false};
 const scopes = {type:"array",items:scope,maxItems:100};
 const definitions = [
+  ["project_context", "collab.session.context", "读取当前项目共享上下文、可协作的 Agent，以及此共享任务中每位 Agent 的分工。", {}, []],
+  ["task_contribute", "collab.task.contribute", "在当前共享任务里请求一位已接入项目的 Agent 承担独立分工。不会自动启动，对方持有人接入并启动后执行。先读取 project_context 获取 Agent ID。", {agentId:string,goal:string,acceptance:string,requestKey:string}, ["agentId","goal","requestKey"]],
   ["context", "coordination.context", "读取当前会话、计划、成员、共享记忆、文件锁和 Agent 消息。", {}, []],
   ["plan_add", "plan.add", "在当前会话拆分一个可分配的计划步骤。", { text: string, assigneeId: string, fileScopes:scopes }, ["text"]],
   ["overlap_check", "coordination.check", "检查当前通道的文件/目录、计划和其他活动任务是否相交；结果为确定性建议，不阻止本机写入。", {prompt:promptString,fileScopes:scopes,planIds:{type:"array",items:string,maxItems:50},branch:string}, []],
@@ -26,7 +28,7 @@ const definitions = [
   ["lock_renew", "lock.renew", "续期当前成员持有的建议性文件锁。", { id: string, ttlMs: { type: "integer", minimum: 1000, maximum: 1800000 } }, ["id"]],
   ["lock_release", "lock.release", "释放当前成员持有的建议性文件锁。", { id: string }, ["id"]],
 ];
-export const coordinationTools = definitions.map(([name, , description, properties, required]) => ({ name: `rpo_${name}`, description, inputSchema: { type: "object", properties, required, additionalProperties: false }, annotations: { readOnlyHint: ["context","overlap_check","memory_list"].includes(name), destructiveHint: false, idempotentHint: ["context","overlap_check","memory_list","memory_retire","subtask_spawn"].includes(name), openWorldHint: false } }));
+export const coordinationTools = definitions.map(([name, , description, properties, required]) => ({ name: `rpo_${name}`, description, inputSchema: { type: "object", properties, required, additionalProperties: false }, annotations: { readOnlyHint: ["context","project_context","overlap_check","memory_list"].includes(name), destructiveHint: false, idempotentHint: ["context","overlap_check","memory_list","memory_retire","subtask_spawn","task_contribute"].includes(name), openWorldHint: false } }));
 
 function valid(value, schema) {
   if (schema.enum && !schema.enum.includes(value)) return false;
@@ -71,7 +73,11 @@ export function createCoordinationMcp({ client, sessionId, laneId, spawnSubtask 
       }
       if ((method.startsWith("lock.") || method === "coordination.check") && !laneId) throw Error("当前 MCP 未绑定 Agent 通道");
       if (["lock.renew", "lock.release"].includes(method) && !context.locks.some(l => l.id === args.id && l.laneId === laneId)) throw Error("只能操作当前 Agent 通道的文件锁");
-      const result = method === "coordination.context" ? context : await client.call(method, { ...args, sessionId, workspaceId: context.session.workspaceId, ...((method.startsWith("lock.") || method === "coordination.check") ? { laneId } : {}) });
+      if (method === "collab.task.contribute" && (!laneId || !context.session.taskId || !context.session.lanes.some(l => l.id === laneId && l.ownerId === client.state?.me?.id))) throw Error("当前 Agent 没有共享任务分工权限");
+      const result = method === "coordination.context" ? context : await client.call(method, { ...args, sessionId, workspaceId: context.session.workspaceId,
+        ...(method === "collab.task.contribute" ? {taskId:context.session.taskId} : {}),
+        ...(method === "coordination.message" && laneId ? {senderLaneId:laneId} : {}),
+        ...((method.startsWith("lock.") || method === "coordination.check") ? { laneId } : {}) });
       return { ...response, result: { content: [{ type: "text", text: JSON.stringify(result) }], isError: false } };
     } catch (error) {
       return { ...response, result: { content: [{ type: "text", text: error.message }], isError: true } };

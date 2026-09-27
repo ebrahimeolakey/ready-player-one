@@ -1,4 +1,5 @@
-import { initCollaboration, projectCollaboration, collaborationSnapshot, taskForLane, assertTaskController, finishCollaborationRun } from "./project-collaboration.mjs";
+import { canReadSession, privateResult } from "./session-privacy.mjs";
+import { initCollaboration, projectCollaboration, collaborationSnapshot, taskForLane, assertTaskController, finishCollaborationRun, projectRunContext } from "./project-collaboration.mjs";
 import { validateEditPositions } from "./edit-positions.mjs";
 import { workspaceLifecycle, recoverWorkspaceDeletions } from "./workspace-lifecycle.mjs";
 import { assertSessionScope, scopedResult, grantMembers } from "./access-scope.mjs";
@@ -143,11 +144,11 @@ export class Hub extends EventEmitter {
     const allowed = (w) => { if (peer.host) return true; try { this.workspace(peer,w.id); return true; } catch { return false; } };
     const workspaces = this.db.workspaces.filter(allowed);
     const ids = new Set(workspaces.map((w) => w.id));
-    return scopedResult(redactRecord({
+    return scopedResult(privateResult(this,peer,redactRecord({
       workspaces,
       ...groupChatSnapshot(this, ids),
       collaboration: collaborationSnapshot(this, peer, ids),
-      sessions: this.db.sessions.filter((s) => ids.has(s.workspaceId) && (!peer.sessionId || s.id === peer.sessionId)),
+      sessions: this.db.sessions.filter((s) => ids.has(s.workspaceId) && canReadSession(s,peer) && (!peer.sessionId || s.id === peer.sessionId)),
       memories: this.db.memories.filter((m) => ids.has(m.workspaceId)),
       approvals: this.db.approvals.filter((a) => ids.has(a.workspaceId)),
       outcomes: this.db.outcomes.filter(o => ids.has(o.workspaceId)),
@@ -162,7 +163,7 @@ export class Hub extends EventEmitter {
       storage: { encrypted: true, ...this.db.storage },
       shared: this.shared,
       version: 1,
-    }), peer);
+    })), peer);
   }
   broadcast() {
     this.save();
@@ -176,7 +177,7 @@ export class Hub extends EventEmitter {
     const wss = new WebSocketServer({
       host,
       port,
-      maxPayload: 2 * 1024 * 1024,
+      maxPayload: 12 * 1024 * 1024,
     });
     await new Promise((resolve, reject) => {
       wss.once("listening", resolve);
@@ -365,10 +366,14 @@ export class Hub extends EventEmitter {
       if (targetWorkspaceId && ((workspaceId && workspaceId !== targetWorkspaceId) || (a.workspaceId && a.workspaceId !== targetWorkspaceId))) throw Error("记忆不属于当前工作区");
       workspaceId = targetWorkspaceId;
     }
+    const targetApproval = ["approval.decide","run.claim"].includes(method) ? this.db.approvals.find(v=>v.id===a.id) : method.startsWith("tool.") ? this.db.toolApprovals.find(v=>v.id===a.id) : null;
+    if(targetApproval)this.session(peer,targetApproval.sessionId);
+    const referenced=method.startsWith('handoff.')?this.db.handoffs.find(x=>x.id===a.id):method.startsWith('subtask.')?this.db.subtasks.find(x=>x.id===a.id):method.startsWith('memory.')?this.db.memories.find(x=>x.id===a.id):method.startsWith('outcome.')?this.db.outcomes.find(x=>x.id===a.id):null;
+    if(referenced?.sessionId)this.session(peer,referenced.sessionId);
     if (!workspaceId) return; // The target handler supplies its specific missing-resource error.
     this.workspace(peer, workspaceId);
     const required = ["invite.create", "invite.revoke"].includes(method) && a.sessionId ? "editor" : ["invite.create", "invite.revoke", "member.role", "member.remove", "workspace.delete.preview", "workspace.delete"].includes(method) ? "owner"
-      : ["session.export", "coordination.context", "memory.list", "memory.history", "chat.read"].includes(method) ? "viewer"
+      : ["session.export", "collab.session.context", "coordination.context", "memory.list", "memory.history", "chat.read"].includes(method) ? "viewer"
       : ["chat.send", "chat.task.request", "chat.task.cancel", "comment.add", "comment.resolve", "plan.add", "plan.claim", "plan.release", "plan.status", "plan.toggle", "plan.transfer", "plan.transfer.accept", "plan.transfer.decline"].includes(method) ? "commenter" : "editor";
     if (ROLES.indexOf(this.role(peer, workspaceId)) < ROLES.indexOf(required)) throw Error(`此操作需要 ${required} 权限`);
   }
@@ -384,6 +389,7 @@ export class Hub extends EventEmitter {
     const s = this.db.sessions.find((s) => s.id === sessionId);
     if (!s) throw Error("会话不存在");
     this.workspace(peer, s.workspaceId);
+    if (!canReadSession(s,peer)) throw Error("此会话仅参与者可见");
     if (peer.sessionId && peer.sessionId !== s.id) throw Error("会话不在邀请范围内");
     return s;
   }
@@ -419,7 +425,7 @@ export class Hub extends EventEmitter {
     // only the outward API boundary projects the invitation's visible scope.
     const nested = (this.actionDepth || 0) > 0;
     this.actionDepth = (this.actionDepth || 0) + 1;
-    try { const result = this.perform(peer, method, a); return nested ? result : scopedResult(result, peer); }
+    try { const result = this.perform(peer, method, a); return nested ? result : scopedResult(privateResult(this,peer,result), peer); }
     finally { this.actionDepth--; }
   }
   perform(peer, method, a) {
@@ -503,9 +509,12 @@ export class Hub extends EventEmitter {
     }
     if (method === "session.create") {
       const w = this.workspace(peer, a.workspaceId);
+      const project = a.projectId && this.db.collaboration.projects.find(p => p.id === a.projectId && p.teamId === w.id);
+      if (a.projectId && !project) throw Error("项目不属于此团队");
       const s = {
         id: id(),
         workspaceId: w.id,
+        ...(project ? { projectId: project.id } : {}),
         title: text(a.title, 150),
         description: String(a.description || "").slice(0, 5000),
         branch: w.branch,
@@ -545,6 +554,7 @@ export class Hub extends EventEmitter {
     }
     if (method === "lane.create") {
       const s = this.session(peer, a.sessionId);
+      if (s.taskId && !this.collaborationDispatch) throw Error("请在任务会话中选择执行 Agent");
       if (s.status !== "active") throw Error("请先恢复会话");
       if (!["codex", "claude"].includes(a.provider) && !/^(?:custom|acp)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(a.provider || "")) throw Error("未知智能体");
       if (Object.keys(a).some(k => /^(apiKey|api_key|key|secret|token|encryptedKey|baseUrl|headers|authorization|runtimeConfig)$/i.test(k))) throw Error("协作通道只允许 Provider 标识与短名称，不接收密钥或连接配置");
@@ -561,6 +571,9 @@ export class Hub extends EventEmitter {
         files: [],
       };
       s.lanes.push(l);
+      if (s.projectId && !s.taskId && !peer.sessionId) {
+        projectCollaboration(this, peer, "collab.agent.register", { teamId: s.workspaceId, projectId: s.projectId, sessionId: s.id, laneId: l.id, name: s.title.slice(0, 100), role: "执行" });
+      }
       this.entry(
         l,
         "system",
@@ -576,7 +589,12 @@ export class Hub extends EventEmitter {
         throw Error("当前通道已有待处理任务");
       if (!["read-only", "workspace-write"].includes(a.mode))
         throw Error("未知权限模式");
+      const taskAgent=this.db.collaboration?.agents.find(x=>x.taskId&&x.sessionId===s.id&&x.sourceLaneId===l.id);
+      const managedAgent=this.db.collaboration?.agents.find(x=>!x.taskId&&(x.sourceLaneId===l.id||x.id===s.agentIdentityId||x.id===taskAgent?.parentAgentId));
+      if(managedAgent?.paused)throw Error('Agent 已暂停');
       const prompt = validatePrompt(a.prompt);
+      const projectContext = peer.sessionId ? null : projectRunContext(this, s);
+      const contextProject = projectContext && this.db.collaboration.projects.find(p => p.id === s.projectId);
       if (!Array.isArray(a.files || [])) throw Error("文件列表无效");
       const scopes = fileScopes(a.files, a.fileScopes, 100);
       const files = scopes.map(v => v.path), linkedPlans = planIds(s,a.planIds), branch = branchName(a.branch);
@@ -588,11 +606,13 @@ export class Hub extends EventEmitter {
         sessionId: s.id,
         laneId: l.id,
         ownerId: l.ownerId,
+        ...(managedAgent?.computerId?{computerId:managedAgent.computerId}:{}),
         owner: l.owner,
         requestedBy: peer.id,
         requester: peer.name,
         provider: l.provider,
         prompt,
+        ...(contextProject ? { projectContext, projectId: s.projectId, projectBinding: { repository: contextProject.repository, branch: contextProject.branch, subPath: contextProject.subPath } } : {}),
         mode: a.mode,
         files,
         fileScopes: scopes,
@@ -628,6 +648,7 @@ export class Hub extends EventEmitter {
     if (method === "run.claim") {
       const ap = this.db.approvals.find((ap) => ap.id === a.id);
       if (!ap || ap.ownerId !== peer.id) throw Error("任务已经领取或未获批准");
+      if(ap.computerId&&ap.computerId!==a.computerId)throw Error('此执行分配给另一台电脑');
       const { s, l } = this.lane(peer, ap);
       const keyHash = claimKeyHash(a.claimKey);
       const result = () => ({ approval: ap, session: s, memories: this.db.memories.filter(m => m.workspaceId === s.workspaceId && !m.retired) });

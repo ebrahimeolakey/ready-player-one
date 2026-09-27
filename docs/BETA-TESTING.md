@@ -1,11 +1,11 @@
 # 头号玩家 · Mac 同事内测指南
 
-版本：0.5.0-beta.2。适用场景：每人一台 Mac，在不同网络里共享同一个 Agent 会话。
+版本：0.5.0-beta.3。适用场景：每人一台 Mac，在不同网络里共享同一个 Agent 会话。
 
 ## 1. 安装
 
-- Apple Silicon（M 系列）：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.2/Ready-Player-One-0.5.0-beta.2-mac-arm64.zip)。
-- Intel Mac：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.2/Ready-Player-One-0.5.0-beta.2-mac-x64.zip)。
+- Apple Silicon（M 系列）：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.3/Ready-Player-One-0.5.0-beta.3-mac-arm64.zip)。
+- Intel Mac：[直接下载](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.3/Ready-Player-One-0.5.0-beta.3-mac-x64.zip)。
 - 解压，把「头号玩家.app」拖到「应用程序」，然后打开。使用 Git 仓库功能时需安装 Git；普通本机文件夹可直接打开。无需 Node.js 或 Homebrew。
 - 这是使用临时签名（ad-hoc）、未做 Developer ID 签名和公证的内部测试包。macOS 可能阻止第一次打开；仅在确认文件来自本仓库、校验与发布一致后，按系统「隐私与安全性」中的提示选择是否允许。公司设备若禁止未公证应用，请交给 IT 处理。不要关闭 Gatekeeper 或移除系统安全策略。
 - GitHub 仓库已公开。任何同事均可直接下载安装包，无需 GitHub 登录或源码仓库权限。
@@ -14,9 +14,9 @@
 
 ### Mac 首次启动 / First launch
 
-**English:** Version 0.5.0-beta.2 repairs the incomplete bundle signature in the previous Mac package. Download the repair release, quit the old app after saving your work, and replace the app bundle without deleting your application data. It remains a beta without Apple Developer ID signing or notarization. If macOS blocks it as an unidentified developer, try opening it once, then go to **System Settings → Privacy & Security → Open Anyway** and confirm. Only approve a download from this repository after checking its published checksum. See [Apple's first-launch instructions](https://support.apple.com/102445). If there is no approval option or it still says “damaged,” stop and report the macOS version and exact message.
+**English:** Version 0.5.0-beta.3 retains the Mac signature repair and adds guided Agent collaboration. Download this release, quit the old app after saving your work, and replace the app bundle without deleting your application data. It remains a beta without Apple Developer ID signing or notarization. If macOS blocks it as an unidentified developer, try opening it once, then go to **System Settings → Privacy & Security → Open Anyway** and confirm. Only approve a download from this repository after checking its published checksum. See [Apple's first-launch instructions](https://support.apple.com/102445). If there is no approval option or it still says “damaged,” stop and report the macOS version and exact message.
 
-**中文：** 0.5.0-beta.2 修复了上一版 Mac 包签名不完整的问题。下载修复版，保存工作并退出旧版后替换应用，无需删除应用数据。它仍是没有 Apple Developer ID 签名、公证的测试版。如果系统提示无法验证开发者，先尝试打开一次，再进入 **系统设置 → 隐私与安全性 → 仍要打开**，按提示确认。仅对来自本仓库且 SHA256 校验一致的包放行。详见 [Apple 官方说明](https://support.apple.com/102445)。没有放行入口或仍提示“已损坏”时，请反馈 macOS 版本与完整提示。
+**中文：** 0.5.0-beta.3 延续 Mac 签名修复，并加入新手引导与 Agent 协作。下载本版，保存工作并退出旧版后替换应用，无需删除应用数据。它仍是没有 Apple Developer ID 签名、公证的测试版。如果系统提示无法验证开发者，先尝试打开一次，再进入 **系统设置 → 隐私与安全性 → 仍要打开**，按提示确认。仅对来自本仓库且 SHA256 校验一致的包放行。详见 [Apple 官方说明](https://support.apple.com/102445)。没有放行入口或仍提示“已损坏”时，请反馈 macOS 版本与完整提示。
 
 Changing the app signature may trigger a macOS Keychain prompt when reopening existing encrypted data. Confirm it yourself in the system dialog if you want the app to access that data; do not share your password or delete the keychain item.
 
@@ -42,7 +42,7 @@ Changing the app signature may trigger a macOS Keychain prompt when reopening ex
 
 邀请同事参与项目群时，进入「成员」→ 邀请，选择 **工作区范围**。仅邀请一个 Session 不授予项目群访问权。房主需在线；常驻 Hub 尚未部署。
 
-本轮新增链路已用模拟 Codex 协议子进程验证，没有将其当成真实模型或两台实体 Mac 测试。以下旧有 Session Share 流程仍可使用。
+新版入口为「项目」，内置 8 步弹窗、Cindy 和成员配置面板；详见 [当前上手与协作指南](AGENT-MANAGEMENT.md)。本轮已验证两个真实 Codex Agent 的群聊协作，但尚未完成两台实体 Mac 跨网验收。以下 Session Share 流程仍可使用。
 
 ## 3. 房主创建公网邀请
 

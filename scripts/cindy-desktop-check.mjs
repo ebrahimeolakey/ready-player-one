@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import { writeFile,readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+const pause=ms=>new Promise(r=>setTimeout(r,ms));
+async function wait(fn){const until=Date.now()+15000;while(!await fn()){if(Date.now()>until)throw Error('Cindy UI timeout: '+fn);await pause(80);}}
+export async function exerciseCindy({invoke,js,win,dir,team,project}){
+  await js(`document.querySelector('[role=dialog] [aria-label=关闭]')?.click()`);
+  await js(`document.querySelector('.cindy-entry').click()`);
+  await wait(()=>js(`!!document.querySelector('.cindy')`));
+  assert.match(await js(`document.querySelector('.cindy').textContent`),/尚未调用 AI/);
+  await js(`[...document.querySelectorAll('.cindy button')].find(b=>b.textContent.includes('连接 Cindy')).click()`);
+  await wait(()=>js(`!!document.querySelector('.local-setup')`));
+  await js(`[...document.querySelectorAll('.local-setup button')].find(b=>b.textContent.includes('下一步：选择 AI')).click()`);
+  await wait(()=>js(`!!document.querySelector('.setup-provider-options')`));
+  await js(`[...document.querySelectorAll('.local-setup button')].find(b=>b.textContent==='下一步 ').click()`);
+  await wait(()=>js(`!!document.querySelector('[aria-label="AI 名称"]')`));
+  assert.equal(await js(`document.querySelector('[aria-label="AI 名称"]').value`),'Cindy');
+  await js(`[...document.querySelectorAll('.local-setup button')].find(b=>b.textContent==='连接并加入项目').click()`);
+  await wait(()=>js(`!!document.querySelector('.cindy')`));
+  await wait(async()=>!!(await invoke('bootstrap')).collaboration.onboarding.find(r=>r.projectId===project.id)?.agentId);
+  const tasksBefore=(await invoke('bootstrap')).collaboration.tasks.length;
+  await js(`[...document.querySelectorAll('.cindy button')].find(b=>b.textContent==='帮我配置一个分工明确的 Agent 团队').click()`);
+  await wait(()=>js(`[...document.querySelectorAll('.cindy button')].some(b=>b.textContent==='添加调研搭档')`));
+  assert.equal((await invoke('bootstrap')).collaboration.tasks.length,tasksBefore,'model proposals do not mutate tasks');
+  await writeFile(join(dir,'cindy-conversation.png'),(await win.webContents.capturePage()).toPNG());
+  await js(`[...document.querySelectorAll('.cindy button')].find(b=>b.textContent==='添加调研搭档').click()`);
+  await wait(()=>js(`!!document.querySelector('.local-setup')`));
+  await js(`[...document.querySelectorAll('.local-setup button')].find(b=>b.textContent.includes('下一步：选择 AI')).click()`);
+  await js(`[...document.querySelectorAll('.local-setup button')].find(b=>b.textContent==='下一步 ').click()`);
+  await wait(()=>js(`!!document.querySelector('[aria-label="AI 名称"]')`));
+  assert.equal(await js(`document.querySelector('[aria-label="AI 名称"]').value`),'调研搭档');
+  assert.equal(await js(`document.querySelector('[aria-label="Agent 分工"]').value`),'查证资料并保留来源');
+  await js(`[...document.querySelectorAll('.local-setup button')].find(b=>b.textContent==='连接并加入项目').click()`);
+  await wait(()=>js(`!!document.querySelector('.cindy')`));
+  const state=await invoke('bootstrap');
+  const agents=state.collaboration.agents.filter(a=>a.projectId===project.id&&!a.taskId);
+  const cindy=agents.find(a=>a.name==='Cindy'),research=agents.find(a=>a.name==='调研搭档');
+  assert.ok(cindy&&research);assert.notEqual(cindy.sessionId,research.sessionId);assert.notEqual(cindy.sourceLaneId,research.sourceLaneId);
+  await js(`[...document.querySelectorAll('.cindy button')].find(b=>['稍后继续','完成引导'].includes(b.textContent)).click()`);
+  await wait(()=>js(`!document.querySelector('.cindy')`));
+  await js(`document.querySelector('.cindy-entry').click()`);
+  await wait(()=>js(`document.querySelector('.cindy')?.textContent.includes('查证资料的调研搭档')`));
+  assert.equal((await invoke('bootstrap')).collaboration.onboarding.find(r=>r.projectId===project.id).dismissed,true);
+  const protocol=await readFile(join(dir,'fixture-protocol.log'),'utf8');
+  assert.match(protocol,/你是头号玩家的上手助手 Cindy/);assert.match(protocol,/read-only/);
+  await js(`document.querySelector('[role=dialog] [aria-label=关闭]').click()`);
+  return {conversation:true,realRuntimeProtocol:true,modelCalls:0,syntheticProvider:true,actionToIndependentAgent:true,reopenPreservesConversation:true,noImplicitTaskCreation:true};
+}

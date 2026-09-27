@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, UserPlus } from "lucide-react";
 import { ProjectRoom } from "./ProjectRoom";
 import { Modal, type Call } from "./ui";
 import type { State } from "./types";
@@ -9,11 +9,21 @@ export function ProjectHub({
   workspace,
   onWorkspace,
   call,
+  onInvite,
+  onProviders,
+  onOpenTask,
+  onOpenSession,
+  initialProjectId,
 }: {
   state: State;
   workspace: string;
   onWorkspace: (id: string) => void;
   call: Call;
+  onInvite: (teamId: string) => void;
+  onProviders: () => void;
+  onOpenTask: (id: string) => void;
+  onOpenSession: (id: string) => void;
+  initialProjectId?: string;
 }) {
   const [creating, setCreating] = useState(false),
     [name, setName] = useState(""),
@@ -23,28 +33,23 @@ export function ProjectHub({
     state.workspaces.find((w) => w.id === workspace) || state.workspaces[0];
   return (
     <div className="studio-shell">
-      <nav className="studio-mode">
-        <strong>团队</strong>
-        <select
-          aria-label="团队"
-          value={current?.id || ""}
-          onChange={(e) => onWorkspace(e.target.value)}
-        >
-          {state.workspaces.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.name}
-            </option>
-          ))}
-        </select>
+      <nav className="studio-mode project-hub-bar" aria-label="当前团队">
+        <span className="room-eyebrow">团队</span>
+        <strong>{current?.name || "我的团队"}</strong>
         {state.me?.host && (
-          <button
-            title="新建团队"
-            aria-label="新建团队"
-            onClick={() => setCreating(true)}
-          >
-            <Plus size={16} />
+          <button className="team-create" onClick={() => setCreating(true)}>
+            <Plus size={14} />
+            新建团队
           </button>
         )}
+        <span className="grow" />
+        {current &&
+          (state.me?.host || state.me?.roles?.[current.id] === "owner") && (
+            <button className="button" onClick={() => onInvite(current.id)}>
+              <UserPlus size={14} />
+              邀请同事
+            </button>
+          )}
       </nav>
       {current ? (
         <ProjectRoom
@@ -52,10 +57,20 @@ export function ProjectHub({
           teamId={current.id}
           state={state}
           call={call}
+          onInvite={
+            state.me?.host || state.me?.roles?.[current.id] === "owner"
+              ? () => onInvite(current.id)
+              : undefined
+          }
+          onProviders={onProviders}
+          onOpenTask={onOpenTask}
+          onOpenSession={onOpenSession}
+          initialProjectId={initialProjectId}
         />
       ) : (
         <div className="room-empty">
-          <p>创建团队，开始协作</p>
+          <h3>和同事、AI 一起做一个项目</h3>
+          <p>先给团队起个名字。</p>
           {state.me?.host && (
             <button onClick={() => setCreating(true)}>新建团队</button>
           )}

@@ -9,7 +9,7 @@ export type LaneUsage = UsageSnapshot & {runId:string;sequence:number;updatedAt:
 export type FileScope = { path: string; kind: "file" | "directory" | "unknown" };
 export type OverlapEvidence = { type: "path" | "plan-path" | "plan-step" | "task-keywords" | "lock"; current?: FileScope & {source:string;planId?:string}; other?: FileScope & {source:string;planId?:string}; planIds?:string[]; terms?:string[]; text?:string };
 export type OverlapDetail = { sessionId:string; sessionTitle:string; laneId:string; ownerId:string; owner:string; files:string[]; kind:"overlapping"|"adjacent"|"lock"; confidence:"high"|"advisory"; currentBranch:string|null; otherBranch:string|null; branchRelation:"same"|"different"|"unknown"; planIds:string[]; evidence:OverlapEvidence[]; algorithm:"deterministic-v1"; advisory:true; reason:string; lockId?:string; expires?:number };
-export type Entry = { id: string; role: string; text: string; at: string };
+export type Entry = { runId?:string; streaming?:boolean; id: string; role: string; text: string; at: string };
 export type ModelConfiguration = { model: string | null; effort: string | null };
 export type Lane = {
   id: string;
@@ -37,6 +37,9 @@ export type Lane = {
   changedFiles?: { path: string; status: string }[];
 };
 export type Session = {
+  privateUserIds?:string[];
+  agentIdentityId?:string;
+  ownerId?:string;
   projectId?:string;
   taskId?:string;
   id: string;
@@ -112,6 +115,8 @@ export type State = {
   identity?:{configured:boolean;issuer?:string|null;audience:string};
   shared?: boolean;
   local: {
+    computerId?:string;
+    agentService?:{enabled:boolean;error?:string};
     projectCheckouts?: Record<string, boolean>;
     navigation?:{scope:string|null;ready:boolean;epoch:number;revision:number};
     referenceIssues?:{workspaceId:string;sessionId?:string;message:string}[];
@@ -119,6 +124,7 @@ export type State = {
     generalSettings?:import("../core/general-settings.mjs").GeneralSettingsValue;
     editorSettings?:import("../core/editor-settings.mjs").EditorSettingsValue;
     keyboard?:Record<string,string>;
+    artifactSync?:Record<string,{status:string;message?:string}>;
     modelCatalogs?:Record<string,import("./ProviderControls").ProviderModel[]>;
     laneOptions?: Record<string,{model?:string;effort?:string}>;
     updateVerification?:{status:string;message?:string;bootstrapMarker?:string|null};

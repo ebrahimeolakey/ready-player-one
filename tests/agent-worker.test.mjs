@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
+import {join,resolve} from 'node:path';
+import {tmpdir} from 'node:os';
+import {spawn} from 'node:child_process';
+import {randomBytes,randomUUID} from 'node:crypto';
+import {Hub} from './helpers/secure-hub.mjs';
+import {HubClient} from '../core/client.mjs';
+const pause=ms=>new Promise(r=>setTimeout(r,ms));
+const wait=async(fn)=>{const end=Date.now()+12000;while(!await fn()){if(Date.now()>end)throw Error('worker timeout');await pause(80);}};
+test('Standalone worker executes real CLI protocol, persists output, and restart never repeats a completed event',async t=>{
+ const dir=await mkdtemp(join(tmpdir(),'rpo-worker-')),hub=new Hub(join(dir,'hub')),c=new HubClient();let child,stderr='';
+ const stop=async()=>{if(!child||child.exitCode!==null)return;const p=child;const done=new Promise(r=>p.once('exit',r));p.kill('SIGTERM');await done;};
+ t.after(async()=>{await stop();c.close();await hub.close();await rm(dir,{recursive:true,force:true});});
+ await hub.listen();const url=`ws://127.0.0.1:${hub.port}`,auth={token:hub.db.hostToken,secret:randomBytes(32).toString('hex'),name:'Worker owner'};
+ await c.connect(url,auth);const team=await c.call('workspace.create',{name:'Worker team'}),project=await c.call('collab.project.create',{teamId:team.id,name:'Worker project',requestKey:randomUUID()});
+ const agent=await c.call('collab.agent.register',{teamId:team.id,projectId:project.id,provider:'codex',name:'独立服务搭档',role:'回复收到',requestKey:randomUUID()});
+ const computerId='worker-computer';await c.call('collab.computer.heartbeat',{teamId:team.id,id:computerId,providers:['codex']});await c.call('collab.agent.configure',{agentId:agent.id,computerId,policy:{trigger:'mentions',projectIds:[project.id],autoTasks:false,maxTurnsPerHour:5}});
+ const bin=join(dir,'bin'),projectRoot=join(dir,'project');await mkdir(bin);await mkdir(projectRoot);
+ const log=join(dir,'calls');await writeFile(join(bin,'codex'),`#!${process.execPath}\nimport {createInterface} from 'node:readline';import {appendFileSync} from 'node:fs';const send=v=>process.stdout.write(JSON.stringify(v)+'\\n');createInterface({input:process.stdin}).on('line',line=>{const q=JSON.parse(line);if(q.id===undefined)return;send({id:q.id,result:q.method==='thread/start'?{thread:{id:'worker-thread'}}:q.method==='turn/start'?{turn:{id:'worker-turn'}}:{}});if(q.method==='turn/start'){appendFileSync(${JSON.stringify(log)},'run\\n');send({method:'item/completed',params:{item:{id:'answer',type:'agentMessage',text:JSON.stringify({text:'独立电脑服务已完成'})}}});send({method:'turn/completed',params:{turn:{id:'worker-turn',status:'completed'}}});}});`,{mode:0o700});
+ const path=join(dir,'worker.json');await writeFile(path,JSON.stringify({url,auth,computerId,teamId:team.id,providers:['codex'],projectRoots:{[project.id]:projectRoot},dataDir:join(dir,'data')}),{mode:0o600});
+ const start=()=>{child=spawn(process.execPath,[resolve('core/agent-worker.mjs'),'--config',path],{env:{...process.env,RPO_BIN_DIR:bin},stdio:['ignore','ignore','pipe']});child.stderr.on('data',b=>stderr+=b.toString());};start();
+ await c.call('collab.message.send',{channelId:hub.db.collaboration.channels[0].id,text:'@独立服务搭档 回复收到',requestKey:randomUUID()});
+ await wait(()=>hub.db.collaboration.agentEvents[0]?.status==='done');assert.equal(hub.db.collaboration.channelMessages.at(-1).text,'独立电脑服务已完成');assert.equal(await readFile(log,'utf8'),'run\n');
+ await stop();start();await pause(2500);assert.equal(await readFile(log,'utf8'),'run\n');assert.ok(!stderr.includes(auth.secret));assert.equal(stderr,'');
+});

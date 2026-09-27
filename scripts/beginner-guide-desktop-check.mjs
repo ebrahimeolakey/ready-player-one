@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import {writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+export async function exerciseBeginnerGuide({invoke,js,win,dir,project}){
+ const pause=ms=>new Promise(r=>setTimeout(r,ms));
+ const wait=async fn=>{const end=Date.now()+15000;while(!await fn()){if(Date.now()>end)throw Error('8-step guide timeout '+fn);await pause(80);}};
+ await js(`document.querySelector('[role=dialog] [aria-label=关闭]')?.click()`);
+ await invoke('collab.onboarding.status',{projectId:project.id,guideStep:0,guideComplete:false,dismissed:false});
+ await js(`[...document.querySelectorAll('button')].find(b=>b.textContent==='新手上手 · 8 步').click()`);
+ await wait(()=>js(`!!document.querySelector('.beginner-guide')`));
+ assert.equal(await js(`document.querySelectorAll('.guide-dots i').length`),8);
+ await pause(180);
+ await writeFile(join(dir,'guide-01-welcome.png'),(await win.webContents.capturePage()).toPNG());
+ await js(`[...document.querySelectorAll('.beginner-guide button')].find(b=>b.textContent==='开始').click()`);
+ await wait(()=>js(`!!document.querySelector('.local-setup')`));
+ await js(`[...document.querySelectorAll('.local-setup button')].find(b=>b.textContent.includes('下一步：选择 AI')).click()`);
+ await js(`[...document.querySelectorAll('.local-setup button')].find(b=>b.textContent==='下一步 ').click()`);
+ await wait(()=>js(`!!document.querySelector('[aria-label="角色模板"]')`));
+ assert.ok(await js(`document.querySelector('[aria-label="角色模板"]').textContent.includes('复核搭档')`));
+ await writeFile(join(dir,'guide-04-role.png'),(await win.webContents.capturePage()).toPNG());
+ await js(`[...document.querySelectorAll('.local-setup button')].find(b=>b.textContent==='连接并加入项目').click()`);
+ await wait(()=>js(`document.querySelector('.beginner-guide h2')?.textContent==='邀请你的同事'`));
+ await js(`[...document.querySelectorAll('.beginner-guide button')].find(b=>b.textContent==='先自己试用').click()`);
+ await wait(()=>js(`document.querySelector('.beginner-guide h2')?.textContent==='在群里和 AI 说句话'`));
+ await js(`[...document.querySelectorAll('.beginner-guide button')].find(b=>b.textContent==='发送这句试试看').click()`);
+ await wait(()=>js(`document.querySelector('.beginner-guide h2')?.textContent==='交出第一项任务'`));
+ await js(`[...document.querySelectorAll('.beginner-guide button')].find(b=>b.textContent==='下一步').click()`);
+ await wait(()=>js(`document.querySelector('.beginner-guide h2')?.textContent==='一起查看成果'`));
+ await writeFile(join(dir,'guide-08-artifacts.png'),(await win.webContents.capturePage()).toPNG());
+ await js(`[...document.querySelectorAll('.beginner-guide button')].find(b=>b.textContent==='完成').click()`);
+ await wait(()=>js(`!document.querySelector('.beginner-guide')`));
+ const state=await invoke('bootstrap');assert.equal(state.collaboration.onboarding.find(r=>r.projectId===project.id).guideComplete,true);
+ assert.ok(state.collaboration.agents.some(a=>a.projectId===project.id&&a.name==='项目协调'));
+ assert.ok(state.collaboration.channelMessages.some(m=>m.text.includes('这个项目第一步应该做什么')));
+ return {modal:true,steps:8,realAccountAndAgentForms:true,templateSelection:true,actualGroupMessage:true,persistedCompletion:true};
+}

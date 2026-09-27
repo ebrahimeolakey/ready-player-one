@@ -251,7 +251,9 @@ export function coordination(hub, peer, method, a) {
   if (method === "coordination.message") {
     const s = hub.session(peer, a.sessionId);
     if (a.laneId && !s.lanes.some(l => l.id === a.laneId)) throw Error("目标通道不存在");
-    const m = { id: uid(), workspaceId: s.workspaceId, sessionId: s.id, laneId: a.laneId || null, ownerId: peer.id, owner: peer.name, text: str(a.text, 6000), at: stamp() };
+    if (a.senderLaneId) hub.lane(peer, {sessionId:s.id,laneId:a.senderLaneId});
+    const sender = a.senderLaneId && hub.db.collaboration?.agents.find(v => v.sourceLaneId === a.senderLaneId && v.workerId === peer.id);
+    const m = { id: uid(), workspaceId: s.workspaceId, sessionId: s.id, laneId: a.laneId || null, senderLaneId:a.senderLaneId || null, ownerId: peer.id, owner: sender ? `${peer.name} · ${sender.name}` : peer.name, text: str(a.text, 6000), at: stamp() };
     hub.db.messages.push(m);
     const sessionMessages = hub.db.messages.filter(v => v.sessionId === s.id);
     if (sessionMessages.length > 500) { const old = new Set(sessionMessages.slice(0, -500).map(v => v.id)); hub.db.messages = hub.db.messages.filter(v => !old.has(v.id)); }

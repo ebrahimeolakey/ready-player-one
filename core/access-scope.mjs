@@ -33,6 +33,7 @@ export function scopedResult(value, peer) {
   const result = {};
   for (const [key, child] of Object.entries(value)) {
     if (key === "memories") result[key] = [];
+    else if (key === "projectContext") result[key] = null;
     else result[key] = scopedResult(child, peer);
   }
   if (Array.isArray(result.overlapDetails)) result.overlaps = [...new Set(result.overlapDetails.map(d => `${d.sessionTitle || "文件锁"} / ${d.owner}`))];

@@ -1,3 +1,4 @@
+import { MAX_ARTIFACT_BYTES, filePayload } from "../../core/artifact-files.mjs";
 import { realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve, relative, isAbsolute } from "node:path";
@@ -32,13 +33,13 @@ export async function verifyProjectCheckout(root, binding) {
 export async function publishProjectArtifact(client, task, root) {
   const path = withinProject(root, task.artifactPath);
   const stat = statSync(path);
-  if (!stat.isFile() || stat.size > 300000)
-    throw Error("产物必须是 300 KB 以内的文件");
-  const content = await readFile(path, "utf8");
+  if (!stat.isFile() || stat.size > MAX_ARTIFACT_BYTES)
+    throw Error("产物必须是 8 MB 以内的文件");
+  const content = await readFile(path);
   return client.call("collab.artifact.publish", {
     taskId: task.id,
     runId: task.runId,
     generation: task.generation,
-    content,
+    ...filePayload(content, task.artifactPath),
   });
 }

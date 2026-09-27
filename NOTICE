@@ -3,3 +3,7 @@ Copyright 2026 Ready Player One contributors
 
 Licensed under the Apache License, Version 2.0.
 Third-party dependencies remain under their respective licenses.
+
+PDF previews use PDF.js, copyright Mozilla Foundation and individual contributors,
+licensed under Apache-2.0. PDF.js fonts, character maps and supporting assets retain
+their accompanying license notices.

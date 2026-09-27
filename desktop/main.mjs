@@ -1,3 +1,8 @@
+import {ExternalAgentBridge} from './services/external-agent.mjs';
+import {validateAgentTools,agentToolOptions} from '../core/agent-tools.mjs';
+import { ArtifactReleaseService } from "./services/artifact-release.mjs";
+import { storedBytes } from "../core/artifact-files.mjs";
+import { ProjectArtifactSync } from "./services/project-artifact-sync.mjs";
 import { withinProject, verifyProjectCheckout, publishProjectArtifact } from "./services/project-artifacts.mjs";
 import { EditPositionPublisher } from "./services/edit-position-publisher.mjs";
 import { SessionNavigation } from "./services/session-navigation.mjs";
@@ -26,13 +31,14 @@ import {
   nativeImage,
 } from "electron";
 import { fileURLToPath } from "node:url";
-import { dirname, join, basename } from "node:path";
+import { dirname, join, basename, relative, sep } from "node:path";
 import {
   readFileSync,
   writeFileSync,
   mkdirSync,
   existsSync,
   statSync,
+  chmodSync,
   realpathSync,
 } from "node:fs";
 import { homedir, networkInterfaces, userInfo } from "node:os";
@@ -241,6 +247,7 @@ const stopTerminal = (p) => stopProcess(p);
 const languageService = new LanguageService();
 const runtime = new ProviderRuntime({ env: local.localEnv() });
 config.laneOptions ??= {};
+let artifactSync;
 config.modelCatalogs ??= {};
 const repoLocks = new Set();
 const canonicalRoot = (root) => realpathSync(root);
@@ -323,10 +330,17 @@ const githubRepository = new GithubRepositoryService({
   },
   withRepository,
 });
+const artifactRelease = new ArtifactReleaseService({
+  store: () => settingsStore,
+  scope: () => githubRepository.currentScope(),
+  resolve: async versionId => { const c = client; const value = await c.call("collab.artifact.release", {versionId}); if(c!==client)throw Error("协作连接已切换"); return value; },
+});
 const gitService = new GitService({ env: local.localEnv(), isBusy: rootBusy });
 gitService.locks = repoLocks;
 const sessionNavigation = new SessionNavigation({client:()=>client,online:()=>online,config,saveConfig});
 let stateRevision = 0;
+let agentServiceError="",agentPollBusy=false;
+config.computerId??=randomUUID();
 const state = () => ({
   ...(client?.state || {
     workspaces: [],
@@ -336,6 +350,8 @@ const state = () => ({
     members: [],
   }),
   local: {
+    computerId: config.computerId,
+    agentService: {enabled:config.agentServiceEnabled===true,error:agentServiceError},
     navigation: {...sessionNavigation.metadata(),revision:++stateRevision},
     generalSettings: resolveGeneralSettings(config.generalSettings),
     notificationError,
@@ -346,6 +362,7 @@ const state = () => ({
     update: updater?.getState(),
     updateVerification: {...updateVerification, bootstrapMarker: updateBootstrapMarker},
     laneOptions: config.laneOptions,
+    artifactSync: artifactSync?.status,
     modelCatalogs: config.modelCatalogs,
     sync: Object.fromEntries(syncStates),
     syncSessions: config.syncSessions,
@@ -396,8 +413,18 @@ const projectCheckout = (projectId) => {
   if (!mapping) throw Error("请先关联此项目的本机目录");
   return mapping;
 };
+const agentForRun=(a)=>{
+ const s=client?.state?.sessions.find(s=>s.id===a.sessionId);
+ const task=client?.state?.collaboration?.tasks.find(t=>t.sessionId===a.sessionId&&t.laneId===a.laneId);
+ const taskAgent=client?.state?.collaboration?.agents.find(x=>x.id===task?.agentId);
+ return client?.state?.collaboration?.agents.find(x=>!x.taskId&&x.workerId===client.state.me.id&&(x.id===s?.agentIdentityId||x.sessionId===s?.id||x.id===taskAgent?.parentAgentId));
+};
+const agentConfigKey=agent=>[client.state.identity.audience,client.state.me.id,agent.id].join(':');
+const agentWorkspace=(agent)=>{const scope=createHash('sha256').update(client.state.identity.audience+client.state.me.id).digest('hex').slice(0,24);const path=join(dir,'agents',scope,agent.id);mkdirSync(path,{recursive:true,mode:0o700});return path;};
 const localRoot = (a) => {
-  const projectId = client?.state?.sessions.find(s => s.id === a.sessionId)?.projectId;
+  const managed=client?.state?.sessions.find(s=>s.id===a.sessionId);
+  if(managed?.agentIdentityId){const agent=agentForRun(a);if(!agent)throw Error('Agent 工作目录不可访问');return agentWorkspace(agent);}
+  const projectId = client?.state?.sessions.find(s => s.id === a.sessionId)?.projectId || a.projectId;
   if (projectId) {
     const project = client.state.collaboration?.projects.find(p => p.id === projectId);
     if (!project) throw Error("项目不可访问");
@@ -442,7 +469,10 @@ const referenceRefresh = new ReferenceRefreshService({client:()=>client,onIssue:
   const key=sessionId||workspaceId;if(message)referenceIssues.set(key,{workspaceId,sessionId,message});else referenceIssues.delete(key);emit();
 }});
 const editPositionPublisher = new EditPositionPublisher({client:()=>client,isCurrent:context=>canonicalRoot(localRoot(context))===canonicalRoot(context.root)});
+const externalAgents=new ExternalAgentBridge({client:()=>client,config,save:saveConfig,computerId:()=>config.computerId,onChange:emit});
 const coordinator = new RunCoordinator({
+  acceptApproval:a=>!externalAgents.enabled(agentForRun(a)?.id),
+  computerId:()=>config.computerId,
   onProviderEvent:(event,context)=>editPositionPublisher.observe(event,context),
   onProviderFinish:async(runId,context,result)=>{
     await editPositionPublisher.finish(runId,context);
@@ -501,7 +531,9 @@ const coordinator = new RunCoordinator({
     if (debuggerService.isBusy(localRoot(a))) throw Error("请先停止项目调试");
     if (repoLocks.has(canonicalRoot(localRoot(a))))
       throw Error("项目正在执行 Git 操作，请稍后重试");
-    const selectedOptions = config.laneOptions[a.laneId] || {};
+    const agent=agentForRun(a);
+    const extraTools=agentToolOptions(agent?config.agentTools?.[agentConfigKey(agent)]:{},a.provider);
+    const selectedOptions = config.laneOptions[a.laneId] || client.state.sessions.find(s=>s.id===a.sessionId)?.lanes.find(l=>l.id===a.laneId)?.configuration || {};
     const model = selectedOptions.model || configuredModel || undefined;
     await client.call("lane.configure", {
       sessionId: a.sessionId, laneId: a.laneId,
@@ -510,12 +542,14 @@ const coordinator = new RunCoordinator({
     Object.assign(env, await coordinationBridge.issue({workspaceId:a.workspaceId,sessionId:a.sessionId,laneId:a.laneId,runId:a.id}));
     return {
       ...selectedOptions,
+      privateInstructions:agentForRun(a)?.memory||"",
       model,
       ...custom,
+      env:{...extraTools.env,...custom.env},
       images,
-      codexConfig: { "mcp_servers.rpo": mcp },
-      mcpServers: { rpo: mcp },
-      readOnlyMcpTools: ["mcp__rpo__rpo_context", "mcp__rpo__rpo_overlap_check", "mcp__rpo__rpo_memory_list"],
+      codexConfig: {...extraTools.codexConfig, "mcp_servers.rpo": mcp },
+      mcpServers: {...extraTools.mcpServers,rpo: mcp },
+      readOnlyMcpTools: ["mcp__rpo__rpo_context", "mcp__rpo__rpo_project_context", "mcp__rpo__rpo_overlap_check", "mcp__rpo__rpo_memory_list"],
     };
   },
   steeringImages: (id) => runImages.get(id) || [],
@@ -702,6 +736,17 @@ async function syncSession(sessionId) {
     emit();
   }
 }
+async function pollAgents(){
+  if(agentPollBusy||!online||!client?.state?.me||updateBlocked())return;
+  agentPollBusy=true;const c=client;
+  try{if(Object.values(config.externalAgents||{}).some(v=>v.enabled))await externalAgents.listen();for(const w of c.state.workspaces){if(!['owner','editor'].includes(c.state.me.roles?.[w.id]))continue;
+    await c.call('collab.computer.heartbeat',{teamId:w.id,id:config.computerId,name:config.computerName||config.name+'的电脑',providers:accounts.accounts.filter(p=>p.authenticated).map(p=>p.id).concat(allProviders().filter(p=>p.available&&/^(custom|acp)-/.test(p.id)).map(p=>p.id))});
+    if(c!==client)break;
+    await c.call('collab.agent.poll',{teamId:w.id,computerId:config.computerId});
+  }agentServiceError='';}catch(e){agentServiceError=e.message;}finally{agentPollBusy=false;}
+}
+const agentTimer=setInterval(()=>void pollAgents(),5000);agentTimer.unref();
+artifactSync = new ProjectArtifactSync({client:()=>client,root:localRoot,onChange:()=>emit()});
 const syncTimer = setInterval(() => {
   for (const [id, enabled] of Object.entries(config.syncSessions))
     if (enabled) syncSession(id).catch(() => {});
@@ -804,6 +849,43 @@ const hubMethods = new Set([
 ]);
 async function invoke(method, a) {
   if (method === "bootstrap") return state();
+  if (['agent.tools.read','agent.tools.save'].includes(method)) {
+    const agent=client?.state.collaboration?.agents.find(x=>x.id===a.agentId&&!x.taskId&&x.workerId===client.state.me.id);
+    if(!agent)throw Error('只能配置自己的 Agent 工具');
+    const k=agentConfigKey(agent);
+    if(method==='agent.tools.read')return config.agentTools?.[k]||{env:{},mcpServers:{}};
+    const value=validateAgentTools(a.configuration);config.agentTools??={};config.agentTools[k]=value;saveConfig();return {saved:true};
+  }
+  if(method==='agent.external.status')return externalAgents.status(a.agentId);
+  if(method==='agent.external.revoke')return externalAgents.revoke(a.agentId);
+  if(method==='agent.external.issue'){
+    const agent=externalAgents.agent(a.agentId);
+    if(!agent.computerId){await client.call('collab.computer.heartbeat',{teamId:agent.teamId,id:config.computerId,name:config.name+'的电脑',providers:[agent.provider]});await client.call('collab.agent.configure',{agentId:agent.id,computerId:config.computerId});}
+    if(agent.computerId&&agent.computerId!==config.computerId)throw Error('请在所属电脑配置外接 Agent');
+    const grant=await externalAgents.issue(a.agentId);
+    const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
+    return {...grant,command:'ELECTRON_RUN_AS_NODE=1 '+quote(process.execPath)+' '+quote(join(base,'../core/external-agent.mjs'))+' pair --url '+quote(grant.url)+' --code '+quote(grant.code)+' --output '+quote(join(homedir(),'rpo-agent-'+agent.id+'.json')),mcp:{mcpServers:{rpo:{command:process.execPath,args:[join(base,'../core/external-agent.mjs'),'--config',join(homedir(),'rpo-agent-'+agent.id+'.json')],env:{ELECTRON_RUN_AS_NODE:'1'}}}}};
+  }
+  if (method === "agent.workspace.open") {
+    const agent=client.state.collaboration?.agents.find(x=>x.id===a.agentId&&x.workerId===client.state.me.id&&!x.taskId);
+    if(!agent)throw Error('只能打开自己的 Agent 工作目录');
+    const error=await shell.openPath(agentWorkspace(agent));if(error)throw Error(error);return true;
+  }
+  if (method === "computer.worker.export") {
+    const c=client;
+    if(!['owner','editor'].includes(c.state.me.roles?.[a.teamId]))throw Error('团队不可访问');
+    const selected=await dialog.showSaveDialog(win,{title:'保存电脑连接配置（仅自己使用）',defaultPath:'rpo-computer.json'});
+    if(selected.canceled||!selected.filePath)return null;
+    if(c!==client)throw Error('连接已切换');
+    const projectRoots=Object.fromEntries(c.state.collaboration.projects.filter(p=>p.teamId===a.teamId).flatMap(p=>{try{return [[p.id,projectCheckout(p.id)]];}catch{return [];}}));
+    const file={version:1,url:c.url,auth:c.auth,computerId:config.computerId,teamId:a.teamId,name:config.name+'的独立执行服务',providers:accounts.accounts.filter(p=>p.authenticated).map(p=>p.id),projectRoots,agentTools:Object.fromEntries(c.state.collaboration.agents.filter(x=>!x.taskId&&x.teamId===a.teamId&&x.workerId===c.state.me.id).map(x=>[x.id,config.agentTools?.[agentConfigKey(x)]||{}])),dataDir:join(dir,'standalone-worker')};
+    writeFileSync(selected.filePath,JSON.stringify(file,null,2),{mode:0o600});chmodSync(selected.filePath,0o600);
+    const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
+    const script='#!/bin/sh\nexport ELECTRON_RUN_AS_NODE=1\nexec '+quote(process.execPath)+' '+quote(join(base,'../core/agent-worker.mjs'))+' --config '+quote(selected.filePath)+'\n';
+    writeFileSync(selected.filePath+'.command',script,{mode:0o700});chmodSync(selected.filePath+'.command',0o700);
+    shell.showItemInFolder(selected.filePath);return {saved:true};
+  }
+  if (method === "computer.service.configure") {config.agentServiceEnabled=a.enabled===true;saveConfig();emit();return {enabled:config.agentServiceEnabled};}
   if (method === "updates.rendererReady") {
     if (!updateHealthTicket || a.marker !== updateBootstrapMarker) throw Error("更新界面确认无效");
     updateRendererFrame = win.webContents.mainFrame;
@@ -822,10 +904,54 @@ async function invoke(method, a) {
     if(busy)throw Error('请先停止项目任务');
     config.projectCheckouts??={};config.projectCheckouts[projectCheckoutKey(project.id)]=root;saveConfig();emit();return {mapped:true};
   }
+  if (method === "collab.artifact.download") {
+    const c=client, value=await c.call("collab.artifact.read",{versionId:a.versionId});
+    const task=c.state.collaboration.tasks.find(t=>t.id===value.taskId), output=c.state.collaboration.outputs?.find(o=>o.id===value.outputId);
+    const name=basename(task?.artifactPath||output?.path||"artifact");
+    const selected=await dialog.showSaveDialog(win,{title:`下载产物 v${value.number}`,defaultPath:name});
+    if(selected.canceled||!selected.filePath)return null;
+    if(c!==client)throw Error("协作连接已切换");
+    const checked=await c.call("collab.artifact.read",{versionId:value.id});
+    if(c!==client)throw Error("协作连接已切换");
+    writeFileSync(selected.filePath,storedBytes(checked,checked));return {saved:true};
+  }
+  if (method === "collab.artifact.github.preview") return artifactRelease.preview(a);
+  if (method === "collab.artifact.github.publish") return artifactRelease.publish(a);
+  if (method === "collab.artifact.github.lookup") return artifactRelease.lookup(a);
+  if (method === "collab.artifact.github.history") return artifactRelease.history(a);
   if (method === "collab.artifact.capture") {
     const c=client,task=c.state.collaboration?.tasks.find(t=>t.id===a.taskId && t.workerId===c.state.me.id);
     if(!task)throw Error('只能发布本机执行的产物');
     return publishProjectArtifact(c,task,localRoot({workspaceId:task.teamId,sessionId:task.sessionId,laneId:task.laneId}));
+  }
+  if (method === "collab.output.track") {
+    const c=client, s=c.state.sessions.find(s=>s.id===a.sessionId), lane=s?.lanes.find(l=>l.id===a.laneId&&l.ownerId===c.state.me.id);
+    if(!s?.projectId||!lane)throw Error('请选择自己的项目会话');
+    const root=localRoot(a);
+    const selected=await dialog.showOpenDialog(win,{title:'共享产物到项目',defaultPath:root,properties:['openFile','multiSelections']});
+    if(selected.canceled)return null;
+    const paths=selected.filePaths.map(file=>{const path=relative(canonicalRoot(root),realpathSync(file)).split(sep).join('/');withinProject(root,path);return path;});
+    if(c!==client||canonicalRoot(localRoot(a))!==canonicalRoot(root))throw Error('项目或连接已切换');
+    const outputs=[];
+    for(const path of paths){if(c!==client)throw Error('协作连接已切换');outputs.push(await c.call(method,{sessionId:s.id,laneId:lane.id,path}));}
+    return outputs[0]||null;
+  }
+  if (method === "collab.agent.configure" && a.policy) {
+    const agent=client.state.collaboration.agents.find(x=>x.id===a.agentId);
+    if(!agent)throw Error('Agent 不存在');
+    await client.call('collab.computer.heartbeat',{teamId:agent.teamId,id:config.computerId,name:config.name+'的电脑',providers:accounts.accounts.filter(p=>p.authenticated).map(p=>p.id)});
+    a={...a,computerId:a.computerId||agent.computerId||config.computerId};
+  }
+  if(method==='collab.onboarding.draft.commit'){
+    if(!accounts.accounts.find(p=>p.id===a.provider&&p.authenticated))throw Error('请先登录 AI 账号');
+    projectCheckout(a.projectId);
+  }
+  if (method === "collab.onboarding.send") {
+    const record=client.state.collaboration?.onboarding?.find(r=>r.projectId===a.projectId&&r.userId===client.state.me.id);
+    const agent=client.state.collaboration?.agents.find(x=>x.id===record?.agentId&&x.workerId===client.state.me.id);
+    if(!agent)throw Error("请先连接 Cindy");
+    localRoot({workspaceId:agent.teamId,sessionId:agent.sessionId,laneId:agent.sourceLaneId});
+    if(!accounts.accounts.find(p=>p.id===agent.provider&&p.authenticated))throw Error("请先登录 Cindy 使用的 AI 账号");
   }
   if (method.startsWith("collab.")) return client.call(method,a);
 
@@ -1485,7 +1611,7 @@ async function invoke(method, a) {
       host: addresses[0] || "127.0.0.1",
       port,
       token: invite.token,
-      sessionId: a.sessionId,
+      sessionId: invite.sessionId,
     });
     clipboard.writeText(url);
     return {
@@ -1761,10 +1887,12 @@ app
       refreshCustomProviders().catch(console.error);
       refreshACP().catch(console.error);
       if (app.isPackaged && resolveGeneralSettings(config.generalSettings).autoCheckUpdates) updater.check().catch(console.error);
+      win.on("close", event=>{if(!shutting&&config.agentServiceEnabled){event.preventDefault();win.hide();}});
       win.on("closed", () => {
         win = null;
         app.quit();
       });
+      app.on("activate",()=>{win?.show();win?.focus();});
       app.on("second-instance", () => {
         win?.show();
         win?.focus();
@@ -1788,12 +1916,14 @@ app.on("before-quit", async (event) => {
   terminalService.closeAll();
   browserService.closeAll();
   clearInterval(syncTimer);
+  clearInterval(agentTimer);
+  artifactSync.dispose();
   accounts.close();
   tunnel.stop();
   for (const p of terminals) stopTerminal(p);
   try {
     editPositionPublisher.dispose();
-    await Promise.all([coordinationBridge.close(), coordinator.close(), debuggerService.closeAll()]);
+    await Promise.all([externalAgents.close(),coordinationBridge.close(), coordinator.close(), debuggerService.closeAll()]);
     client?.close();
     await hub?.close();
   } catch (error) {

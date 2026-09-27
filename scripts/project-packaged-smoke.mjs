@@ -30,7 +30,7 @@ for(const phase of ['create','restart']){
   }else{
    const state=await invoke('bootstrap');assert.equal(state.collaboration.projects.find(p=>p.id===ids.project).name,'持久项目');assert.equal(state.collaboration.channelMessages.find(m=>m.channelId===ids.channel).text,'关闭后群聊仍在');
   }
-  await js('[...document.querySelectorAll(".nav-item")].find(b=>b.textContent==="项目群").click()');await sleep(200);assert.equal(await js('!!document.querySelector(".project-room")'),true);
+  await js('[...document.querySelectorAll(".nav-item")].find(b=>b.textContent==="项目").click()');await sleep(200);assert.equal(await js('!!document.querySelector(".project-room")'),true);
   const shot=await rpc('Page.captureScreenshot',{format:'png'});await writeFile(join(dir,phase+'.png'),Buffer.from(shot.data,'base64'));
  }finally{ws?.close();child.kill('SIGTERM');await Promise.race([new Promise(r=>child.once('exit',r)),sleep(5000).then(()=>child.kill('SIGKILL'))]);await writeFile(join(dir,phase+'.log'),log);}
 }

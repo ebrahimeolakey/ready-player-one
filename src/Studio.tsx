@@ -1,4 +1,3 @@
-import { ProjectRoom } from "./ProjectRoom";
 import {ChatEditorTabs,ChatViewPortal} from "./ChatEditorTabs";
 import { useGeneralSettings } from "./GeneralSettings";
 import "./studio-preferences.css";
@@ -63,7 +62,6 @@ export function Studio({
   onShare: () => void;
   onRepos: () => void;
 }) {
-  const [workspaceView,setWorkspaceView]=useState("ide");
   const keyboard = useKeyboard();
   const general = useGeneralSettings();
   const chatScope=JSON.stringify([state.local.navigation?.scope ?? state.identity?.audience ?? '',state.me?.id,s.workspaceId,s.id]);
@@ -201,8 +199,6 @@ export function Studio({
   );
   return (
     <div className="studio-shell">
-      {!state.me?.sessionId&&<nav className="studio-mode" aria-label="工作视图"><button className={workspaceView==='project'?'active':''} onClick={()=>setWorkspaceView('project')}>项目群</button><button className={workspaceView==='ide'?'active':''} onClick={()=>setWorkspaceView('ide')}>开发工具</button></nav>}
-      {workspaceView==='project'&&!state.me?.sessionId ? <ProjectRoom key={`${state.identity?.audience}:${state.me?.id}:${s.workspaceId}`} state={state} session={s} call={window.rpo.invoke}/> : <>
       <ProjectContext
         params={params}
         mapped={mapped}
@@ -731,7 +727,6 @@ export function Studio({
           </button>
         )}
       </div>
-      </>}
     </div>
   );
 }

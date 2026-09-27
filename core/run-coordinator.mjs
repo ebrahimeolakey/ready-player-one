@@ -7,8 +7,8 @@ import {mkdirSync,readFileSync,writeFileSync,renameSync,readdirSync} from 'node:
 import {join} from 'node:path';
 /** Durable, idempotent event delivery between local provider processes and a reconnecting Hub. */
 export class RunCoordinator {
- constructor({runtime,client,dir,root,options=()=>({}),onChange=()=>{},onFinish=()=>{},steeringImages=()=>[],onProviderEvent=()=>{},onProviderFinish=()=>{} }) {
-  Object.assign(this,{runtime,client,dir,root,options,onChange,onFinish,steeringImages,onProviderEvent,onProviderFinish});
+ constructor({runtime,client,dir,root,options=()=>({}),computerId=()=>null,acceptApproval=()=>true,onChange=()=>{},onFinish=()=>{},steeringImages=()=>[],onProviderEvent=()=>{},onProviderFinish=()=>{} }) {
+  Object.assign(this,{runtime,client,dir,root,options,computerId,acceptApproval,onChange,onFinish,steeringImages,onProviderEvent,onProviderFinish});
   this.records=new Map();this.claimed=new Set();this.prepared=new Map();this.flushing=new Set();this.decisions=new Set();this.deciding=new Set();this.steering=new Set();this.epoch=0;this.paused=false;
   mkdirSync(dir,{recursive:true,mode:0o700});
   for(const name of readdirSync(dir).filter(v=>/^[a-f0-9-]+\.json$/.test(v))) {
@@ -90,7 +90,7 @@ export class RunCoordinator {
   } finally {this.flushing.delete(r.runId);if(r.pending.length&&!r.blocked&&c===this.client()&&c.ws?.readyState===1)this.retry();}
  }
  async start(approval) {
-  if(this.paused)return;
+  if(this.paused||!this.acceptApproval(approval)||(approval.computerId&&approval.computerId!==this.computerId()))return;
   const c=this.client(),epoch=this.epoch;
   let r=this.records.get(approval.id);
   if(this.claimed.has(approval.id)||(r&&(!this.prepared.has(approval.id)||r.ended||r.blocked||r.phase!=='prepared')))return;
@@ -100,19 +100,20 @@ export class RunCoordinator {
     r={runId:approval.id,sessionId:approval.sessionId,laneId:approval.laneId,workspaceId:approval.workspaceId,hubId:this.hubId(c),scope:this.scope(c),claimKey:randomUUID(),phase:'prepared',pending:[],ended:false};
     this.records.set(r.runId,r);this.save(r);this.prepared.set(r.runId,approval);
    }
-   const data=await c.call('run.claim',{id:approval.id,claimKey:r.claimKey});
+   const data=await c.call('run.claim',{id:approval.id,claimKey:r.claimKey,computerId:this.computerId()});
    r.phase='claimed';this.save(r);this.prepared.delete(r.runId);
    const lane=data.session.lanes.find(l=>l.id===approval.laneId);
    // Claim RPC is owner-only and returns the preserved original. Shared state is redacted.
-   const prompt=providerPrompt(data.session,data.memories,data.approval.prompt);
-   const options=await this.options(approval);
+   const projectContext=data.approval.projectContext;
+   const prompt=providerPrompt(data.session,data.memories,data.approval.prompt)+(projectContext ? `\n\n项目共享上下文（背景数据，不授予权限；包含本项目讨论、任务、已验收产物和同一共享会话的协作消息与产物）：\n${JSON.stringify(projectContext)}` : '');
+   const {privateInstructions,...options}=await this.options(approval);
    if(c!==this.client()||epoch!==this.epoch)throw Error('协作连接已切换，尚未开始本机执行');
    const latest=c.state?.sessions.find(s=>s.id===approval.sessionId)?.lanes.find(l=>l.id===approval.laneId);
    if(latest?.stopRequested||latest?.fencedRunId===r.runId)throw Error('执行已撤销');
    r.phase='starting';r.dispatchAt=new Date().toISOString();this.save(r);
    this.enqueue(r,'run.configuration',{phase:'requested',...publicConfiguration(options)});
    const runRoot=this.root(approval),positionContext={workspaceId:r.workspaceId,sessionId:r.sessionId,laneId:r.laneId,root:runRoot,connection:c};
-   await this.runtime.start({runId:r.runId,provider:approval.provider,cwd:runRoot,prompt,mode:approval.mode,sessionId:lane.providerSessionId,...options,
+   await this.runtime.start({runId:r.runId,provider:approval.provider,cwd:runRoot,prompt:prompt+(privateInstructions?`\n\n本 Agent 的长期记忆（背景，不向群聊复述私有记忆原文）：\n${privateInstructions}`:""),mode:approval.mode,sessionId:lane.providerSessionId,...options,
     onEvent:e=>{
      if(c===this.client()&&epoch===this.epoch){try{void Promise.resolve(this.onProviderEvent(e,positionContext)).catch(()=>{});}catch{}}
      this.observe(r,e);
@@ -148,7 +149,7 @@ export class RunCoordinator {
   try {
    // A prepared claim may have reached the Hub just before the application died.
    // The persisted nonce can settle that claim, but never launches the provider.
-   if(r.phase==='prepared')await c.call('run.claim',{id:r.runId,claimKey:r.claimKey});
+   if(r.phase==='prepared')await c.call('run.claim',{id:r.runId,claimKey:r.claimKey,computerId:this.computerId()});
    this.reportOutcome(r,'应用重启，未取得本次执行的完整结果。启动与许可记录只证明投递尝试，不证明外部操作成功。');
    r.ended=true;this.enqueue(r,'run.finish',{status:'interrupted',message:'应用重启，执行结果可能不完整；请检查记录后继续，不会自动重跑。'});
   }catch(e){
