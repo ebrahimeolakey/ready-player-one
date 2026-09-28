@@ -1,3 +1,4 @@
+import { aiName } from "./ui";
 import { BeginnerGuide } from "./BeginnerGuide";
 import { Cindy, type CindyAction } from "./Cindy";
 import { AgentMember } from "./AgentMember";
@@ -290,7 +291,7 @@ export function ProjectRoom({
             {p.name}
           </button>
         ))}
-        {project && editor && <button className="cindy-entry" onClick={()=>setCindy(true)}><Sparkles size={16}/><span>Cindy<small>上手与配置 Agent</small></span></button>}
+        {project && editor && <button className="cindy-entry" onClick={()=>setCindy(true)}><Sparkles size={16}/><span>{aiName("Cindy")}<small>上手与配置 Agent</small></span></button>}
         {project&&editor&&<button onClick={()=>setGuide(true)}>新手上手 · 8 步</button>}
         <header>
           <strong>AI 成员</strong>
@@ -309,10 +310,10 @@ export function ProjectRoom({
         )}
         {agents.filter(a=>!a.taskId).map((a) => (
           <button className="project-agent" key={a.id}
-            aria-label={`查看 AI 成员 ${a.name}`}
+            aria-label={`查看 AI 成员 ${aiName(a.name)}`}
             onClick={() => setMemberId(a.id)}>
             <Bot size={15} />
-            <span>{a.name}<small>{ownerName(a.workerId)} · {a.role || "执行"}</small></span>
+            <span>{aiName(a.name)}<small>{ownerName(a.workerId)} · {a.role || "执行"}</small></span>
           </button>
         ))}
         {project && editor && (
@@ -360,7 +361,7 @@ export function ProjectRoom({
                   >
                     {ownAgents.map((a) => (
                       <option key={a.id} value={a.id}>
-                        {a.name}
+                        {aiName(a.name)}
                       </option>
                     ))}
                   </select>
@@ -560,8 +561,7 @@ export function ProjectRoom({
                               </span>
                               <span className="board-task-agent">
                                 <Bot size={13} />
-                                {agents.find((a) => a.id === t.agentId)?.name ||
-                                  "等待 AI 认领"}
+                                {t.agentId ? aiName(agents.find((a) => a.id === t.agentId)?.name || "Agent") : "等待 AI 认领"}
                               </span>
                             </button>
                           ))}
@@ -657,7 +657,7 @@ export function ProjectRoom({
                 >
                   <div>
                     <Avatar name={m.author.name} small />
-                    <strong>{m.author.name}</strong>
+                    <strong>{m.author.type === "agent" ? aiName(m.author.name) : m.author.name}</strong>
                     <time>{time(m.at)}</time>
                   </div>
                   {m.versionId && <small>产物评论 · {m.anchor}</small>}

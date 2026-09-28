@@ -1,3 +1,4 @@
+import { aiName } from "./ui";
 import { TeamConfiguration } from "./TeamConfiguration";
 import type { State } from "./types";
 import type { Project } from "./project-types";
@@ -141,7 +142,7 @@ export function TeamSpace({
           <strong>等待你接入 · {pending.length}</strong>
           {pending.map((t) => (
             <button key={t.id} onClick={() => onOpenTask?.(t.id)}>
-              {agents.find((a) => a.id === t.requestedAgentId)?.name}：{t.goal}
+              {aiName(agents.find((a) => a.id === t.requestedAgentId)?.name || "Agent")}：{t.goal}
               <ArrowRight size={14} />
             </button>
           ))}
@@ -189,7 +190,7 @@ export function TeamSpace({
                 >
                   <Bot size={20} />
                   <span>
-                    <strong>{a.name}</strong>
+                    <strong>{aiName(a.name)}</strong>
                     <small>
                       {a.role} ·{" "}
                       {a.provider === "codex" ? "Codex" : "Claude Code"}

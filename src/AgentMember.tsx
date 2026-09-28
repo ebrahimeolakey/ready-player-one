@@ -1,3 +1,4 @@
+import { aiName } from "./ui";
 import { AgentSettings } from "./AgentSettings";
 import { Bot, MessageSquare, ArrowRight } from "lucide-react";
 import type { State } from "./types";
@@ -39,7 +40,7 @@ export function AgentMember({ call, state, agentId, projectId, close, onDiscussi
   return <Modal title="AI 成员" close={close} drawer>
     <div className="agent-member" data-agent-id={agent.id}>
       <header className="agent-member-identity">
-        <Bot size={28}/><div><h2>{agent.name}</h2><p>{owner}的 Agent · {agent.provider === "claude" ? "Claude Code" : "Codex"}</p></div>
+        <Bot size={28}/><div><h2>{aiName(agent.name)}</h2><p>{owner}的 Agent · {agent.provider === "claude" ? "Claude Code" : "Codex"}</p></div>
       </header>
       <p className="agent-member-role">{agent.role || "执行任务"} · {agent.online ? "持有人在线" : "持有人离线"}</p>
       {call&&<AgentSettings key={agent.id} state={state} agentId={agent.id} call={call} onOpenSession={id=>{close();onOpenSession?.(id);}}/>}

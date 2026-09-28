@@ -1,3 +1,4 @@
+import { aiName } from "./ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { Bot, Plus, Users, Send } from "lucide-react";
 import type { State } from "./types";
@@ -136,7 +137,7 @@ export function TaskTeam({
             >
               <Bot size={16} />
               <span>
-                <strong>{a?.name || "主任务"}</strong>
+                <strong>{a ? aiName(a.name) : "主任务"}</strong>
                 <small>
                   {owner?.name || "待认领"} · {status[t.status] || t.status}
                 </small>
@@ -237,7 +238,7 @@ export function TaskTeam({
               >
                 {available.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name} ·{" "}
+                    {aiName(a.name)} ·{" "}
                     {a.workerId === me
                       ? "我的"
                       : state.members.find((m) => m.id === a.workerId)?.name ||

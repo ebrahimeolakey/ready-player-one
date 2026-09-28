@@ -1,3 +1,4 @@
+import { aiName } from "./ui";
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Send, Check, ArrowRight } from 'lucide-react';
 import { Modal, type Call } from './ui';
@@ -43,11 +44,11 @@ export function Cindy({state,project,call,close,onAction,onOpenSession}:{state:S
     if(setup.name==='Cindy')await call('collab.onboarding.attach',{projectId:project.id,agentId:a.id});
     setSetup(null);
   }}/>;
-  return <Modal title="Cindy · 上手助手" close={close} drawer><div className="cindy">
+  return <Modal title={`${aiName("Cindy")} · 上手助手`} close={close} drawer><div className="cindy">
     <header><span className="cindy-avatar"><Sparkles size={26}/></span><div><h2>一起把团队搭起来</h2><p>{owner?'从一件你想完成的事开始。':'接入你的 Agent，和团队一起工作。'}</p></div></header>
     <div className="cindy-progress" aria-label="真实接入进度">{steps.map((s,i)=><span key={s.label} className={s.done?'done':''}>{s.done?<Check size={13}/>:i+1} {s.label}</span>)}</div>
     <div className="cindy-conversation" aria-live="polite">
-      <article className="cindy-reply"><strong>Cindy</strong><p>{agent?'你好，我是 Cindy。你可以告诉我项目目标，我会帮你配置合适的搭档，再交出第一项任务。':'先连接我的运行账号和模型。准备好后，我会用你的 AI 账号回答问题，带你把团队搭起来。'}</p>{!agent&&<small>这是接入说明，尚未调用 AI。</small>}</article>
+      <article className="cindy-reply"><strong>{aiName("Cindy")}</strong><p>{agent?'你好，我是 Cindy。你可以告诉我项目目标，我会帮你配置合适的搭档，再交出第一项任务。':'先连接我的运行账号和模型。准备好后，我会用你的 AI 账号回答问题，带你把团队搭起来。'}</p>{!agent&&<small>这是接入说明，尚未调用 AI。</small>}</article>
       {!agent&&<button className="button primary" onClick={connect}>连接 Cindy <ArrowRight size={15}/></button>}
       {!agent&&agents.filter(a=>a.workerId===state.me?.id&&a.name==='Cindy').map(a=><button key={a.id} className="button" disabled={busy} onClick={()=>void run(()=>call('collab.onboarding.attach',{projectId:project.id,agentId:a.id}))}>继续使用已有 Cindy · {a.provider}</button>)}
       {record?.turns.map(t=>{
@@ -56,7 +57,7 @@ export function Cindy({state,project,call,close,onAction,onOpenSession}:{state:S
         const active=target?.activeRunId===t.runId&&['running','awaiting'].includes(target.status);
         const parsed=reply(entries.map(e=>e.text).join('\n'));
         const actions=(record.drafts||[]).filter(d=>d.runId===t.runId).map(d=>({...d,draftId:d.id,label:d.agentId?d.label+' · 已接入':d.label}));
-        return <div key={t.id}><article className="cindy-user"><strong>你</strong><p>{t.text}</p></article><article className="cindy-reply"><strong>Cindy</strong><p>{active?'正在思考…':parsed.text||'这次没有收到回答。请打开会话查看原因，或重试。'}</p>{!active&&actions.length>0&&<div className="cindy-actions">{actions.map((a,i)=><button key={i} className="button" onClick={()=>action(a)}>{a.label}<ArrowRight size={13}/></button>)}</div>}</article></div>;
+        return <div key={t.id}><article className="cindy-user"><strong>你</strong><p>{t.text}</p></article><article className="cindy-reply"><strong>{aiName("Cindy")}</strong><p>{active?'正在思考…':parsed.text||'这次没有收到回答。请打开会话查看原因，或重试。'}</p>{!active&&actions.length>0&&<div className="cindy-actions">{actions.map((a,i)=><button key={i} className="button" onClick={()=>action(a)}>{a.label}<ArrowRight size={13}/></button>)}</div>}</article></div>;
       })}
       {agent&&!record?.turns.length&&<div className="cindy-actions">{['帮我配置一个分工明确的 Agent 团队','同事如何带自己的 Agent 一起工作？','谁能看到我的文件和会话？'].map(text=><button key={text} disabled={busy||running} className="button" onClick={()=>send(text)}>{text}</button>)}</div>}
       {complete&&<p className="cindy-complete"><Check size={16}/>项目已产出第一份成果，随时可以回来找我。</p>}

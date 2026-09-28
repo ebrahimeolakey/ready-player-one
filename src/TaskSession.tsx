@@ -1,3 +1,4 @@
+import { aiName } from "./ui";
 import { TaskTeam } from "./TaskTeam";
 import { useState, type ReactNode } from "react";
 import { Play, Square, X, FolderOpen, Bot } from "lucide-react";
@@ -155,7 +156,7 @@ function TaskExecution({
                 </details>
               ) : (
                 <article className={`task-session-entry ${e.role}`} key={e.id}>
-                  <small>{e.role === "assistant" ? "Agent" : "状态"}</small>
+                  <small>{e.role === "assistant" ? aiName("Agent") : "状态"}</small>
                   <p>{e.text}</p>
                 </article>
               ),
@@ -168,7 +169,7 @@ function TaskExecution({
             负责人 ·{" "}
             {members.find((m) => m.id === task.driUserId)?.name || "成员"}
             {task.workerId &&
-              `　执行 · ${agents.find((a) => a.id === task.agentId)?.name || "Agent"}`}
+              `　执行 · ${aiName(agents.find((a) => a.id === task.agentId)?.name || "Agent")}`}
           </small>
           {executionLane && worker && (
             <ProviderControls
@@ -216,7 +217,7 @@ function TaskExecution({
                 </option>
                 {ownAgents.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    {aiName(a.name)}
                   </option>
                 ))}
               </select>

@@ -14,6 +14,8 @@ export const statusNames: Record<string, string> = {
   interrupted: "已中断",
   needs_handoff: "待接管",
 };
+// Display-only label: stored names and @mention targets stay unchanged.
+export const aiName = (name: string) => `${name.replace(/(?:\s*[（(]AI[）)])+\s*$/i, "")}（AI）`;
 export const time = (s: string) =>
   new Date(s).toLocaleTimeString("zh-CN", {
     hour: "2-digit",

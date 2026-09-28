@@ -1,3 +1,4 @@
+import { aiName } from "./ui";
 import { useGeneralSettings } from "./GeneralSettings";
 import { promptProblem, promptStats, PROMPT_LIMITS, SUMMARY_LIMIT } from "../core/prompt-limits.mjs";
 import { useKeyboard, shortcutsAllowed } from "./KeyboardSettings";
@@ -361,7 +362,7 @@ export function AgentLane({
             {l.owner}
             <span>{mine ? "我" : ""}</span>
           </strong>
-          <small className="lane-provider">{providerLabel} · <LaneModel lane={l} /></small>
+          <small className="lane-provider">{aiName(providerLabel)} · <LaneModel lane={l} /></small>
         </div>
         {onOpenInEditor && <button className="icon-button" title="在编辑器中打开聊天" aria-label="在编辑器中打开聊天" onClick={onOpenInEditor}><FileCode2 size={14}/></button>}
         <span className={"lane-status " + l.status}>
@@ -404,7 +405,7 @@ export function AgentLane({
                         ? "思考"
                         : e.role === "tool"
                           ? "工具执行"
-                          : providerLabel}
+                          : aiName(providerLabel)}
                   </span>
                   <span className="entry-actions">
                     {canComment&&<button type="button" title="评论这条消息" aria-label="评论这条消息" onClick={()=>{setCommentEntry({id:e.id,text:e.text});setEntryComment('');}}><MessageSquare size={12}/></button>}
@@ -493,7 +494,7 @@ export function AgentLane({
         >
           <div className="composer-owner">
             <span className="dot mint" />
-            {providerLabel}
+            {aiName(providerLabel)}
             <ProviderControls
               models={state.local.modelCatalogs?.[l.provider]}
               value={selection}

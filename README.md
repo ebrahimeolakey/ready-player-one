@@ -10,18 +10,20 @@ Bring your team and your own AI accounts into one project. Discuss ideas in the 
 
 ## Download
 
-**0.5.0-beta.3 · macOS only · Apache-2.0 · No GitHub login needed to download**
+AI teammates are explicitly labeled **（AI）** across group chats, members, tasks, and shared sessions.
+
+**0.5.0-beta.4 · macOS only · Apache-2.0 · No GitHub login needed to download**
 
 | Mac | Download |
 | --- | --- |
-| Apple Silicon · M series | **[↓ Apple Silicon ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.3/Ready-Player-One-0.5.0-beta.3-mac-arm64.zip)** |
-| Intel | **[↓ Intel ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.3/Ready-Player-One-0.5.0-beta.3-mac-x64.zip)** |
+| Apple Silicon · M series | **[↓ Apple Silicon ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/Ready-Player-One-0.5.0-beta.4-mac-arm64.zip)** |
+| Intel | **[↓ Intel ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/Ready-Player-One-0.5.0-beta.4-mac-x64.zip)** |
 
 Unzip, move `头号玩家.app` into Applications, and open it. No separate Node.js installation is needed. The desktop UI is currently Chinese. Use your own Codex / Claude Code account and credits.
 
 This beta is ad-hoc signed, without Apple Developer ID signing or notarization. macOS may require first-launch approval; follow the [Mac installation guide](docs/BETA-TESTING.md#mac-first-launch). Save your work and quit the previous version before replacing the app; keep your application data.
 
-[Release notes](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.3) · [SHA256 checksums](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.3/SHA256SUMS-0.5.0-beta.3.txt) · [Report an issue](https://github.com/ebrahimeolakey/ready-player-one/issues)
+[Release notes](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.4) · [SHA256 checksums](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/SHA256SUMS-0.5.0-beta.4.txt) · [Report an issue](https://github.com/ebrahimeolakey/ready-player-one/issues)
 
 ## Why this workspace
 
@@ -98,18 +100,20 @@ The current source uses [Apache-2.0](LICENSE). Releases v0.3.0-beta.1 and earlie
 
 ## 直接下载
 
-**0.5.0-beta.3 · 本次仅发布 macOS · Apache-2.0 · 下载无需 GitHub 登录**
+AI 成员在群聊、成员列表、任务和共享会话中统一标注 **（AI）**。
+
+**0.5.0-beta.4 · 本次仅发布 macOS · Apache-2.0 · 下载无需 GitHub 登录**
 
 | Mac | 下载 |
 | --- | --- |
-| Apple Silicon · M 系列 | **[↓ 下载 M 系列 ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.3/Ready-Player-One-0.5.0-beta.3-mac-arm64.zip)** |
-| Intel | **[↓ 下载 Intel ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.3/Ready-Player-One-0.5.0-beta.3-mac-x64.zip)** |
+| Apple Silicon · M 系列 | **[↓ 下载 M 系列 ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/Ready-Player-One-0.5.0-beta.4-mac-arm64.zip)** |
+| Intel | **[↓ 下载 Intel ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/Ready-Player-One-0.5.0-beta.4-mac-x64.zip)** |
 
 解压后将「头号玩家.app」放入「应用程序」并打开，无需另装 Node.js。界面为中文，使用自己的 Codex / Claude Code 账号与额度。
 
 测试版使用临时签名，尚无 Apple Developer ID 签名与公证。首次启动可能需要系统放行，见 [Mac 安装说明](docs/BETA-TESTING.md#mac-first-launch)。升级前保存工作、退出旧应用，再替换程序，保留原有应用数据。
 
-[版本说明](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.3) · [SHA256 校验](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.3/SHA256SUMS-0.5.0-beta.3.txt) · [反馈问题](https://github.com/ebrahimeolakey/ready-player-one/issues)
+[版本说明](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.4) · [SHA256 校验](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/SHA256SUMS-0.5.0-beta.4.txt) · [反馈问题](https://github.com/ebrahimeolakey/ready-player-one/issues)
 
 ## 项目亮点
 

@@ -1,3 +1,4 @@
+import { aiName } from "./ui";
 import {useLayoutEffect,useState,type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import {FileCode2,MessageSquare,X} from 'lucide-react';
@@ -19,7 +20,7 @@ export function ChatEditorTabs({lanes,activeId,hidden,onSelect,onClose,onMount}:
   <div className="chat-editor-tabbar" role="tablist" aria-label="文件与聊天">
    <button role="tab" aria-selected={!activeId} onClick={()=>onSelect('')}><FileCode2 size={13}/>文件</button>
    {lanes.map(lane=><div className={'chat-editor-tab'+(activeId===lane.id?' selected':'')} key={lane.id}>
-    <button role="tab" data-chat-id={lane.id} aria-selected={activeId===lane.id} title={`${lane.owner} · ${lane.providerLabel||lane.provider} · ${lane.id}`} onClick={()=>onSelect(lane.id)}><MessageSquare size={13}/><span>{lane.owner} · {lane.providerLabel||(lane.provider==='codex'?'Codex':lane.provider==='claude'?'Claude':'Agent')}</span></button>
+    <button role="tab" data-chat-id={lane.id} aria-selected={activeId===lane.id} title={`${lane.owner} · ${lane.providerLabel||lane.provider} · ${lane.id}`} onClick={()=>onSelect(lane.id)}><MessageSquare size={13}/><span>{lane.owner} · {aiName(lane.providerLabel||(lane.provider==='codex'?'Codex':lane.provider==='claude'?'Claude':'Agent'))}</span></button>
     <button className="chat-tab-close" aria-label={`关闭 ${lane.owner} 的聊天标签`} title="关闭标签，保留聊天" onClick={()=>onClose(lane.id)}><X size={12}/></button>
    </div>)}
   </div>

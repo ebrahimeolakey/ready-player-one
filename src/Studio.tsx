@@ -1,3 +1,4 @@
+import { aiName } from "./ui";
 import {ChatEditorTabs,ChatViewPortal} from "./ChatEditorTabs";
 import { useGeneralSettings } from "./GeneralSettings";
 import "./studio-preferences.css";
@@ -621,12 +622,12 @@ export function Studio({
                                   }}
                                 >
                                   <span>
-                                    {l.providerLabel ||
+                                    {aiName(l.providerLabel ||
                                       (l.provider === "codex"
                                         ? "Codex"
                                         : l.provider === "claude"
                                           ? "Claude"
-                                          : "自定义 API")}
+                                          : "自定义 API"))}
                                     {" · "}<LaneModel lane={l} />
                                   </span>
                                   <small>
