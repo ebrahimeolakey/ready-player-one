@@ -1,3 +1,4 @@
+import { ProjectGitHubTarget } from "./ProjectGitHubTarget";
 import { aiName } from "./ui";
 import { BeginnerGuide } from "./BeginnerGuide";
 import { Cindy, type CindyAction } from "./Cindy";
@@ -291,6 +292,7 @@ export function ProjectRoom({
             {p.name}
           </button>
         ))}
+        {project && <ProjectGitHubTarget key={project.id} state={state} project={project} call={call}/>}
         {project && editor && <button className="cindy-entry" onClick={()=>setCindy(true)}><Sparkles size={16}/><span>{aiName("Cindy")}<small>上手与配置 Agent</small></span></button>}
         {project&&editor&&<button onClick={()=>setGuide(true)}>新手上手 · 8 步</button>}
         <header>

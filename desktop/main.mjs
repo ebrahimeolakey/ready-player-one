@@ -1,9 +1,9 @@
 import {ExternalAgentBridge} from './services/external-agent.mjs';
 import {validateAgentTools,agentToolOptions} from '../core/agent-tools.mjs';
-import { ArtifactReleaseService } from "./services/artifact-release.mjs";
+import { ArtifactPullRequestService } from "./services/artifact-pull-request.mjs";
 import { storedBytes } from "../core/artifact-files.mjs";
 import { ProjectArtifactSync } from "./services/project-artifact-sync.mjs";
-import { withinProject, verifyProjectCheckout, publishProjectArtifact } from "./services/project-artifacts.mjs";
+import { withinProject, verifyProjectCheckout, projectWorkingDirectory, resolveProjectCheckoutSelection, publishProjectArtifact } from "./services/project-artifacts.mjs";
 import { EditPositionPublisher } from "./services/edit-position-publisher.mjs";
 import { SessionNavigation } from "./services/session-navigation.mjs";
 import { DesktopNotifications } from "./services/desktop-notifications.mjs";
@@ -330,7 +330,7 @@ const githubRepository = new GithubRepositoryService({
   },
   withRepository,
 });
-const artifactRelease = new ArtifactReleaseService({
+const artifactRelease = new ArtifactPullRequestService({
   store: () => settingsStore,
   scope: () => githubRepository.currentScope(),
   resolve: async versionId => { const c = client; const value = await c.call("collab.artifact.release", {versionId}); if(c!==client)throw Error("协作连接已切换"); return value; },
@@ -367,6 +367,8 @@ const state = () => ({
     sync: Object.fromEntries(syncStates),
     syncSessions: config.syncSessions,
     projectCheckouts: Object.fromEntries((client?.state?.collaboration?.projects||[]).map(p=>[p.id,Boolean(config.projectCheckouts?.[projectCheckoutKey(p.id)])])),
+    projectCheckoutModes: Object.fromEntries((client?.state?.collaboration?.projects||[]).map(p=>[p.id,projectCheckoutMode(p.id)])),
+    projectCheckoutPaths: Object.fromEntries((client?.state?.collaboration?.projects||[]).map(p=>[p.id,config.projectCheckouts?.[projectCheckoutKey(p.id)]||""])),
     paths: config.paths,
     sessionPaths: config.sessionPaths,
     providers: allProviders(),
@@ -408,6 +410,7 @@ async function refreshAccounts() {
   }
 }
 const projectCheckoutKey = (projectId) => `${client?.state?.identity?.audience}:${client?.state?.me?.id}:${projectId}`;
+const projectCheckoutMode = projectId => config.projectCheckoutModes?.[projectCheckoutKey(projectId)] || "repository";
 const projectCheckout = (projectId) => {
   const mapping = config.projectCheckouts?.[projectCheckoutKey(projectId)];
   if (!mapping) throw Error("请先关联此项目的本机目录");
@@ -428,7 +431,7 @@ const localRoot = (a) => {
   if (projectId) {
     const project = client.state.collaboration?.projects.find(p => p.id === projectId);
     if (!project) throw Error("项目不可访问");
-    return withinProject(projectCheckout(projectId), project.subPath);
+    return projectWorkingDirectory(projectCheckout(projectId), project, projectCheckoutMode(projectId));
   }
   const p =
     (a.laneId && config.lanePaths[a.laneId]) ||
@@ -485,7 +488,7 @@ const coordinator = new RunCoordinator({
   dir: join(dir, "outbox"),
   root: (a)=>canonicalRoot(localRoot(a)),
   options: async (a) => {
-    if (a.projectId) await verifyProjectCheckout(projectCheckout(a.projectId), a.projectBinding);
+    if (a.projectId) await verifyProjectCheckout(projectCheckout(a.projectId), a.projectBinding, projectCheckoutMode(a.projectId));
     const env = {
       ELECTRON_RUN_AS_NODE: "1",
       RPO_HUB_URL: client.url,
@@ -878,7 +881,7 @@ async function invoke(method, a) {
     if(selected.canceled||!selected.filePath)return null;
     if(c!==client)throw Error('连接已切换');
     const projectRoots=Object.fromEntries(c.state.collaboration.projects.filter(p=>p.teamId===a.teamId).flatMap(p=>{try{return [[p.id,projectCheckout(p.id)]];}catch{return [];}}));
-    const file={version:1,url:c.url,auth:c.auth,computerId:config.computerId,teamId:a.teamId,name:config.name+'的独立执行服务',providers:accounts.accounts.filter(p=>p.authenticated).map(p=>p.id),projectRoots,agentTools:Object.fromEntries(c.state.collaboration.agents.filter(x=>!x.taskId&&x.teamId===a.teamId&&x.workerId===c.state.me.id).map(x=>[x.id,config.agentTools?.[agentConfigKey(x)]||{}])),dataDir:join(dir,'standalone-worker')};
+    const file={version:1,url:c.url,auth:c.auth,computerId:config.computerId,teamId:a.teamId,name:config.name+'的独立执行服务',providers:accounts.accounts.filter(p=>p.authenticated).map(p=>p.id),projectRoots,projectModes:Object.fromEntries(Object.keys(projectRoots).map(id=>[id,projectCheckoutMode(id)])),agentTools:Object.fromEntries(c.state.collaboration.agents.filter(x=>!x.taskId&&x.teamId===a.teamId&&x.workerId===c.state.me.id).map(x=>[x.id,config.agentTools?.[agentConfigKey(x)]||{}])),dataDir:join(dir,'standalone-worker')};
     writeFileSync(selected.filePath,JSON.stringify(file,null,2),{mode:0o600});chmodSync(selected.filePath,0o600);
     const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
     const script='#!/bin/sh\nexport ELECTRON_RUN_AS_NODE=1\nexec '+quote(process.execPath)+' '+quote(join(base,'../core/agent-worker.mjs'))+' --config '+quote(selected.filePath)+'\n';
@@ -895,14 +898,16 @@ async function invoke(method, a) {
   if (method === "collab.checkout.map") {
     const c=client, project=c.state.collaboration?.projects.find(p=>p.id===a.projectId);
     if(!project || !['owner','editor'].includes(c.state.me.roles?.[project.teamId]))throw Error('项目不可访问');
-    const selected=await dialog.showOpenDialog(win,{title:'关联项目目录',properties:['openDirectory']});
+    const mode=a.mode ?? projectCheckoutMode(project.id);
+    if(!['folder','repository'].includes(mode))throw Error('请选择工作文件夹或代码仓库');
+    const selected=await dialog.showOpenDialog(win,{title:mode==='folder'?'选择 AI 工作文件夹':'选择项目代码仓库',message:mode==='folder'?'文件将在这里制作，不需要 Git 仓库。':project.repository?`${project.repository} · ${project.branch}${project.subPath?' · '+project.subPath:''}`:'选择已有代码仓库',defaultPath:config.projectCheckouts?.[projectCheckoutKey(project.id)]||config.paths[project.teamId],properties:['openDirectory','createDirectory']});
     if(selected.canceled)return null;
-    const root=realpathSync(selected.filePaths[0]);
-    await verifyProjectCheckout(root,project);
+    const {root,directory}=await resolveProjectCheckoutSelection(selected.filePaths[0],project,mode);
     if(c!==client)throw Error('协作连接已切换');
     const busy=c.state.collaboration.tasks.some(t=>t.projectId===project.id && t.workerId===c.state.me.id && t.status==='running');
-    if(busy)throw Error('请先停止项目任务');
-    config.projectCheckouts??={};config.projectCheckouts[projectCheckoutKey(project.id)]=root;saveConfig();emit();return {mapped:true};
+    if(busy || c.state.sessions.some(s=>s.projectId===project.id&&s.lanes.some(l=>l.ownerId===c.state.me.id&&['running','awaiting'].includes(l.status))))throw Error('请先停止项目中正在运行的 AI，再更换工作文件夹');
+    if(!['owner','editor'].includes(c.state.me.roles?.[project.teamId]))throw Error('项目不可访问');
+    config.projectCheckouts??={};config.projectCheckouts[projectCheckoutKey(project.id)]=root;config.projectCheckoutModes??={};config.projectCheckoutModes[projectCheckoutKey(project.id)]=mode;saveConfig();emit();return {mapped:true,directory,mode};
   }
   if (method === "collab.artifact.download") {
     const c=client, value=await c.call("collab.artifact.read",{versionId:a.versionId});
@@ -1340,6 +1345,16 @@ async function invoke(method, a) {
     if (result.canceled) return null;
     if (githubRepository.currentScope() !== currentScope) throw Error("连接已切换，请重新选择项目");
     return githubRepository.previewBind({id:a.id,path:result.filePaths[0]});
+  }
+  if (method === "github.repository.details") {
+    validateRepo(a.repository);
+    const c=client, repo=await githubRepository.api(`repos/${a.repository}`);
+    if(c!==client)throw Error('协作连接已切换');
+    if(!repo.id || repo.full_name?.toLowerCase()!==a.repository.toLowerCase() || !repo.permissions?.push)throw Error('当前 GitHub 账号没有此仓库的写入权限');
+    const branch=a.branch || repo.default_branch;
+    await githubRepository.api(`repos/${a.repository}/branches/${encodeURIComponent(branch)}`);
+    if(c!==client)throw Error('协作连接已切换');
+    return {fullName:repo.full_name,defaultBranch:repo.default_branch,private:repo.private};
   }
   if (method === "github.repositories") return repositories();
   if (method === "github.clone") {

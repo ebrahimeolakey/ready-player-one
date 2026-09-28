@@ -59,6 +59,7 @@ async function probe() {
     const project = await invoke("collab.project.create", {
       teamId: team.id,
       name: "秋季发布",
+      repository: "example/project", branch: "main", subPath: "docs",
       requestKey: "fixture-project",
     });
     const checkout = join(dir, "checkout");
@@ -67,7 +68,14 @@ async function probe() {
       canceled: false,
       filePaths: [checkout],
     });
-    await invoke("collab.checkout.map", { projectId: project.id });
+    await assert.rejects(invoke("collab.checkout.map", {projectId:project.id,mode:"repository"}), /本地工作文件夹/);
+    assert.equal((await invoke("bootstrap")).local.projectCheckouts[project.id], false);
+    dialog.showOpenDialog = async () => ({canceled:true,filePaths:[]});
+    assert.equal(await invoke("collab.checkout.map",{projectId:project.id,mode:"folder"}),null);
+    assert.equal((await invoke("bootstrap")).local.projectCheckouts[project.id], false);
+    dialog.showOpenDialog = async () => ({canceled:false,filePaths:[checkout]});
+    await invoke("collab.checkout.map", { projectId: project.id, mode:"folder" });
+    assert.equal((await invoke("bootstrap")).local.projectCheckoutModes[project.id],"folder");
     let state = await invoke("bootstrap"),
       channel = state.collaboration.channels.find(
         (c) => c.projectId === project.id,
@@ -79,6 +87,25 @@ async function probe() {
       () => js('!!document.querySelector(".project-composer")'),
       "project room without session",
     );
+    // Read-only GitHub responses are synthetic; configuration is persisted by the real Hub.
+    const {GithubRepositoryService}=await import("../desktop/services/github-repository.mjs");
+    const originalApi=GithubRepositoryService.prototype.api;
+    GithubRepositoryService.prototype.api=async function(path,options){
+      if(path==='repos/example/output')return {id:123,full_name:'example/output',default_branch:'main',private:true,permissions:{push:true}};
+      if(path==='repos/example/output/branches/main')return {name:'main'};
+      return originalApi.call(this,path,options);
+    };
+    await js('[...document.querySelectorAll("button")].find(b=>b.textContent.trim()==="PR 目标").click()');
+    await until(()=>js('!!document.querySelector(".github-target-form")'),"PR target form");
+    for(const [label,value] of [['PR 目标仓库','example/output'],['PR 目标分支','main'],['PR 目标目录','drafts']]){
+      await js(`(()=>{const el=document.querySelector('[aria-label="${label}"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+    }
+    await js('[...document.querySelectorAll(".github-target-form button")].find(b=>b.textContent==="保存 PR 目标").click()');
+    await until(async()=>((await invoke('bootstrap')).collaboration.projects.find(p=>p.id===project.id).githubTarget?.repository==='example/output'),"shared PR target saved");
+    assert.equal((await invoke('bootstrap')).collaboration.projects.find(p=>p.id===project.id).repository,'example/project');
+    await writeFile(join(dir,'github-target.png'),(await win.webContents.capturePage()).toPNG());
+    await js(`document.querySelector('[aria-label="项目 PR 目标"] [aria-label="关闭"]').click()`);
+    GithubRepositoryService.prototype.api=originalApi;
     await invoke("accounts.refresh");
     await js(
       `document.querySelector('[aria-label="添加团队 Agent"]').click()`,

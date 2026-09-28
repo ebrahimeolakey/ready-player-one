@@ -1090,3 +1090,15 @@ test('Automatic task opt-in claims, binds the execution computer, pauses tasks a
  await host.call('collab.agent.poll',{teamId:team.id,computerId:a.computerId});assert.equal(hub.db.collaboration.tasks.length,1);
  await host.call('collab.agent.lifecycle',{agentId:a.id,action:'pause'});assert.equal(task.status,'interrupted');assert.equal(approval.status,'cancelled');assert.notEqual(task.status,'accepted');
 });
+
+test('project DRI configures shared PR target separately from execution repo with concurrent update protection',async t=>{
+ const f=await setup(t),args={projectId:f.project.id,repository:'team/output',baseBranch:'main',pathPrefix:'drafts',revision:0};
+ await assert.rejects(f.guest.call('collab.project.githubTarget',args),/负责人/);
+ const p=await f.host.call('collab.project.githubTarget',args);
+ assert.deepEqual(p.githubTarget,{repository:'team/output',baseBranch:'main',pathPrefix:'drafts'});
+ assert.equal(p.repository,f.project.repository);assert.equal(p.githubTargetRevision,1);
+ await assert.rejects(f.host.call('collab.project.githubTarget',args),/已被更新/);
+ await assert.rejects(f.host.call('collab.project.githubTarget',{...args,revision:1,pathPrefix:'../escape'}),/项目路径/);
+ const visible=f.hub.snapshot(f.hub.peers.values().next().value);
+ assert.ok(visible);
+});

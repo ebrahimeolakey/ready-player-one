@@ -10,20 +10,20 @@ Bring your team and your own AI accounts into one project. Discuss ideas in the 
 
 ## Download
 
-AI teammates are explicitly labeled **（AI）** across group chats, members, tasks, and shared sessions.
+Use an ordinary local folder, choose a project GitHub PR destination, and submit approved artifacts through pull requests. AI teammates are explicitly labeled **（AI）**.
 
-**0.5.0-beta.4 · macOS only · Apache-2.0 · No GitHub login needed to download**
+**0.5.0-beta.6 · macOS only · Apache-2.0 · No GitHub login needed to download**
 
 | Mac | Download |
 | --- | --- |
-| Apple Silicon · M series | **[↓ Apple Silicon ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/Ready-Player-One-0.5.0-beta.4-mac-arm64.zip)** |
-| Intel | **[↓ Intel ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/Ready-Player-One-0.5.0-beta.4-mac-x64.zip)** |
+| Apple Silicon · M series | **[↓ Apple Silicon ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.6/Ready-Player-One-0.5.0-beta.6-mac-arm64.zip)** |
+| Intel | **[↓ Intel ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.6/Ready-Player-One-0.5.0-beta.6-mac-x64.zip)** |
 
 Unzip, move `头号玩家.app` into Applications, and open it. No separate Node.js installation is needed. The desktop UI is currently Chinese. Use your own Codex / Claude Code account and credits.
 
 This beta is ad-hoc signed, without Apple Developer ID signing or notarization. macOS may require first-launch approval; follow the [Mac installation guide](docs/BETA-TESTING.md#mac-first-launch). Save your work and quit the previous version before replacing the app; keep your application data.
 
-[Release notes](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.4) · [SHA256 checksums](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/SHA256SUMS-0.5.0-beta.4.txt) · [Report an issue](https://github.com/ebrahimeolakey/ready-player-one/issues)
+[Release notes](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.6) · [SHA256 checksums](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.6/SHA256SUMS-0.5.0-beta.6.txt) · [Report an issue](https://github.com/ebrahimeolakey/ready-player-one/issues)
 
 ## Why this workspace
 
@@ -70,8 +70,10 @@ Click an AI member to configure its identity, runtime/model, project participati
 - Automatic work is opt-in and subject to project scope, a bound computer, serial dispatch, rate limits, and human approval for final publication. Reminders persist across disconnections.
 - Per-agent MCP and environment settings are stored encrypted locally. The external-agent bridge issues revocable access to one agent through a local MCP connection; it is not a universal importer of CLI history. Third-party apps still require their own setup and authorization.
 - Teams retain the existing team-level project access model. Full private channels, system-start daemon installation, all third-party cloud app integrations, and general VS Code extension compatibility are not included. Office previews are not full native Office editors.
-- **Validation:** 465 automated tests passed, plus the Electron onboarding/collaboration flow and real Codex-to-Codex group consultation on one Mac. Both Mac archives are signature-checked; Apple Silicon packaged launch/restart is tested. Two physical Macs over the Internet, Intel hardware, fresh accounts, and real Claude execution still need acceptance testing. See the [release validation record](docs/evidence/agent-onboarding-0.5.0-beta.3.json).
+- **Validation:** 476 automated tests passed, plus the Electron onboarding/collaboration flow and real Codex-to-Codex group consultation on one Mac. Both Mac archives are signature-checked; Apple Silicon packaged launch/restart is tested. Two physical Macs over the Internet, Intel hardware, fresh accounts, and real Claude execution still need acceptance testing. See the [beta.3 validation record](docs/evidence/agent-onboarding-0.5.0-beta.3.json) and [beta.6 release checks](docs/evidence/local-folder-pr-0.5.0-beta.6.json).
 - Transport is encrypted through a Cloudflare relay, not end-to-end encrypted. This release publishes no Windows or Linux binaries.
+
+Local folders and GitHub destinations are separate: choose **PR target** in the project sidebar or onboarding step 2. The project DRI saves the repository, base branch, and optional directory. Publishing creates a separate branch and a PR with only the approved snapshot; it does not merge or push your working directory. A failed or uncertain request requires inspection and is not automatically replayed.
 
 ## Develop
 
@@ -100,20 +102,22 @@ The current source uses [Apache-2.0](LICENSE). Releases v0.3.0-beta.1 and earlie
 
 ## 直接下载
 
-AI 成员在群聊、成员列表、任务和共享会话中统一标注 **（AI）**。
+普通文件夹即可开始工作；项目可配置 GitHub PR 目标，获批产物通过 PR 提交。AI 成员统一标注 **（AI）**。
 
-**0.5.0-beta.4 · 本次仅发布 macOS · Apache-2.0 · 下载无需 GitHub 登录**
+**0.5.0-beta.6 · 本次仅发布 macOS · Apache-2.0 · 下载无需 GitHub 登录**
 
 | Mac | 下载 |
 | --- | --- |
-| Apple Silicon · M 系列 | **[↓ 下载 M 系列 ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/Ready-Player-One-0.5.0-beta.4-mac-arm64.zip)** |
-| Intel | **[↓ 下载 Intel ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/Ready-Player-One-0.5.0-beta.4-mac-x64.zip)** |
+| Apple Silicon · M 系列 | **[↓ 下载 M 系列 ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.6/Ready-Player-One-0.5.0-beta.6-mac-arm64.zip)** |
+| Intel | **[↓ 下载 Intel ZIP](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.6/Ready-Player-One-0.5.0-beta.6-mac-x64.zip)** |
 
 解压后将「头号玩家.app」放入「应用程序」并打开，无需另装 Node.js。界面为中文，使用自己的 Codex / Claude Code 账号与额度。
 
 测试版使用临时签名，尚无 Apple Developer ID 签名与公证。首次启动可能需要系统放行，见 [Mac 安装说明](docs/BETA-TESTING.md#mac-first-launch)。升级前保存工作、退出旧应用，再替换程序，保留原有应用数据。
 
-[版本说明](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.4) · [SHA256 校验](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.4/SHA256SUMS-0.5.0-beta.4.txt) · [反馈问题](https://github.com/ebrahimeolakey/ready-player-one/issues)
+[版本说明](https://github.com/ebrahimeolakey/ready-player-one/releases/tag/v0.5.0-beta.6) · [SHA256 校验](https://github.com/ebrahimeolakey/ready-player-one/releases/download/v0.5.0-beta.6/SHA256SUMS-0.5.0-beta.6.txt) · [反馈问题](https://github.com/ebrahimeolakey/ready-player-one/issues)
+
+本地目录与 GitHub 目标独立：在项目侧栏「PR 目标」或引导第 2 步中，由项目负责人保存仓库、目标分支和目录。获批产物写入独立分支并创建 PR，不自动合并，也不上传整个工作目录。网络结果不确定时需检查状态，不自动重发。
 
 ## 项目亮点
 
@@ -160,7 +164,7 @@ Agent 是有身份、职责、模型、记忆和执行电脑的成员。重新�
 - 自动工作需要持有人开启，受参与项目、绑定电脑、串行执行和轮次限制约束。最终发布仍需人工审批；提醒可跨断线保存。
 - 每个 Agent 的 MCP 与环境变量加密保存在本机。外接桥通过本地 MCP 对单个 Agent 授权，可撤销；不自动导入全部 CLI 历史。第三方应用仍需自己的配置与授权。
 - 项目沿用团队权限范围。本版没有完整私密频道、系统开机自启服务、所有云应用集成或通用 VS Code 插件兼容；办公文件预览不等于完整原生 Office 编辑器。
-- **验证情况：** 465 项自动测试通过，另有 Electron 引导与协作测试，以及一台 Mac 上两个真实 Codex Agent 的群聊协作。两个 Mac ZIP 均验证签名；M 系列打包应用验证启动、重启。两台实体 Mac 跨网、Intel 实机、新账号和真实 Claude 执行仍待验收。见 [本版验证记录](docs/evidence/agent-onboarding-0.5.0-beta.3.json)。
+- **验证情况：** 476 项自动测试通过，另有 Electron 引导与协作测试，以及一台 Mac 上两个真实 Codex Agent 的群聊协作。两个 Mac ZIP 均验证签名；M 系列打包应用验证启动、重启。两台实体 Mac 跨网、Intel 实机、新账号和真实 Claude 执行仍待验收。见 [beta.3 验证记录](docs/evidence/agent-onboarding-0.5.0-beta.3.json)及 [beta.6 发布检查](docs/evidence/local-folder-pr-0.5.0-beta.6.json)。
 - 公网经过 Cloudflare 中继，使用传输加密，非端到端加密。本次不发布 Windows 或 Linux 安装包。
 
 ## 开发与许可

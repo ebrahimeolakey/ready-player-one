@@ -1150,3 +1150,10 @@
 .agent-event{padding:12px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;font-size:12px}.agent-event>span{flex:1;overflow-wrap:anywhere}.agent-event small{display:block;margin-top:6px}
 
 .local-setup>label{display:flex;flex-direction:column;gap:7px}.local-setup>label>textarea{resize:vertical;font:inherit;line-height:1.5}
+
+.github-target-form { display: grid; gap: 12px; min-width: 0; }
+.github-target-form label { display: grid; gap: 6px; }
+.github-target-form input, .github-target-form select { width: 100%; box-sizing: border-box; }
+.project-github-target { margin: 14px 0; }
+.project-github-target > summary { cursor: pointer; padding: 6px 0; }
+.github-target-form small { overflow-wrap: anywhere; }

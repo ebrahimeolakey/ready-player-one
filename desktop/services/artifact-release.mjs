@@ -38,7 +38,7 @@ export class ArtifactReleaseService extends GithubRepositoryService {
           "--hostname",
           "github.com",
           "--method",
-          "PUT",
+          options.method || "PUT",
           path,
           "--input",
           "-",
@@ -114,17 +114,17 @@ export class ArtifactReleaseService extends GithubRepositoryService {
         source = await this.source(a.versionId),
         account = await this.account();
       const repository = String(
-        a.repository || source.project.repository || "",
+        a.repository || source.project.githubTarget?.repository || source.project.repository || "",
       ).trim();
       if (
         !/^[a-z\d][a-z\d-]{0,38}\/[a-z\d_.-]{1,100}$/i.test(repository) ||
         repository.split("/")[1] === ".."
       )
         throw Error("请输入 owner/repo 格式的 GitHub 仓库");
-      const branch = String(a.branch || source.project.branch || "main").trim(),
+      const branch = String(a.branch || source.project.githubTarget?.baseBranch || source.project.branch || "main").trim(),
         path = projectPath(
           a.path ||
-            [source.project.subPath, source.path].filter(Boolean).join("/"),
+            [source.project.githubTarget?.pathPrefix ?? source.project.subPath, source.path].filter(Boolean).join("/"),
         );
       if (
         !path ||
@@ -164,6 +164,7 @@ export class ArtifactReleaseService extends GithubRepositoryService {
       const old = await this.remote(record);
       record.previousSha = old?.sha || null;
       record.expectedSha = blobHash(source.bytes);
+      if (this.prepare) await this.prepare(record, source);
       const data = this.data();
       const pending = data.operations.find(
         (r) =>

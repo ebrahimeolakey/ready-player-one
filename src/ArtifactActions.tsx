@@ -6,6 +6,8 @@ import type { Call } from "./ui";
 
 type Receipt = {
   id: string;
+  kind?: string;
+  headBranch?: string;
   status: string;
   number: number;
   hash: string;
@@ -39,10 +41,10 @@ export function ArtifactActions({
   const project = state.collaboration?.projects.find((p) => p.id === projectId);
   const [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
-    [repository, setRepository] = useState(project?.repository || ""),
-    [branch, setBranch] = useState(project?.branch || "main"),
+    [repository, setRepository] = useState(project?.githubTarget?.repository || project?.repository || ""),
+    [branch, setBranch] = useState(project?.githubTarget?.baseBranch || project?.branch || "main"),
     [target, setTarget] = useState(
-      [project?.subPath, path].filter(Boolean).join("/"),
+      [project?.githubTarget?.pathPrefix ?? project?.subPath, path].filter(Boolean).join("/"),
     ),
     [receipt, setReceipt] = useState<Receipt | null>(null),
     [history, setHistory] = useState<Receipt[]>([]);
@@ -85,6 +87,10 @@ export function ArtifactActions({
           disabled={busy}
           onClick={() =>
             void act(async () => {
+              setRepository(project?.githubTarget?.repository || project?.repository || "");
+              setBranch(project?.githubTarget?.baseBranch || project?.branch || "main");
+              setTarget([project?.githubTarget?.pathPrefix ?? project?.subPath, path].filter(Boolean).join("/"));
+              setReceipt(null);
               setOpen(true);
               setHistory(
                 await call("collab.artifact.github.history", {
@@ -95,17 +101,17 @@ export function ArtifactActions({
           }
         >
           <Github size={14} />
-          发布到 GitHub
+          创建 GitHub PR
         </button>
       )}
       {open && (
         <div
           className="artifact-release-panel"
           role="dialog"
-          aria-label="发布获批版本"
+          aria-label="提交获批版本 PR"
         >
           <header>
-            <strong>发布获批版本 v{version.number}</strong>
+            <strong>提交获批版本 PR v{version.number}</strong>
             <button
               aria-label="关闭发布面板"
               disabled={busy}
@@ -140,7 +146,7 @@ export function ArtifactActions({
                 />
               </label>
               <label>
-                分支
+                合并到分支
                 <input
                   required
                   value={branch}
@@ -155,7 +161,7 @@ export function ArtifactActions({
                   onChange={(e) => setTarget(e.target.value)}
                 />
               </label>
-              <button disabled={busy}>预览发布</button>
+              <button disabled={busy}>预览 PR</button>
             </form>
           ) : (
             <div>
@@ -164,6 +170,7 @@ export function ArtifactActions({
                 {receipt.branch}
               </p>
               <p>{receipt.path}</p>
+              {receipt.headBranch && <small>新建分支 {receipt.headBranch} → {receipt.branch} · 不自动合并</small>}
               <small>
                 账号 {receipt.account.login} · v{receipt.number} ·{" "}
                 {receipt.hash.slice(0, 12)} ·{" "}
@@ -187,7 +194,7 @@ export function ArtifactActions({
                       )
                     }
                   >
-                    确认发布此版本
+                    确认创建 PR
                   </button>
                 </div>
               )}
@@ -207,7 +214,7 @@ export function ArtifactActions({
                   检查发布状态
                 </button>
               )}
-              {receipt.status === "published" && <p>已发布获批版本</p>}
+              {receipt.status === "published" && <p>已提交获批版本 PR</p>}
               {receipt.message && <p>{receipt.message}</p>}
               {receipt.url && (
                 <button
@@ -229,7 +236,7 @@ export function ArtifactActions({
                 <button key={r.id} onClick={() => setReceipt(r)}>
                   {r.repository} · {r.path} ·{" "}
                   {r.status === "published"
-                    ? "已发布"
+                    ? r.kind === "pull_request" ? "PR 已创建" : "旧版提交"
                     : r.status === "prepared"
                       ? "待确认"
                       : r.status === "verified"

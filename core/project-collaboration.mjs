@@ -476,6 +476,18 @@ export function projectCollaboration(hub, peer, method, a) {
       requestKey: a.requestKey,
     });
   }
+  if (method === "collab.project.githubTarget") {
+    const project=target(hub,peer,"projects",a.projectId);
+    access(hub,peer,project.teamId,true);
+    if(project.driUserId!==peer.id)throw Error("只有项目负责人可以设置 PR 目标");
+    if((a.revision ?? 0)!==(project.githubTargetRevision || 0))throw Error("PR 目标已被更新，请重新打开设置");
+    const repository=string(a.repository,200), baseBranch=string(a.baseBranch,200), pathPrefix=projectPath(a.pathPrefix || "");
+    if(!/^[a-z\d][a-z\d-]{0,38}\/[a-z\d_.-]{1,100}$/i.test(repository) || ['.','..'].includes(repository.split('/')[1]))throw Error("仓库格式应为 owner/repo");
+    if(/[\s~^:?*\[\\\x00-\x1f]/.test(baseBranch)||baseBranch.includes('..')||baseBranch.includes('@{')||baseBranch.startsWith('/')||baseBranch.endsWith('/')||baseBranch.endsWith('.')||baseBranch.endsWith('.lock')||baseBranch.startsWith('-'))throw Error("目标分支无效");
+    project.githubTarget={repository,baseBranch,pathPrefix};
+    project.githubTargetRevision=(project.githubTargetRevision||0)+1;
+    return project;
+  }
   if (method === "collab.project.create") {
     access(hub, peer, a.teamId, true);
     if (

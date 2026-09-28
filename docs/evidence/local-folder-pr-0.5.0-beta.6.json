@@ -1,0 +1,43 @@
+{
+  "version": "0.5.0-beta.6",
+  "platform": "macOS",
+  "automatedTests": {
+    "passed": 476,
+    "failed": 0
+  },
+  "desktop": {
+    "passed": true,
+    "syntheticProvider": true,
+    "modelCalls": 0,
+    "physicalMachines": 1,
+    "ordinaryFolderWithBoundRepository": true,
+    "repositoryMismatchRejected": true,
+    "cancelPreservesMapping": true,
+    "sharedPrTargetSavedInUi": true,
+    "executionBindingUnchanged": true,
+    "artifactPreviewAndApproval": true,
+    "prPreviewEntry": true
+  },
+  "githubTransport": {
+    "realApi": true,
+    "syntheticApprovedArtifact": true,
+    "draftPullRequest": "https://github.com/ebrahimeolakey/ready-player-one/pull/1",
+    "baseBranchUnchanged": true,
+    "repeatedPublishIdempotent": true,
+    "testPullRequestClosedWithoutMerge": true,
+    "testBranchDeleted": true
+  },
+  "packages": {
+    "arm64ZipSignatureVerified": true,
+    "x64ZipSignatureVerified": true,
+    "arm64LaunchAndRestart": true,
+    "mockKeychainInIsolatedSmoke": true
+  },
+  "limitations": [
+    "No Apple Developer ID signing or notarization",
+    "Intel hardware not tested",
+    "Two physical Macs over Internet not tested",
+    "Live GitHub test used synthetic approval, not two-person production acceptance",
+    "First download quarantine behavior not tested in packaged smoke"
+  ]
+}

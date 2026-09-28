@@ -7,6 +7,8 @@ export type Project = {
   subPath: string;
   branch: string;
   driUserId: string;
+  githubTarget?: {repository:string;baseBranch:string;pathPrefix:string};
+  githubTargetRevision?: number;
 };
 export type ProjectMessage = {
   id: string;

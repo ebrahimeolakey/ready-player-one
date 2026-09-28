@@ -118,6 +118,8 @@ export type State = {
     computerId?:string;
     agentService?:{enabled:boolean;error?:string};
     projectCheckouts?: Record<string, boolean>;
+    projectCheckoutModes?: Record<string, "folder" | "repository">;
+    projectCheckoutPaths?: Record<string, string>;
     navigation?:{scope:string|null;ready:boolean;epoch:number;revision:number};
     referenceIssues?:{workspaceId:string;sessionId?:string;message:string}[];
     notificationError?:string|null;

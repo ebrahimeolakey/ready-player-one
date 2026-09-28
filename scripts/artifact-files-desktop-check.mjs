@@ -151,7 +151,7 @@ export async function exerciseArtifactFiles({
   );
   assert.equal(
     await js(
-      'document.querySelector(".artifact-toolbar").textContent.includes("发布到 GitHub")',
+      'document.querySelector(".artifact-toolbar").textContent.includes("创建 GitHub PR")',
     ),
     false,
   );
@@ -170,16 +170,16 @@ export async function exerciseArtifactFiles({
   );
   await wait(() =>
     js(
-      'document.querySelector(".artifact-toolbar").textContent.includes("发布到 GitHub")',
+      'document.querySelector(".artifact-toolbar").textContent.includes("创建 GitHub PR")',
     ),
   );
   await js(
-    '[...document.querySelectorAll(".artifact-toolbar button")].find(b=>b.textContent.includes("发布到 GitHub")).click()',
+    '[...document.querySelectorAll(".artifact-toolbar button")].find(b=>b.textContent.includes("创建 GitHub PR")).click()',
   );
   await wait(() => js('!!document.querySelector(".artifact-release-panel")'));
   assert.equal(
     await js(
-      'document.querySelector(".artifact-release-panel").textContent.includes("预览发布")',
+      'document.querySelector(".artifact-release-panel").textContent.includes("预览 PR")',
     ),
     true,
   );
@@ -204,7 +204,7 @@ export async function exerciseArtifactFiles({
   );
   assert.equal(
     await js(
-      'document.querySelector(".artifact-toolbar").textContent.includes("发布到 GitHub")',
+      'document.querySelector(".artifact-toolbar").textContent.includes("创建 GitHub PR")',
     ),
     false,
   );

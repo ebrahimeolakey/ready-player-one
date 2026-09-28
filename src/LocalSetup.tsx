@@ -1,3 +1,4 @@
+import { ProjectGitHubTarget } from "./ProjectGitHubTarget";
 import { useState } from "react";
 import {
   Check,
@@ -47,7 +48,10 @@ export function LocalSetup({
     [existingSession, setExistingSession] = useState("");
   const setStep=(n:number)=>{setLocalStep(n);wizard?.onStep(n);};
   const templates=state.collaboration?.roleTemplates||[];
-  const mapped = !!state.local.projectCheckouts?.[project.id];
+  const savedMode = state.local.projectCheckoutModes?.[project.id] || "repository";
+  const [folderMode, setFolderMode] = useState<"folder" | "repository">(state.local.projectCheckouts?.[project.id] ? savedMode : "folder");
+  const mapped = !!state.local.projectCheckouts?.[project.id] && savedMode === folderMode;
+  const mappedPath = state.local.projectCheckoutPaths?.[project.id];
   const account = state.local.accounts?.find((a) => a.id === provider),
     job = state.local.authJobs?.find((j) => j.id === provider),
     install = state.local.installations?.find((j) => j.id === provider);
@@ -61,7 +65,7 @@ export function LocalSetup({
     try {
       await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError((e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method [^:]+:\s*(?:Error:\s*)?/, ""));
     } finally {
       setBusy(false);
     }
@@ -86,23 +90,32 @@ export function LocalSetup({
           <>
             <Monitor size={30} />
             <h2>让 AI 在这台电脑上工作</h2>
-            <p>使用本机账号和项目文件，执行过程分享给团队。</p>
+            <p>选择 AI 保存文件的位置。文档、方案可以直接使用普通文件夹。</p>
             <div className="setup-check">
               <span>本机执行服务</span>
               <strong>{state.local.online ? "已连接" : "连接中…"}</strong>
             </div>
+            <div className="setup-provider-options" aria-label="工作目录用途">
+              <button aria-pressed={folderMode === "folder"} disabled={busy} onClick={()=>{setFolderMode("folder");setError("");}}>本地工作文件夹<small>文档、方案，不需要 Git</small></button>
+              {project.repository && <button aria-pressed={folderMode === "repository"} disabled={busy} onClick={()=>{setFolderMode("repository");setError("");}}>代码仓库<small>按项目绑定检查仓库和分支</small></button>}
+            </div>
+            {folderMode === "repository" && project.repository && <small>仓库：{project.repository} · 分支：{project.branch}{project.subPath ? ` · 子目录：${project.subPath}` : ""}</small>}
             <button
               className="button full"
               disabled={busy}
               onClick={() =>
                 void run(() =>
-                  call("collab.checkout.map", { projectId: project.id }),
+                  call("collab.checkout.map", { projectId: project.id, mode: folderMode }),
                 )
               }
             >
               <FolderOpen size={16} />
-              {mapped ? "工作文件夹已连接" : "选择项目工作文件夹"}
+              {mapped ? "更换工作文件夹" : folderMode === "folder" ? "选择工作文件夹" : "选择代码仓库"}
             </button>
+            {mapped && mappedPath && <small role="status">已连接：{mappedPath}</small>}
+            {folderMode === "folder" && <small>文件先保存在这里；共享产物发布到 GitHub 仍需负责人审批。</small>}
+            {!mapped && <small>选择文件夹后即可继续。</small>}
+            <ProjectGitHubTarget state={state} project={project} call={call} inline/>
             <small>已内置电脑连接服务，无需另装 Computer CLI。保持应用和电脑在线。</small>
             <details><summary>想用同事的电脑？</summary><p>让同事通过团队邀请加入，在自己的电脑上完成同样的接入。然后在任务的协作成员中邀请他的 Agent。</p></details>
             <button
