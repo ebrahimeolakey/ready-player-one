@@ -1,0 +1,2 @@
+Automated Ready Player One beta.6 PR workflow verification.
+Synthetic content only; no user files. Close without merging.
